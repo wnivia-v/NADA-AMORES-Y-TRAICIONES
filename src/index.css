@@ -18,23 +18,23 @@
    ============================================================================= */
 
 .theme-velvet {
-  --bg-primary: #FFF7ED;
-  --bg-secondary: #FFFBF5;
+  --bg-primary: #F9FAFB;
+  --bg-secondary: #FFFFFF;
   --bg-card: #FFFFFF;
-  --bg-elevated: #FEF3E2;
-  --text-primary: #1C1917;
-  --text-secondary: #78350F;
+  --bg-elevated: #F0FDF4;
+  --text-primary: #1F2937;
+  --text-secondary: #4B5563;
   --text-muted: #9CA3AF;
-  --accent: #F97316;
-  --accent-light: rgba(249, 115, 22, 0.1);
-  --accent-glow: rgba(249, 115, 22, 0.3);
-  --border: rgba(249, 115, 22, 0.12);
-  --success: #10B981;
-  --warning: #EAB308;
-  --danger: #EF4444;
-  --safe-bg: rgba(16, 185, 129, 0.1);
-  --suspicious-bg: rgba(234, 179, 8, 0.1);
-  --dangerous-bg: rgba(239, 68, 68, 0.1);
+  --accent: #8B5CF6;
+  --accent-light: rgba(139, 92, 246, 0.08);
+  --accent-glow: rgba(139, 92, 246, 0.25);
+  --border: rgba(0, 0, 0, 0.06);
+  --success: #34D399;
+  --warning: #FBBF24;
+  --danger: #F87171;
+  --safe-bg: rgba(167, 243, 208, 0.4);
+  --suspicious-bg: rgba(253, 230, 138, 0.4);
+  --dangerous-bg: rgba(254, 202, 202, 0.4);
 }
 
 /* =============================================================================
@@ -43,23 +43,23 @@
    ============================================================================= */
 
 .theme-gamer {
-  --bg-primary: #0C0A1D;
-  --bg-secondary: #16132D;
-  --bg-card: #1D1A35;
-  --bg-elevated: #2A2650;
-  --text-primary: #F5F3FF;
-  --text-secondary: #C4B5FD;
-  --text-muted: #6D5F99;
-  --accent: #A78BFA;
-  --accent-light: rgba(167, 139, 250, 0.12);
-  --accent-glow: rgba(167, 139, 250, 0.35);
-  --border: rgba(167, 139, 250, 0.15);
-  --success: #4ADE80;
-  --warning: #FACC15;
-  --danger: #FB7185;
-  --safe-bg: rgba(74, 222, 128, 0.1);
-  --suspicious-bg: rgba(250, 204, 21, 0.1);
-  --dangerous-bg: rgba(251, 113, 133, 0.1);
+  --bg-primary: #0D0D1A;
+  --bg-secondary: #141428;
+  --bg-card: #1A1A33;
+  --bg-elevated: #24244A;
+  --text-primary: #EEEEFF;
+  --text-secondary: #A5A5CC;
+  --text-muted: #5E5E8A;
+  --accent: #00FFAA;
+  --accent-light: rgba(0, 255, 170, 0.1);
+  --accent-glow: rgba(0, 255, 170, 0.35);
+  --border: rgba(0, 255, 170, 0.12);
+  --success: #00FFAA;
+  --warning: #FFE066;
+  --danger: #FF5577;
+  --safe-bg: rgba(0, 255, 170, 0.08);
+  --suspicious-bg: rgba(255, 224, 102, 0.08);
+  --dangerous-bg: rgba(255, 85, 119, 0.08);
 }
 
 /* =============================================================================
@@ -95,7 +95,7 @@ body {
 }
 
 .theme-gamer .card {
-  box-shadow: 0 2px 8px rgba(0,0,0,0.3), 0 0 1px rgba(167,139,250,0.3);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.4), 0 0 1px rgba(0,255,170,0.3);
 }
 
 .card:hover {
@@ -105,7 +105,7 @@ body {
 }
 
 .theme-gamer .card:hover {
-  box-shadow: 0 8px 24px rgba(0,0,0,0.4), 0 0 20px var(--accent-glow);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5), 0 0 25px var(--accent-glow);
 }
 
 .card:active {
@@ -174,8 +174,8 @@ body {
     0deg,
     transparent,
     transparent 3px,
-    rgba(6, 182, 212, 0.015) 3px,
-    rgba(6, 182, 212, 0.015) 4px
+    rgba(0, 255, 170, 0.02) 3px,
+    rgba(0, 255, 170, 0.02) 4px
   );
   animation: scanline-scroll 10s linear infinite;
 }
