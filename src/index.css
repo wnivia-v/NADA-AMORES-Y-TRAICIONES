@@ -3,13 +3,8 @@
 @tailwind utilities;
 
 /* =============================================================================
-   NADA v2 — Design System 2026
-   
-   Based on 2026 UI color trends:
-   - Elevated Neutrals (warm soft backgrounds, never pure white)
-   - Hyper-Saturated Accents (one bold color for focus)
-   - High-Contrast Dark Mode (true blacks + charcoal layers + neon)
-   - Soft Gradients 2.0 (light passing through glass)
+   NADA v2 — Design System
+   Tendencia 2026: Elevated Neutrals + Hyper-Saturated Accents
    ============================================================================= */
 
 :root {
@@ -18,65 +13,53 @@
 }
 
 /* =============================================================================
-   TEMA VELVET — Elevated Neutrals + Soft Gradient
-   Warm, calm, premium. Never pure white.
+   TEMA VELVET — Claro, calido, con vida
+   Fondo crema/lavanda, cards blancas solidas, acento violeta vibrante
    ============================================================================= */
 
 .theme-velvet {
-  --bg-primary: #F8F6F4;
-  --bg-secondary: #FFFFFF;
-  --bg-card: rgba(255, 255, 255, 0.82);
-  --bg-elevated: #F3F0ED;
-  --text-primary: #1C1917;
-  --text-secondary: #57534E;
-  --text-muted: #A8A29E;
+  --bg-primary: #EDE9FE;
+  --bg-secondary: #F5F3FF;
+  --bg-card: #FFFFFF;
+  --bg-elevated: #F3EDFF;
+  --text-primary: #1E1B4B;
+  --text-secondary: #4C1D95;
+  --text-muted: #7C7C9A;
   --accent: #7C3AED;
-  --accent-light: rgba(124, 58, 237, 0.08);
-  --accent-glow: rgba(124, 58, 237, 0.25);
-  --border: rgba(0, 0, 0, 0.06);
+  --accent-light: rgba(124, 58, 237, 0.12);
+  --accent-glow: rgba(124, 58, 237, 0.3);
+  --border: rgba(124, 58, 237, 0.12);
   --success: #059669;
   --warning: #D97706;
   --danger: #DC2626;
-  --safe-bg: rgba(5, 150, 105, 0.08);
-  --suspicious-bg: rgba(217, 119, 6, 0.08);
-  --dangerous-bg: rgba(220, 38, 38, 0.08);
-  --card-bg: linear-gradient(160deg, rgba(255,255,255,0.9) 0%, rgba(248,246,244,0.85) 100%);
-  --card-border: rgba(0, 0, 0, 0.05);
-  --card-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.04);
-  --card-hover-shadow: 0 8px 30px rgba(124, 58, 237, 0.1), 0 2px 8px rgba(0,0,0,0.06);
-  --ambient-gradient: radial-gradient(ellipse at 0% 0%, rgba(124,58,237,0.04) 0%, transparent 60%),
-                      radial-gradient(ellipse at 100% 100%, rgba(236,72,153,0.03) 0%, transparent 60%);
+  --safe-bg: rgba(5, 150, 105, 0.1);
+  --suspicious-bg: rgba(217, 119, 6, 0.1);
+  --dangerous-bg: rgba(220, 38, 38, 0.1);
 }
 
 /* =============================================================================
-   TEMA GAMER — High-Contrast Dark + Neon Accent
-   True black, layered charcoal, electric accent.
+   TEMA GAMER — Oscuro con profundidad, NO negro muerto
+   Azul muy oscuro (no negro puro), cards visibles, acento cyan electrico
    ============================================================================= */
 
 .theme-gamer {
-  --bg-primary: #000000;
-  --bg-secondary: #0A0A0A;
-  --bg-card: rgba(18, 18, 18, 0.95);
-  --bg-elevated: #1A1A1A;
-  --text-primary: #FAFAFA;
-  --text-secondary: #A1A1AA;
-  --text-muted: #52525B;
-  --accent: #6366F1;
-  --accent-light: rgba(99, 102, 241, 0.1);
-  --accent-glow: rgba(99, 102, 241, 0.3);
-  --border: rgba(255, 255, 255, 0.06);
+  --bg-primary: #0F172A;
+  --bg-secondary: #1E293B;
+  --bg-card: #1E293B;
+  --bg-elevated: #334155;
+  --text-primary: #F1F5F9;
+  --text-secondary: #94A3B8;
+  --text-muted: #64748B;
+  --accent: #06B6D4;
+  --accent-light: rgba(6, 182, 212, 0.12);
+  --accent-glow: rgba(6, 182, 212, 0.3);
+  --border: rgba(6, 182, 212, 0.15);
   --success: #34D399;
   --warning: #FBBF24;
-  --danger: #F87171;
-  --safe-bg: rgba(52, 211, 153, 0.08);
-  --suspicious-bg: rgba(251, 191, 36, 0.08);
-  --dangerous-bg: rgba(248, 113, 113, 0.08);
-  --card-bg: linear-gradient(160deg, rgba(24,24,27,0.98) 0%, rgba(14,14,16,0.95) 100%);
-  --card-border: rgba(255, 255, 255, 0.06);
-  --card-shadow: 0 1px 2px rgba(0,0,0,0.5), 0 4px 16px rgba(0,0,0,0.4);
-  --card-hover-shadow: 0 8px 30px rgba(99,102,241,0.15), 0 0 1px rgba(99,102,241,0.5), 0 4px 16px rgba(0,0,0,0.5);
-  --ambient-gradient: radial-gradient(ellipse at 20% 0%, rgba(99,102,241,0.06) 0%, transparent 50%),
-                      radial-gradient(ellipse at 80% 100%, rgba(236,72,153,0.03) 0%, transparent 50%);
+  --danger: #FB7185;
+  --safe-bg: rgba(52, 211, 153, 0.1);
+  --suspicious-bg: rgba(251, 191, 36, 0.1);
+  --dangerous-bg: rgba(251, 113, 133, 0.1);
 }
 
 /* =============================================================================
@@ -90,50 +73,39 @@ html, body {
   padding: 0;
   font-family: var(--nada-font-sans);
   -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
 }
 
 body {
-  background: var(--bg-primary);
+  background-color: var(--bg-primary);
   color: var(--text-primary);
+  transition: background-color 0.4s ease, color 0.3s ease;
   min-height: 100vh;
-  transition: background 0.4s ease, color 0.3s ease;
-}
-
-/* Ambient light — subtle color wash behind everything */
-body::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  background: var(--ambient-gradient);
-  pointer-events: none;
-  z-index: 0;
-}
-
-#root {
-  position: relative;
-  z-index: 1;
 }
 
 /* =============================================================================
-   CARDS — Clean, layered, minimal but with depth
+   CARDS — solidas, con sombra real, se distinguen del fondo
    ============================================================================= */
 
 .card {
-  background: var(--card-bg);
-  border: 1px solid var(--card-border);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
   border-radius: 1rem;
-  box-shadow: var(--card-shadow);
-  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1),
-              box-shadow 0.25s ease,
-              border-color 0.25s ease;
-  position: relative;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 12px rgba(0,0,0,0.06);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.theme-gamer .card {
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3), 0 0 1px rgba(6,182,212,0.2);
 }
 
 .card:hover {
   transform: translateY(-2px);
   border-color: var(--accent);
-  box-shadow: var(--card-hover-shadow);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.1), 0 0 0 1px var(--accent-light);
+}
+
+.theme-gamer .card:hover {
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4), 0 0 20px var(--accent-glow);
 }
 
 .card:active {
@@ -153,7 +125,7 @@ body::before {
   padding: 0.75rem 1.5rem;
   border: none;
   cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.2s ease;
   box-shadow: 0 2px 8px var(--accent-glow);
 }
 
@@ -174,23 +146,23 @@ body::before {
 .badge-safe {
   background: var(--safe-bg);
   color: var(--success);
-  border: 1px solid currentColor;
+  border: 1px solid var(--success);
 }
 
 .badge-suspicious {
   background: var(--suspicious-bg);
   color: var(--warning);
-  border: 1px solid currentColor;
+  border: 1px solid var(--warning);
 }
 
 .badge-dangerous {
   background: var(--dangerous-bg);
   color: var(--danger);
-  border: 1px solid currentColor;
+  border: 1px solid var(--danger);
 }
 
 /* =============================================================================
-   SCANLINE EFFECT (Gamer only)
+   SCANLINE (Gamer only — muy sutil)
    ============================================================================= */
 
 .scanline-overlay {
@@ -201,11 +173,11 @@ body::before {
   background: repeating-linear-gradient(
     0deg,
     transparent,
-    transparent 2px,
-    rgba(99, 102, 241, 0.01) 2px,
-    rgba(99, 102, 241, 0.01) 4px
+    transparent 3px,
+    rgba(6, 182, 212, 0.015) 3px,
+    rgba(6, 182, 212, 0.015) 4px
   );
-  animation: scanline-scroll 12s linear infinite;
+  animation: scanline-scroll 10s linear infinite;
 }
 
 @keyframes scanline-scroll {
@@ -218,7 +190,7 @@ body::before {
    ============================================================================= */
 
 .fade-slide-in {
-  animation: fadeSlideIn 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  animation: fadeSlideIn 0.3s ease-out;
 }
 
 @keyframes fadeSlideIn {
@@ -228,7 +200,7 @@ body::before {
 
 @keyframes pulse-ring {
   0% { transform: scale(1); opacity: 0.6; }
-  100% { transform: scale(1.6); opacity: 0; }
+  100% { transform: scale(1.5); opacity: 0; }
 }
 
 .pulse-ring {
@@ -249,21 +221,17 @@ body::before {
 }
 
 /* =============================================================================
-   NAVIGATION BAR
+   NAV
    ============================================================================= */
 
 nav {
-  backdrop-filter: blur(12px) saturate(1.2) !important;
-  -webkit-backdrop-filter: blur(12px) saturate(1.2) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
 }
 
 /* =============================================================================
    INPUTS
    ============================================================================= */
-
-textarea, input[type="text"], input[type="email"], input[type="password"] {
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
-}
 
 textarea:focus, input:focus {
   outline: none;
@@ -280,7 +248,6 @@ textarea:focus, input:focus {
 ::-webkit-scrollbar-thumb {
   background: var(--accent);
   border-radius: 2px;
-  opacity: 0.6;
 }
 
 /* =============================================================================
@@ -294,8 +261,6 @@ textarea:focus, input:focus {
     transition-duration: 0.01ms !important;
   }
   .scanline-overlay { display: none; }
-  .card:hover { transform: none; }
-  .btn-primary:hover { transform: none; }
 }
 
 /* =============================================================================
