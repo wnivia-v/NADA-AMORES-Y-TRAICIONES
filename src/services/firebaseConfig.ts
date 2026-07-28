@@ -21,6 +21,20 @@ let app: FirebaseApp | null = null;
 if (hasValidConfig) {
   try {
     app = initializeApp(firebaseConfig);
+    // Initialize App Check for Firebase AI Logic.
+    // Without this, Gemini API calls are rejected when App Check enforcement is on.
+    const recaptchaKey = import.meta.env.VITE_RECAPTCHA_ENTERPRISE_KEY;
+    if (recaptchaKey) {
+      import('firebase/app-check').then(({ initializeAppCheck, ReCaptchaEnterpriseProvider }) => {
+        initializeAppCheck(app!, {
+          provider: new ReCaptchaEnterpriseProvider(recaptchaKey),
+          isTokenAutoRefreshEnabled: true,
+        });
+        console.log('[NADA] App Check initialized with reCAPTCHA Enterprise.');
+      }).catch((e) => {
+        console.warn('[NADA] App Check init failed (Gemini may not work):', e);
+      });
+    }
   } catch (e) {
     console.warn('[NADA] Firebase init failed, running in local-only mode:', e);
   }
