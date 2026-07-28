@@ -3,8 +3,13 @@
 @tailwind utilities;
 
 /* =============================================================================
-   NADA v2 — Sistema de Temas Premium (Glassmorphism / Jelly)
-   Hackaton Kiro — 23 Julio 2026
+   NADA v2 — Design System 2026
+   
+   Based on 2026 UI color trends:
+   - Elevated Neutrals (warm soft backgrounds, never pure white)
+   - Hyper-Saturated Accents (one bold color for focus)
+   - High-Contrast Dark Mode (true blacks + charcoal layers + neon)
+   - Soft Gradients 2.0 (light passing through glass)
    ============================================================================= */
 
 :root {
@@ -13,70 +18,65 @@
 }
 
 /* =============================================================================
-   TEMA VELVET (Modo claro premium — cristal con profundidad)
+   TEMA VELVET — Elevated Neutrals + Soft Gradient
+   Warm, calm, premium. Never pure white.
    ============================================================================= */
 
 .theme-velvet {
-  --bg-primary: linear-gradient(160deg, #FDF2F8 0%, #F0E6FF 40%, #FFF0F3 100%);
-  --bg-primary-solid: #FDF2F8;
+  --bg-primary: #F8F6F4;
   --bg-secondary: #FFFFFF;
-  --bg-card: linear-gradient(145deg, rgba(255,255,255,0.85) 0%, rgba(255,240,250,0.7) 100%);
-  --bg-elevated: rgba(255, 220, 240, 0.4);
-  --text-primary: #1A0A2E;
-  --text-secondary: #6B4080;
-  --text-muted: #A07BB8;
-  --accent: #E91E78;
-  --accent-light: rgba(233, 30, 120, 0.1);
-  --accent-glow: rgba(233, 30, 120, 0.35);
-  --border: rgba(233, 30, 120, 0.15);
+  --bg-card: rgba(255, 255, 255, 0.82);
+  --bg-elevated: #F3F0ED;
+  --text-primary: #1C1917;
+  --text-secondary: #57534E;
+  --text-muted: #A8A29E;
+  --accent: #7C3AED;
+  --accent-light: rgba(124, 58, 237, 0.08);
+  --accent-glow: rgba(124, 58, 237, 0.25);
+  --border: rgba(0, 0, 0, 0.06);
   --success: #059669;
   --warning: #D97706;
   --danger: #DC2626;
   --safe-bg: rgba(5, 150, 105, 0.08);
   --suspicious-bg: rgba(217, 119, 6, 0.08);
   --dangerous-bg: rgba(220, 38, 38, 0.08);
-  --glass-blur: 16px;
-  --glass-border: rgba(255, 255, 255, 0.7);
-  --glass-shine: linear-gradient(135deg, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.3) 40%, transparent 70%);
-  --gradient-bg: radial-gradient(ellipse at 0% 0%, rgba(233, 30, 120, 0.12) 0%, transparent 50%),
-                 radial-gradient(ellipse at 100% 50%, rgba(139, 92, 246, 0.1) 0%, transparent 50%),
-                 radial-gradient(ellipse at 40% 100%, rgba(255, 120, 200, 0.08) 0%, transparent 50%);
-  --card-shadow: 0 4px 24px rgba(100, 0, 60, 0.1), 0 1px 3px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255,255,255,0.9);
-  --card-hover-shadow: 0 12px 40px rgba(233, 30, 120, 0.18), 0 4px 12px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255,255,255,1);
+  --card-bg: linear-gradient(160deg, rgba(255,255,255,0.9) 0%, rgba(248,246,244,0.85) 100%);
+  --card-border: rgba(0, 0, 0, 0.05);
+  --card-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.04);
+  --card-hover-shadow: 0 8px 30px rgba(124, 58, 237, 0.1), 0 2px 8px rgba(0,0,0,0.06);
+  --ambient-gradient: radial-gradient(ellipse at 0% 0%, rgba(124,58,237,0.04) 0%, transparent 60%),
+                      radial-gradient(ellipse at 100% 100%, rgba(236,72,153,0.03) 0%, transparent 60%);
 }
 
 /* =============================================================================
-   TEMA GAMER (Neon cyberpunk — multiples capas de luz intensa)
+   TEMA GAMER — High-Contrast Dark + Neon Accent
+   True black, layered charcoal, electric accent.
    ============================================================================= */
 
 .theme-gamer {
-  --bg-primary: linear-gradient(180deg, #030608 0%, #0A0F1A 50%, #050810 100%);
-  --bg-primary-solid: #030608;
-  --bg-secondary: #080C14;
-  --bg-card: linear-gradient(145deg, rgba(10,25,40,0.9) 0%, rgba(5,15,25,0.85) 100%);
-  --bg-elevated: rgba(0, 255, 136, 0.06);
-  --text-primary: #E8FFF0;
-  --text-secondary: #7BCCAA;
-  --text-muted: #3A6B55;
-  --accent: #00FF88;
-  --accent-light: rgba(0, 255, 136, 0.1);
-  --accent-glow: rgba(0, 255, 136, 0.4);
-  --border: rgba(0, 255, 136, 0.12);
-  --success: #00FF88;
-  --warning: #FFAA00;
-  --danger: #FF3366;
-  --safe-bg: rgba(0, 255, 136, 0.06);
-  --suspicious-bg: rgba(255, 170, 0, 0.06);
-  --dangerous-bg: rgba(255, 51, 102, 0.06);
-  --glass-blur: 20px;
-  --glass-border: rgba(0, 255, 136, 0.15);
-  --glass-shine: linear-gradient(135deg, rgba(0,255,136,0.1) 0%, rgba(0,180,255,0.05) 30%, transparent 60%);
-  --gradient-bg: radial-gradient(ellipse at 20% 0%, rgba(0, 255, 136, 0.15) 0%, transparent 35%),
-                 radial-gradient(ellipse at 80% 20%, rgba(0, 120, 255, 0.12) 0%, transparent 35%),
-                 radial-gradient(ellipse at 50% 100%, rgba(255, 0, 100, 0.08) 0%, transparent 35%),
-                 radial-gradient(circle at 90% 70%, rgba(0, 255, 200, 0.06) 0%, transparent 25%);
-  --card-shadow: 0 8px 32px rgba(0, 0, 0, 0.7), 0 0 1px rgba(0, 255, 136, 0.4), inset 0 1px 0 rgba(0, 255, 136, 0.08);
-  --card-hover-shadow: 0 16px 48px rgba(0, 0, 0, 0.8), 0 0 50px rgba(0, 255, 136, 0.2), 0 0 2px rgba(0, 255, 136, 0.6), inset 0 1px 0 rgba(0, 255, 136, 0.15);
+  --bg-primary: #000000;
+  --bg-secondary: #0A0A0A;
+  --bg-card: rgba(18, 18, 18, 0.95);
+  --bg-elevated: #1A1A1A;
+  --text-primary: #FAFAFA;
+  --text-secondary: #A1A1AA;
+  --text-muted: #52525B;
+  --accent: #6366F1;
+  --accent-light: rgba(99, 102, 241, 0.1);
+  --accent-glow: rgba(99, 102, 241, 0.3);
+  --border: rgba(255, 255, 255, 0.06);
+  --success: #34D399;
+  --warning: #FBBF24;
+  --danger: #F87171;
+  --safe-bg: rgba(52, 211, 153, 0.08);
+  --suspicious-bg: rgba(251, 191, 36, 0.08);
+  --dangerous-bg: rgba(248, 113, 113, 0.08);
+  --card-bg: linear-gradient(160deg, rgba(24,24,27,0.98) 0%, rgba(14,14,16,0.95) 100%);
+  --card-border: rgba(255, 255, 255, 0.06);
+  --card-shadow: 0 1px 2px rgba(0,0,0,0.5), 0 4px 16px rgba(0,0,0,0.4);
+  --card-hover-shadow: 0 8px 30px rgba(99,102,241,0.15), 0 0 1px rgba(99,102,241,0.5), 0 4px 16px rgba(0,0,0,0.5);
+  --ambient-gradient: radial-gradient(ellipse at 20% 0%, rgba(99,102,241,0.06) 0%, transparent 50%),
+                      radial-gradient(ellipse at 80% 100%, rgba(236,72,153,0.03) 0%, transparent 50%);
 }
 
 /* =============================================================================
@@ -90,30 +90,24 @@ html, body {
   padding: 0;
   font-family: var(--nada-font-sans);
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 body {
-  background: var(--bg-primary-solid);
+  background: var(--bg-primary);
   color: var(--text-primary);
-  transition: background-color 0.5s ease, color 0.3s ease;
   min-height: 100vh;
+  transition: background 0.4s ease, color 0.3s ease;
 }
 
-/* Ambient gradient background — multiple light sources */
+/* Ambient light — subtle color wash behind everything */
 body::before {
   content: '';
   position: fixed;
   inset: 0;
-  background: var(--gradient-bg);
+  background: var(--ambient-gradient);
   pointer-events: none;
   z-index: 0;
-  opacity: 1;
-}
-
-/* Background gradient on body itself for themes that use it */
-.theme-velvet body,
-.theme-gamer body {
-  background: var(--bg-primary-solid);
 }
 
 #root {
@@ -122,125 +116,81 @@ body::before {
 }
 
 /* =============================================================================
-   GLASS CARDS — El efecto premium gelatinoso
+   CARDS — Clean, layered, minimal but with depth
    ============================================================================= */
 
 .card {
-  background: var(--bg-card);
-  border: 1px solid var(--glass-border);
-  border-radius: 1.25rem;
-  backdrop-filter: blur(var(--glass-blur)) saturate(1.5);
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.5);
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 1rem;
   box-shadow: var(--card-shadow);
-  transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1),
-              border-color 0.3s ease,
-              box-shadow 0.4s ease;
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 0.25s ease,
+              border-color 0.25s ease;
   position: relative;
-  overflow: hidden;
-}
-
-/* Gel shine — thick glossy reflection at the top */
-.card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 50%;
-  background: var(--glass-shine);
-  border-radius: inherit;
-  pointer-events: none;
 }
 
 .card:hover {
-  transform: translateY(-4px) scale(1.02);
+  transform: translateY(-2px);
   border-color: var(--accent);
   box-shadow: var(--card-hover-shadow);
 }
 
 .card:active {
-  transform: translateY(0) scale(0.98);
-  transition-duration: 0.15s;
-}
-
-/* =============================================================================
-   BOTONES PREMIUM
-   ============================================================================= */
-
-.btn-primary {
-  background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 70%, white));
-  color: var(--bg-primary);
-  font-weight: 700;
-  border-radius: 0.875rem;
-  padding: 0.75rem 1.5rem;
-  border: none;
-  cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-  box-shadow:
-    0 4px 16px var(--accent-glow),
-    inset 0 1px 0 rgba(255, 255, 255, 0.25);
-  position: relative;
-  overflow: hidden;
-}
-
-.btn-primary::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(135deg, rgba(255,255,255,0.3) 0%, transparent 50%);
-  border-radius: inherit;
-  pointer-events: none;
-}
-
-.btn-primary:hover {
-  transform: translateY(-2px) scale(1.03);
-  box-shadow:
-    0 8px 24px var(--accent-glow),
-    0 0 40px var(--accent-glow),
-    inset 0 1px 0 rgba(255, 255, 255, 0.3);
-}
-
-.btn-primary:active {
-  transform: translateY(0) scale(0.97);
+  transform: translateY(0) scale(0.99);
   transition-duration: 0.1s;
 }
 
 /* =============================================================================
-   VERDICT BADGES — glassmorphism
+   BUTTONS
+   ============================================================================= */
+
+.btn-primary {
+  background: var(--accent);
+  color: #FFFFFF;
+  font-weight: 600;
+  border-radius: 0.75rem;
+  padding: 0.75rem 1.5rem;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 8px var(--accent-glow);
+}
+
+.btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px var(--accent-glow);
+  filter: brightness(1.1);
+}
+
+.btn-primary:active {
+  transform: translateY(0) scale(0.98);
+}
+
+/* =============================================================================
+   VERDICT BADGES
    ============================================================================= */
 
 .badge-safe {
   background: var(--safe-bg);
   color: var(--success);
-  border: 1px solid rgba(0, 255, 170, 0.3);
-  backdrop-filter: blur(8px);
-  box-shadow: 0 0 12px rgba(0, 255, 170, 0.15);
+  border: 1px solid currentColor;
 }
 
 .badge-suspicious {
   background: var(--suspicious-bg);
   color: var(--warning);
-  border: 1px solid rgba(255, 209, 102, 0.3);
-  backdrop-filter: blur(8px);
-  box-shadow: 0 0 12px rgba(255, 209, 102, 0.15);
+  border: 1px solid currentColor;
 }
 
 .badge-dangerous {
   background: var(--dangerous-bg);
   color: var(--danger);
-  border: 1px solid rgba(255, 77, 109, 0.3);
-  backdrop-filter: blur(8px);
-  box-shadow: 0 0 12px rgba(255, 77, 109, 0.2);
-  animation: danger-pulse 2s ease-in-out infinite;
-}
-
-@keyframes danger-pulse {
-  0%, 100% { box-shadow: 0 0 12px rgba(255, 77, 109, 0.2); }
-  50% { box-shadow: 0 0 20px rgba(255, 77, 109, 0.4); }
+  border: 1px solid currentColor;
 }
 
 /* =============================================================================
-   SCANLINE EFFECT (Gamer theme)
+   SCANLINE EFFECT (Gamer only)
    ============================================================================= */
 
 .scanline-overlay {
@@ -248,29 +198,14 @@ body::before {
   inset: 0;
   pointer-events: none;
   z-index: 9999;
-  background:
-    repeating-linear-gradient(
-      0deg,
-      transparent,
-      transparent 2px,
-      rgba(0, 255, 136, 0.015) 2px,
-      rgba(0, 255, 136, 0.015) 4px
-    ),
-    repeating-linear-gradient(
-      90deg,
-      transparent,
-      transparent 60px,
-      rgba(0, 255, 136, 0.008) 60px,
-      rgba(0, 255, 136, 0.008) 61px
-    ),
-    repeating-linear-gradient(
-      0deg,
-      transparent,
-      transparent 60px,
-      rgba(0, 255, 136, 0.008) 60px,
-      rgba(0, 255, 136, 0.008) 61px
-    );
-  animation: scanline-scroll 10s linear infinite;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(99, 102, 241, 0.01) 2px,
+    rgba(99, 102, 241, 0.01) 4px
+  );
+  animation: scanline-scroll 12s linear infinite;
 }
 
 @keyframes scanline-scroll {
@@ -279,21 +214,21 @@ body::before {
 }
 
 /* =============================================================================
-   ANIMACIONES PREMIUM
+   ANIMATIONS
    ============================================================================= */
 
 .fade-slide-in {
-  animation: fadeSlideIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+  animation: fadeSlideIn 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 @keyframes fadeSlideIn {
-  from { opacity: 0; transform: translateY(16px) scale(0.97); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 @keyframes pulse-ring {
-  0% { transform: scale(1); opacity: 0.7; }
-  100% { transform: scale(1.8); opacity: 0; }
+  0% { transform: scale(1); opacity: 0.6; }
+  100% { transform: scale(1.6); opacity: 0; }
 }
 
 .pulse-ring {
@@ -303,55 +238,49 @@ body::before {
 .pulse-ring::after {
   content: '';
   position: absolute;
-  inset: -8px;
+  inset: -6px;
   border-radius: 50%;
   border: 2px solid var(--accent);
-  animation: pulse-ring 2.5s ease-out infinite;
-  filter: blur(1px);
+  animation: pulse-ring 2s ease-out infinite;
 }
 
-/* Glow text */
 .text-shadow-green {
-  text-shadow: 0 0 12px rgba(0, 255, 136, 0.6), 0 0 4px rgba(0, 255, 136, 0.3);
+  text-shadow: 0 0 8px var(--accent-glow);
 }
 
 /* =============================================================================
-   BOTTOM NAV GLASS
+   NAVIGATION BAR
    ============================================================================= */
 
 nav {
-  backdrop-filter: blur(24px) saturate(1.4) !important;
-  -webkit-backdrop-filter: blur(24px) saturate(1.4) !important;
-  box-shadow: 0 -4px 30px rgba(0, 0, 0, 0.3) !important;
-  border-top: 1px solid var(--glass-border) !important;
+  backdrop-filter: blur(12px) saturate(1.2) !important;
+  -webkit-backdrop-filter: blur(12px) saturate(1.2) !important;
 }
 
 /* =============================================================================
-   SCROLLBAR PREMIUM
-   ============================================================================= */
-
-::-webkit-scrollbar { width: 5px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, var(--accent), transparent);
-  border-radius: 4px;
-}
-
-/* =============================================================================
-   INPUT FIELDS GLASS
+   INPUTS
    ============================================================================= */
 
 textarea, input[type="text"], input[type="email"], input[type="password"] {
-  background: rgba(255, 255, 255, 0.03) !important;
-  border: 1px solid var(--glass-border);
-  border-radius: 0.75rem;
-  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 textarea:focus, input:focus {
   outline: none;
   border-color: var(--accent) !important;
-  box-shadow: 0 0 16px var(--accent-glow);
+  box-shadow: 0 0 0 3px var(--accent-light);
+}
+
+/* =============================================================================
+   SCROLLBAR
+   ============================================================================= */
+
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--accent);
+  border-radius: 2px;
+  opacity: 0.6;
 }
 
 /* =============================================================================
@@ -370,12 +299,12 @@ textarea:focus, input:focus {
 }
 
 /* =============================================================================
-   SPLASH SCREEN
+   SPLASH
    ============================================================================= */
 
 @keyframes splash-pulse {
-  0%, 100% { opacity: 0.6; transform: scale(1); filter: drop-shadow(0 0 8px var(--accent-glow)); }
-  50% { opacity: 1; transform: scale(1.08); filter: drop-shadow(0 0 20px var(--accent-glow)); }
+  0%, 100% { opacity: 0.7; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.04); }
 }
 
 .splash-logo {
