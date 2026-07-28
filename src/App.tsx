@@ -130,6 +130,7 @@ export default function App() {
         <nav
           className="fixed bottom-0 left-0 right-0 z-40 border-t backdrop-blur-xl"
           style={{ background: 'var(--bg-card)', borderColor: 'var(--border)' }}
+          aria-label="Navegacion principal"
         >
           <div className="relative flex justify-around py-3 px-6">
             {/* Sliding indicator */}
@@ -145,22 +146,31 @@ export default function App() {
 
             <button
               onClick={() => setActiveTab('home')}
-              className="flex flex-col items-center gap-1 cursor-pointer transition-all"
+              className="flex flex-col items-center gap-1 cursor-pointer transition-all min-w-[44px] min-h-[44px] justify-center"
               style={{ color: activeTab === 'home' ? 'var(--accent)' : 'var(--text-muted)' }}
+              aria-label={t.tabHome}
+              aria-current={activeTab === 'home' ? 'page' : undefined}
             >
-              <Home className="w-5 h-5" />
+              <Home className="w-5 h-5" aria-hidden="true" />
               <span className="text-[10px] font-bold">{t.tabHome}</span>
             </button>
 
             <button
               onClick={() => setActiveTab('alerts')}
-              className="flex flex-col items-center gap-1 cursor-pointer transition-all relative"
+              className="flex flex-col items-center gap-1 cursor-pointer transition-all relative min-w-[44px] min-h-[44px] justify-center"
               style={{ color: activeTab === 'alerts' ? 'var(--accent)' : 'var(--text-muted)' }}
+              aria-label={`${t.tabAlerts}${alerts.length > 0 ? ` (${alerts.length})` : ''}`}
+              aria-current={activeTab === 'alerts' ? 'page' : undefined}
             >
-              <Bell className="w-5 h-5" />
+              <Bell className="w-5 h-5" aria-hidden="true" />
               <span className="text-[10px] font-bold">{t.tabAlerts}</span>
               {alerts.length > 0 && (
-                <span className="absolute -top-1 -right-2 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold text-white animate-pulse" style={{ background: 'var(--danger)' }}>
+                <span
+                  className="absolute -top-1 -right-2 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold text-white animate-pulse"
+                  style={{ background: 'var(--danger)' }}
+                  aria-live="polite"
+                  aria-atomic="true"
+                >
                   {alerts.length}
                 </span>
               )}
@@ -168,10 +178,12 @@ export default function App() {
 
             <button
               onClick={() => setActiveTab('settings')}
-              className="flex flex-col items-center gap-1 cursor-pointer transition-all"
+              className="flex flex-col items-center gap-1 cursor-pointer transition-all min-w-[44px] min-h-[44px] justify-center"
               style={{ color: activeTab === 'settings' ? 'var(--accent)' : 'var(--text-muted)' }}
+              aria-label={t.tabSettings}
+              aria-current={activeTab === 'settings' ? 'page' : undefined}
             >
-              <Settings className="w-5 h-5" />
+              <Settings className="w-5 h-5" aria-hidden="true" />
               <span className="text-[10px] font-bold">{t.tabSettings}</span>
             </button>
           </div>

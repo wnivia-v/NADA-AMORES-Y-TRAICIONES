@@ -52,8 +52,9 @@ export function StatusBar() {
           )}
           <button
             onClick={clearLogs}
-            className="text-xs cursor-pointer hover:underline"
+            className="text-xs cursor-pointer hover:underline min-h-[44px] flex items-center"
             style={{ color: 'var(--text-muted)' }}
+            aria-label="Limpiar consola"
           >
             Limpiar
           </button>

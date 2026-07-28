@@ -251,6 +251,19 @@ textarea:focus, input:focus {
 }
 
 /* =============================================================================
+   FOCUS INDICATORS
+   ============================================================================= */
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* =============================================================================
    REDUCED MOTION
    ============================================================================= */
 
@@ -261,6 +274,8 @@ textarea:focus, input:focus {
     transition-duration: 0.01ms !important;
   }
   .scanline-overlay { display: none; }
+  .pulse-ring::after { animation: none !important; }
+  .danger-pulse { animation: none !important; }
 }
 
 /* =============================================================================

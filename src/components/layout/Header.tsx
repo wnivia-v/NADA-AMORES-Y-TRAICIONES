@@ -30,9 +30,9 @@ export function Header() {
         {/* Theme toggle */}
         <button
           onClick={() => setTheme(theme === 'velvet' ? 'gamer' : 'velvet')}
-          className="px-3 py-1.5 text-xs font-semibold rounded-lg border cursor-pointer transition-all hover:scale-105"
+          className="px-3 py-1.5 text-xs font-semibold rounded-lg border cursor-pointer transition-all hover:scale-105 min-w-[44px] min-h-[44px] flex items-center justify-center"
           style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
-          title={t.theme}
+          aria-label={theme === 'velvet' ? 'Cambiar a tema Gamer' : 'Cambiar a tema Velvet'}
         >
           {theme === 'velvet' ? '🌸' : '🎮'}
         </button>
@@ -40,16 +40,17 @@ export function Header() {
         {/* Debug mode toggle */}
         <button
           onClick={() => setActiveTab(activeTab === 'debug' ? 'home' : 'debug')}
-          className={`p-2 rounded-lg border cursor-pointer transition-all hover:scale-105 ${
+          className={`p-2 rounded-lg border cursor-pointer transition-all hover:scale-105 min-w-[44px] min-h-[44px] flex items-center justify-center ${
             activeTab === 'debug' ? 'border-[var(--accent)]' : ''
           }`}
           style={{
             borderColor: activeTab === 'debug' ? 'var(--accent)' : 'var(--border)',
             color: activeTab === 'debug' ? 'var(--accent)' : 'var(--text-muted)',
           }}
-          title={t.debugMode}
+          aria-label={t.debugMode}
+          aria-pressed={activeTab === 'debug'}
         >
-          <Bug className="w-4 h-4" />
+          <Bug className="w-4 h-4" aria-hidden="true" />
         </button>
       </div>
     </header>

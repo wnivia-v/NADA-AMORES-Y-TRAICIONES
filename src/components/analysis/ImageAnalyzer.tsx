@@ -98,21 +98,23 @@ export function ImageAnalyzer() {
       <div className="card p-4">
         {/* Upload area */}
         {!preview ? (
-          <div
+          <button
+            type="button"
             onDrop={handleDrop}
             onDragOver={(e) => e.preventDefault()}
             onClick={() => fileInputRef.current?.click()}
-            className="border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all hover:border-[var(--accent)] hover:bg-[var(--bg-elevated)]"
-            style={{ borderColor: 'var(--border)' }}
+            className="w-full border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all hover:border-[var(--accent)] hover:bg-[var(--bg-elevated)]"
+            style={{ borderColor: 'var(--border)', background: 'transparent' }}
+            aria-label={t.uploadScreenshot}
           >
-            <Upload className="w-10 h-10 mx-auto mb-3" style={{ color: 'var(--text-muted)' }} />
+            <Upload className="w-10 h-10 mx-auto mb-3" style={{ color: 'var(--text-muted)' }} aria-hidden="true" />
             <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
               {t.uploadScreenshot}
             </p>
             <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
               {t.uploadScreenshotDesc}
             </p>
-          </div>
+          </button>
         ) : (
           <div className="space-y-3">
             {/* Preview */}
@@ -120,10 +122,11 @@ export function ImageAnalyzer() {
               <img src={preview} alt="Preview" className="w-full max-h-64 object-contain" />
               <button
                 onClick={handleClear}
-                className="absolute top-2 right-2 w-7 h-7 rounded-full flex items-center justify-center cursor-pointer"
+                className="absolute top-2 right-2 min-w-[44px] min-h-[44px] rounded-full flex items-center justify-center cursor-pointer"
                 style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}
+                aria-label="Cerrar vista previa"
               >
-                <X className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />
+                <X className="w-4 h-4" style={{ color: 'var(--text-muted)' }} aria-hidden="true" />
               </button>
             </div>
 

@@ -48,11 +48,11 @@ export function TextAnalyzer() {
           <div className="flex gap-2">
             <button
               onClick={() => { setText(''); resetSession(); }}
-              className="p-2 rounded-lg border cursor-pointer hover:scale-105 transition-transform"
+              className="p-2 rounded-lg border cursor-pointer hover:scale-105 transition-transform min-w-[44px] min-h-[44px] flex items-center justify-center"
               style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}
-              title="Reset"
+              aria-label="Reset"
             >
-              <RotateCcw className="w-4 h-4" />
+              <RotateCcw className="w-4 h-4" aria-hidden="true" />
             </button>
             <button
               onClick={handleAnalyze}

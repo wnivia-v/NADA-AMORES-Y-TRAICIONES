@@ -76,19 +76,20 @@ export function AlertsView() {
           <div className="flex gap-2">
             <button
               onClick={() => handleExport('csv')}
-              className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg border cursor-pointer hover:scale-105 transition-transform"
+              className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg border cursor-pointer hover:scale-105 transition-transform min-h-[44px]"
               style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}
-              title={t.exportCsv}
+              aria-label={t.exportCsv}
             >
-              <Download className="w-3 h-3" />
+              <Download className="w-3 h-3" aria-hidden="true" />
               CSV
             </button>
             <button
               onClick={clearAlerts}
-              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border cursor-pointer hover:scale-105 transition-transform"
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border cursor-pointer hover:scale-105 transition-transform min-h-[44px]"
               style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}
+              aria-label={t.clearAlerts}
             >
-              <Trash2 className="w-3.5 h-3.5" />
+              <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
               {t.clearAlerts}
             </button>
           </div>
@@ -97,25 +98,34 @@ export function AlertsView() {
 
       {alerts.length === 0 ? (
         <div className="card p-12 text-center">
-          <Bell className="w-10 h-10 mx-auto mb-3" style={{ color: 'var(--text-muted)' }} />
+          <Bell className="w-10 h-10 mx-auto mb-3" style={{ color: 'var(--text-muted)' }} aria-hidden="true" />
           <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>{t.noAlerts}</p>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-3" role="list">
           {alerts.map((alert) => {
             const badgeClass = alert.verdict === 'PELIGROSO' ? 'badge-dangerous' : alert.verdict === 'SOSPECHOSO' ? 'badge-suspicious' : 'badge-safe';
             const isExpanded = expandedId === alert.id;
             const isCopied = copiedId === alert.id;
 
             return (
-              <div key={alert.id} className="card overflow-hidden">
-                {/* Main row */}
-                <div
-                  className="p-4 cursor-pointer transition-all"
+              <div key={alert.id} className="card overflow-hidden" role="listitem">
+                {/* Main row - keyboard accessible */}
+                <button
+                  type="button"
+                  className="w-full p-4 cursor-pointer transition-all text-left"
                   onClick={() => toggleExpand(alert.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      toggleExpand(alert.id);
+                    }
+                  }}
+                  aria-expanded={isExpanded}
+                  aria-label={`${alert.verdict} — ${alert.description.slice(0, 60)}`}
                 >
                   <div className="flex items-start gap-3">
-                    <ShieldAlert className="w-5 h-5 mt-0.5 shrink-0" style={{ color: alert.verdict === 'PELIGROSO' ? 'var(--danger)' : 'var(--warning)' }} />
+                    <ShieldAlert className="w-5 h-5 mt-0.5 shrink-0" style={{ color: alert.verdict === 'PELIGROSO' ? 'var(--danger)' : 'var(--warning)' }} aria-hidden="true" />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
                         <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${badgeClass}`}>
@@ -143,14 +153,16 @@ export function AlertsView() {
                       <span className="text-sm font-bold font-mono" style={{ color: alert.riskScore >= 70 ? 'var(--danger)' : 'var(--warning)' }}>
                         {alert.riskScore}
                       </span>
-                      {isExpanded ? (
-                        <ChevronUp className="w-3.5 h-3.5" style={{ color: 'var(--text-muted)' }} />
-                      ) : (
-                        <ChevronDown className="w-3.5 h-3.5" style={{ color: 'var(--text-muted)' }} />
-                      )}
+                      <span className="min-w-[44px] min-h-[44px] flex items-center justify-center" aria-hidden="true">
+                        {isExpanded ? (
+                          <ChevronUp className="w-3.5 h-3.5" style={{ color: 'var(--text-muted)' }} />
+                        ) : (
+                          <ChevronDown className="w-3.5 h-3.5" style={{ color: 'var(--text-muted)' }} />
+                        )}
+                      </span>
                     </div>
                   </div>
-                </div>
+                </button>
 
                 {/* Expanded details */}
                 {isExpanded && (
@@ -197,18 +209,20 @@ export function AlertsView() {
                     <div className="flex gap-2 pt-1">
                       <button
                         onClick={(e) => { e.stopPropagation(); handleShare(alert); }}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold cursor-pointer transition-all hover:scale-105"
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold cursor-pointer transition-all hover:scale-105 min-h-[44px]"
                         style={{ background: 'var(--accent-light)', color: 'var(--accent)' }}
+                        aria-label={isCopied ? t.copied : t.share}
                       >
-                        {isCopied ? <Check className="w-3 h-3" /> : <Share2 className="w-3 h-3" />}
+                        {isCopied ? <Check className="w-3 h-3" aria-hidden="true" /> : <Share2 className="w-3 h-3" aria-hidden="true" />}
                         {isCopied ? t.copied : t.share}
                       </button>
                       <button
                         onClick={(e) => { e.stopPropagation(); copyToClipboard(alert.description, alert.id); }}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold cursor-pointer transition-all hover:scale-105"
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold cursor-pointer transition-all hover:scale-105 min-h-[44px]"
                         style={{ background: 'var(--bg-elevated)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}
+                        aria-label={t.copy}
                       >
-                        <Copy className="w-3 h-3" />
+                        <Copy className="w-3 h-3" aria-hidden="true" />
                         {t.copy}
                       </button>
                     </div>

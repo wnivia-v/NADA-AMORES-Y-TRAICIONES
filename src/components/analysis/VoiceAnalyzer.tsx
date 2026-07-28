@@ -130,8 +130,10 @@ export function VoiceAnalyzer() {
             color: 'var(--bg-primary)',
             boxShadow: listening ? '0 0 30px var(--danger)' : '0 0 20px var(--accent-glow)',
           }}
+          aria-label={listening ? t.stopListening : t.startListening}
+          aria-pressed={listening}
         >
-          {listening ? <MicOff className="w-8 h-8" /> : <Mic className="w-8 h-8" />}
+          {listening ? <MicOff className="w-8 h-8" aria-hidden="true" /> : <Mic className="w-8 h-8" aria-hidden="true" />}
         </button>
         <p className="mt-4 text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
           {listening ? t.stopListening : t.startListening}

@@ -44,6 +44,8 @@ export function ThreatChart() {
         width="100%"
         viewBox={`0 0 ${chartW} ${chartH + 20}`}
         className="overflow-visible"
+        role="img"
+        aria-label={language === 'es' ? 'Grafico de amenazas de los ultimos 7 dias' : 'Threat chart for the last 7 days'}
       >
         {/* Grid lines */}
         {[0, 0.5, 1].map((pct) => (
