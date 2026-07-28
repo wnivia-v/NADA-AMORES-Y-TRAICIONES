@@ -217,6 +217,84 @@
       "category": "texto-largo-ocr",
       "text": "ATENCION CLIENTE BANCO NACIONAL. Hemos detectado un acceso no autorizado a su cuenta desde un dispositivo desconocido. Por su seguridad su cuenta ha sido restringida temporalmente. Para restablecer el acceso completo debe verificar su identidad en el siguiente enlace dentro de las proximas 4 horas o su cuenta sera cerrada permanentemente y sus fondos transferidos a una cuenta de retencion. Ingrese sus datos completos incluyendo numero de tarjeta, clave y codigo de seguridad. No comparta este mensaje con terceros.",
       "note": "Long text as it would arrive from OCR of a screenshot. Tests that scoring works on realistic OCR-length input."
+    },
+
+    {
+      "id": "incibe-001",
+      "label": "PELIGROSO",
+      "category": "smishing-bancario",
+      "text": "Cargo por 2890 EUR pre-aprobado por defecto. Si no ha sido usted procede a cancelarla inmediatamente aqui: https://bbva-seguridad.top/verificar",
+      "note": "REAL: INCIBE documented campaign (June 2023). SMS suplantando BBVA con cargo falso y URL maliciosa en dominio .top."
+    },
+    {
+      "id": "incibe-002",
+      "label": "PELIGROSO",
+      "category": "smishing-bancario",
+      "text": "Apartir del 27 06 no puedes utilizar su cuenta. Tienes que activar el nuevo sistema de seguridad web. Activa ahora: https://santander-online.xyz/activar",
+      "note": "REAL: INCIBE documented campaign. Bloqueo falso de cuenta con urgencia y enlace a dominio .xyz fraudulento."
+    },
+    {
+      "id": "incibe-003",
+      "label": "PELIGROSO",
+      "category": "smishing-bancario",
+      "text": "Compra aceptada por importe de 2890EUR, si no reconoce este movimiento, verifique inmediatamente: https://caixa-verificar.top/mov",
+      "note": "REAL: INCIBE documented campaign. Cargo falso elevado para generar panico y que la victima pulse sin pensar."
+    },
+    {
+      "id": "incibe-004",
+      "label": "PELIGROSO",
+      "category": "smishing-bancario",
+      "text": "Se ha detectado un acceso no autorizado desde una nueva localizacion, si no ha sido usted, verifique en el siguiente enlace: https://kutxa-seguridad.buzz/login",
+      "note": "REAL: INCIBE documented campaign. Acceso no autorizado falso, redirige a pagina de login falsa."
+    },
+    {
+      "id": "incibe-005",
+      "label": "PELIGROSO",
+      "category": "smishing-bancario",
+      "text": "Caixabank: A partir del 26/06/2023, no podra utilizar tarjeta si no ha activado el nuevo sistema garantiza mayor seguridad en sus operaciones Activa ahora para leer: https://caixa-activacion.tk/nuevo",
+      "note": "REAL: INCIBE documented campaign. Suplanta CaixaBank con fecha limite falsa."
+    },
+    {
+      "id": "incibe-006",
+      "label": "PELIGROSO",
+      "category": "smishing-bancario",
+      "text": "Se ha realizado un cargo de 332.67 EUR. Si no reconoce esta actividad, verifique inmediatamente. https://bbva-movimientos.cn/check",
+      "note": "REAL: INCIBE documented campaign. Importe preciso para parecer real, URL en dominio .cn."
+    },
+    {
+      "id": "incibe-007",
+      "label": "PELIGROSO",
+      "category": "smishing-dgt",
+      "text": "DGT: Tiene una multa de trafico pendiente de 35 euros. Ultimo dia para pagarla sin recargo: https://dgt-multas.top/pago",
+      "note": "REAL: INCIBE documented campaign (2024). Suplanta la DGT con multa falsa y enlace a dominio fraudulento."
+    },
+    {
+      "id": "incibe-008",
+      "label": "PELIGROSO",
+      "category": "smishing-paqueteria",
+      "text": "Correos: Su paquete no ha podido ser entregado. Confirme sus datos y pague los gastos de envio (1.79 EUR) en: https://correos-reenvio.xyz/pago",
+      "note": "REAL: INCIBE documented campaign. Suplanta Correos con paquete falso y micropago para robar datos de tarjeta."
+    },
+    {
+      "id": "incibe-009",
+      "label": "PELIGROSO",
+      "category": "smishing-sanidad",
+      "text": "Ministerio de Sanidad: Su Tarjeta Sanitaria Individual requiere renovacion obligatoria antes del 15/03. Complete el proceso aqui: https://sanidad-tsi.top/renovar",
+      "note": "REAL: INCIBE documented campaign (2025). Suplanta Ministerio de Sanidad con renovacion falsa de tarjeta sanitaria."
+    },
+    {
+      "id": "incibe-010",
+      "label": "PELIGROSO",
+      "category": "empleo-falso-real",
+      "text": "Oferta de trabajo: Necesitamos socorristas para hotel 4 estrellas en Mallorca. Temporada junio-septiembre. Sueldo 2400/mes. Para formalizar la reserva de plaza envie 150 euros de fianza a esta cuenta. Se devuelve el primer dia.",
+      "note": "REAL: based on INCIBE case (June 2026). False lifeguard job offer that asks for advance payment to 'reserve' the position."
+    },
+    {
+      "id": "incibe-011",
+      "label": "PELIGROSO",
+      "category": "fraude-facturacion",
+      "text": "Estimado proveedor, le informamos que hemos cambiado nuestra cuenta bancaria. A partir de hoy todos los pagos deben realizarse a la nueva cuenta: ES91 2100 0418 4502 0005 1332. Rogamos actualice sus registros.",
+      "note": "REAL: based on INCIBE case (July 2026). BEC fraud where attacker intercepts email and changes payment account. Classic invoice fraud targeting businesses."
     }
   ]
 }

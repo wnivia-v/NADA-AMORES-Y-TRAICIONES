@@ -18,7 +18,9 @@ interface LocalScanResult {
 const PATTERNS: { regex: RegExp; category: string; weight: number }[] = [
   // Financial fraud
   { regex: /transfiere?\s*(a|al|ahora|ya|urgente)/i, category: 'Transferencia urgente', weight: 20 },
-  { regex: /env[ií]a\s*(dinero|plata|pago|transferencia)/i, category: 'Solicitud de dinero', weight: 25 },
+  { regex: /env[ií]\w*\s*(dinero|plata|pago|transferencia|lana)/i, category: 'Solicitud de dinero', weight: 25 },
+  { regex: /(dinero|plata|lana|guita)\s+(necesit|urgente|env[ií]|mand[aá]|pas[aá])/i, category: 'Solicitud de dinero', weight: 25 },
+  { regex: /(pas[aá]\w*|mand[aá]\w*|d[aá]\w*)\s+(la\s+)?(plata|lana|guita|dinero)/i, category: 'Solicitud de dinero', weight: 25 },
   { regex: /tarjeta\s*(de\s*cr[eé]dito|d[eé]bito|regalo)/i, category: 'Solicitud de tarjeta', weight: 15 },
   { regex: /n[uú]mero\s*de\s*(cuenta|tarjeta|clave)/i, category: 'Phishing datos bancarios', weight: 25 },
   { regex: /bitcoin|crypto|criptomoneda|wallet/i, category: 'Estafa crypto', weight: 15 },
@@ -38,7 +40,7 @@ const PATTERNS: { regex: RegExp; category: string; weight: number }[] = [
   { regex: /(te\s*amo|mi\s*amor|mi\s*vida).*(dinero|ayuda\s*econ[oó]mica|pr[eé]stamo)/i, category: 'Romance + dinero', weight: 30 },
   { regex: /estoy\s*(en\s*el\s*)?(hospital|accidente|emergencia).*(dinero|enviar|ayuda)/i, category: 'Emergencia falsa', weight: 25 },
   { regex: /(militar|soldado|plataforma\s*petrol[ií]fera|barco).*(no\s*puedo\s*acceder|bloqueado)/i, category: 'Romance military scam', weight: 22 },
-  { regex: /visa|pasaporte.*pagar|pagar.*visa|boleto\s*de\s*avi[oó]n/i, category: 'Estafa de viaje romantico', weight: 20 },
+  { regex: /\bvisa\b|pasaporte.*pagar|pagar.*\bvisa\b|boleto\s*de\s*avi[oó]n/i, category: 'Estafa de viaje romantico', weight: 20 },
 
   // Suspicious URLs
   { regex: /bit\.ly|tinyurl|acortar|haz\s*clic\s*aqu[ií]/i, category: 'URL acortada sospechosa', weight: 10 },
@@ -50,7 +52,7 @@ const PATTERNS: { regex: RegExp; category: string; weight: number }[] = [
 
   // Data harvesting
   { regex: /verificar?\s*(tu\s*)?(identidad|cuenta|datos)/i, category: 'Phishing de verificacion', weight: 15 },
-  { regex: /contrase[nñ]a|password|clave\s*de\s*acceso|pin/i, category: 'Solicitud de credenciales', weight: 20 },
+  { regex: /contrase[nñ]a|password|clave\s*de\s*acceso|\bpin\b/i, category: 'Solicitud de credenciales', weight: 20 },
   { regex: /selfie\s*con\s*(tu\s*)?(identificaci[oó]n|DNI|INE|pasaporte)/i, category: 'Robo de identidad', weight: 25 },
 
   // Employment scam

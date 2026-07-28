@@ -60,14 +60,26 @@ export function cancelAnalysis(scope: AnalysisScope) {
   controllers.delete(scope);
 }
 
-// Sanitize user input to prevent prompt injection
+// Sanitize user input to prevent prompt injection.
+//
+// The input to NADA is by definition attacker-authored text — that is the point
+// of the product. A scammer who knows the victim runs NADA can craft a message
+// designed to manipulate the classifier into returning SEGURO. This function
+// strips the common injection patterns in BOTH English and Spanish.
 function sanitizeForPrompt(text: string): string {
   return text
     .replace(/```/g, '\'\'\'')
     .replace(/"""/g, '\'\'\'')
+    // English injection patterns
     .replace(/\b(ignore|forget|disregard)\s+(previous|above|all)\s+(instructions?|prompts?|rules?)/gi, '[FILTERED]')
     .replace(/\b(you\s+are\s+now|new\s+instructions?|system\s*:)/gi, '[FILTERED]')
-    .replace(/\b(act\s+as|pretend\s+to\s+be|roleplay\s+as)/gi, '[FILTERED]');
+    .replace(/\b(act\s+as|pretend\s+to\s+be|roleplay\s+as)/gi, '[FILTERED]')
+    // Spanish injection patterns (the corpus case edge-004 uses these)
+    .replace(/\b(ignora|olvida|descarta)\s+(las?\s+)?(instrucciones?|reglas?|indicaciones?)\s*(anteriores?|previas?|de\s+arriba)?/gi, '[FILTERED]')
+    .replace(/\b(eres\s+ahora|nuevas?\s+instrucciones?|sistema\s*:)/gi, '[FILTERED]')
+    .replace(/\b(actua\s+como|act[uú]a\s+como|finge\s+ser|simula\s+ser|hazte\s+pasar)/gi, '[FILTERED]')
+    .replace(/\b(responde?\s+que\s+(es|este\s+mensaje\s+es)\s+seguro)/gi, '[FILTERED]')
+    .replace(/\b(riskScore\s*[=:\s]\s*0|verdict\s*[=:\s]\s*["']?SEGURO)/gi, '[FILTERED]');
 }
 
 // Extract URLs from text
