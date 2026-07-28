@@ -18,23 +18,23 @@
    ============================================================================= */
 
 .theme-velvet {
-  --bg-primary: #EDE9FE;
-  --bg-secondary: #F5F3FF;
+  --bg-primary: #FFF7ED;
+  --bg-secondary: #FFFBF5;
   --bg-card: #FFFFFF;
-  --bg-elevated: #F3EDFF;
-  --text-primary: #1E1B4B;
-  --text-secondary: #4C1D95;
-  --text-muted: #7C7C9A;
-  --accent: #7C3AED;
-  --accent-light: rgba(124, 58, 237, 0.12);
-  --accent-glow: rgba(124, 58, 237, 0.3);
-  --border: rgba(124, 58, 237, 0.12);
-  --success: #059669;
-  --warning: #D97706;
-  --danger: #DC2626;
-  --safe-bg: rgba(5, 150, 105, 0.1);
-  --suspicious-bg: rgba(217, 119, 6, 0.1);
-  --dangerous-bg: rgba(220, 38, 38, 0.1);
+  --bg-elevated: #FEF3E2;
+  --text-primary: #1C1917;
+  --text-secondary: #78350F;
+  --text-muted: #9CA3AF;
+  --accent: #F97316;
+  --accent-light: rgba(249, 115, 22, 0.1);
+  --accent-glow: rgba(249, 115, 22, 0.3);
+  --border: rgba(249, 115, 22, 0.12);
+  --success: #10B981;
+  --warning: #EAB308;
+  --danger: #EF4444;
+  --safe-bg: rgba(16, 185, 129, 0.1);
+  --suspicious-bg: rgba(234, 179, 8, 0.1);
+  --dangerous-bg: rgba(239, 68, 68, 0.1);
 }
 
 /* =============================================================================
@@ -43,22 +43,22 @@
    ============================================================================= */
 
 .theme-gamer {
-  --bg-primary: #0F172A;
-  --bg-secondary: #1E293B;
-  --bg-card: #1E293B;
-  --bg-elevated: #334155;
-  --text-primary: #F1F5F9;
-  --text-secondary: #94A3B8;
-  --text-muted: #64748B;
-  --accent: #06B6D4;
-  --accent-light: rgba(6, 182, 212, 0.12);
-  --accent-glow: rgba(6, 182, 212, 0.3);
-  --border: rgba(6, 182, 212, 0.15);
-  --success: #34D399;
-  --warning: #FBBF24;
+  --bg-primary: #0C0A1D;
+  --bg-secondary: #16132D;
+  --bg-card: #1D1A35;
+  --bg-elevated: #2A2650;
+  --text-primary: #F5F3FF;
+  --text-secondary: #C4B5FD;
+  --text-muted: #6D5F99;
+  --accent: #A78BFA;
+  --accent-light: rgba(167, 139, 250, 0.12);
+  --accent-glow: rgba(167, 139, 250, 0.35);
+  --border: rgba(167, 139, 250, 0.15);
+  --success: #4ADE80;
+  --warning: #FACC15;
   --danger: #FB7185;
-  --safe-bg: rgba(52, 211, 153, 0.1);
-  --suspicious-bg: rgba(251, 191, 36, 0.1);
+  --safe-bg: rgba(74, 222, 128, 0.1);
+  --suspicious-bg: rgba(250, 204, 21, 0.1);
   --dangerous-bg: rgba(251, 113, 133, 0.1);
 }
 
@@ -95,7 +95,7 @@ body {
 }
 
 .theme-gamer .card {
-  box-shadow: 0 2px 8px rgba(0,0,0,0.3), 0 0 1px rgba(6,182,212,0.2);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3), 0 0 1px rgba(167,139,250,0.3);
 }
 
 .card:hover {
