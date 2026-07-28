@@ -83,7 +83,7 @@ export default function App() {
   const debugModes: DebugMode[] = ['TEXTO', 'VOZ', 'CAMARA', 'IMAGEN'];
 
   return (
-    <div className={`min-h-screen flex flex-col relative overflow-x-hidden transition-all duration-500 pb-20 md:pb-6 ${
+    <div className={`min-h-screen flex flex-col relative overflow-x-hidden transition-all duration-500 pb-24 md:pb-8 ${
       theme === 'velvet' ? 'theme-velvet' : 'theme-gamer'
     }`}>
       {theme === 'gamer' && <ScanlineEffect />}

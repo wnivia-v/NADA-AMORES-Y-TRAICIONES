@@ -27,6 +27,11 @@ export function ConsumerHome() {
   const [voiceTranscript, setVoiceTranscript] = useState('');
 
   const toggleVoice = useCallback(() => {
+    if (!speechService.isSupported()) {
+      addLog('VOZ: Tu navegador no soporta reconocimiento de voz. Usa Chrome o Edge.', 'error');
+      return;
+    }
+
     if (listening) {
       speechService.stop();
       setListening(false);
@@ -162,9 +167,8 @@ export function ConsumerHome() {
               );
             }
 
-            // Screen card shows a helpful message about needing the desktop app
+            // Screen card — purely informational, no false download link
             if (id === 'screen') {
-              const isElectron = typeof (window as any).electronAPI !== 'undefined';
               return (
                 <div
                   key={id}
@@ -174,7 +178,7 @@ export function ConsumerHome() {
                   <Icon className="w-5 h-5 mx-auto mb-2" style={{ color: status.active ? 'var(--accent)' : 'var(--text-muted)' }} />
                   <p className="text-[11px] font-semibold" style={{ color: 'var(--text-primary)' }}>{label}</p>
                   <p className="text-[10px] mt-1" style={{ color: status.active ? 'var(--success)' : 'var(--text-muted)' }}>
-                    {status.active ? (status.scanning ? t.scanning : t.active) : (isElectron ? t.inactive : '⬇ .exe')}
+                    {status.active ? (status.scanning ? t.scanning : t.active) : t.inactive}
                   </p>
                 </div>
               );
@@ -204,12 +208,6 @@ export function ConsumerHome() {
           </div>
         )}
 
-        {/* Screen shield explanation in web mode */}
-        {!((window as any).electronAPI) && (
-          <p className="text-[10px] mt-2 text-center" style={{ color: 'var(--text-muted)' }}>
-            {t.screenNeedsDesktop}
-          </p>
-        )}
       </div>
 
       {/* Threat trend chart */}
