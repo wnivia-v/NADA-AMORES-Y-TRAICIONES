@@ -11,6 +11,18 @@ export default defineConfig(({ mode }) => {
     resolve: {
       alias: { '@': path.resolve(__dirname, './src') },
     },
+    build: {
+      chunkSizeWarningLimit: 1000,
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            'transformers': ['@huggingface/transformers'],
+            'firebase': ['firebase/app', 'firebase/ai', 'firebase/app-check'],
+            'mediapipe': ['@mediapipe/tasks-vision'],
+          },
+        },
+      },
+    },
     define: {
       'import.meta.env.VITE_FIREBASE_API_KEY': JSON.stringify(env.VITE_FIREBASE_API_KEY || ''),
       'import.meta.env.VITE_FIREBASE_AUTH_DOMAIN': JSON.stringify(env.VITE_FIREBASE_AUTH_DOMAIN || ''),

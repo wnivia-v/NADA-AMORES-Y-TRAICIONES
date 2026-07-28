@@ -142,9 +142,7 @@ export function VoiceAnalyzer() {
           <div className="mt-3 flex items-center justify-center gap-2">
             <span className="w-2 h-2 rounded-full animate-pulse" style={{ background: 'var(--success)' }} />
             <span className="text-[10px] font-mono" style={{ color: 'var(--text-muted)' }}>
-              {language === 'es'
-                ? `Analisis en vivo — ${fragmentCount} fragmentos`
-                : `Live analysis — ${fragmentCount} fragments`}
+              {`${t.liveAnalysis} — ${fragmentCount} ${t.fragments}`}
             </span>
           </div>
         )}
@@ -164,7 +162,7 @@ export function VoiceAnalyzer() {
                 {realtimeVerdict.verdict} — {realtimeVerdict.riskScore}/100
               </p>
               <p className="text-[9px]" style={{ color: 'var(--text-muted)' }}>
-                {realtimeVerdict.tactics[0] ?? (language === 'es' ? 'Patron sospechoso detectado' : 'Suspicious pattern detected')}
+                {realtimeVerdict.tactics[0] ?? t.suspiciousPattern}
               </p>
             </div>
           </div>
@@ -173,7 +171,7 @@ export function VoiceAnalyzer() {
         {transcript && (
           <div className="mt-4 p-3 rounded-lg text-left text-sm max-h-32 overflow-y-auto" style={{ background: 'var(--bg-elevated)', color: 'var(--text-primary)' }}>
             <p className="text-xs font-mono mb-1" style={{ color: 'var(--text-muted)' }}>
-              {language === 'es' ? 'Transcripcion:' : 'Transcript:'}
+              {t.transcript}
             </p>
             {transcript}
           </div>

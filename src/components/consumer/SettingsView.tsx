@@ -66,7 +66,7 @@ export function SettingsView() {
         <div className="flex items-center gap-3 mb-3">
           <Brain className="w-5 h-5" style={{ color: 'var(--accent)' }} />
           <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
-            {language === 'es' ? 'Proveedores de IA' : 'AI Providers'}
+            {t.aiProviders}
           </span>
         </div>
 
@@ -137,7 +137,7 @@ export function SettingsView() {
         {/* Strategy selector */}
         <div className="border-t pt-3" style={{ borderColor: 'var(--border)' }}>
           <p className="text-xs font-semibold mb-2" style={{ color: 'var(--text-muted)' }}>
-            {language === 'es' ? 'Estrategia multi-IA' : 'Multi-AI Strategy'}
+            {t.multiAiStrategy}
           </p>
           <div className="grid grid-cols-2 gap-2">
             {(Object.entries(STRATEGY_INFO) as Array<[ProviderStrategy, typeof STRATEGY_INFO['fallback']]>).map(([key, info]) => {

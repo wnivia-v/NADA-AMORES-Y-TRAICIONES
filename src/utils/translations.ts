@@ -1,5 +1,6 @@
 // =============================================================================
 // Internationalization — ES / EN
+// All user-facing strings live here. Components must NOT hardcode language.
 // =============================================================================
 
 export interface TranslationSet {
@@ -18,15 +19,31 @@ export interface TranslationSet {
   clipboard: string;
   screen: string;
   voice: string;
+  localMode: string;
+  localModeDesc: string;
+  analyzeScreenshot: string;
+  analyzeScreenshotDesc: string;
+  scanning: string;
+  active: string;
+  inactive: string;
+  totalScans: string;
+  threatsToday: string;
   // Alerts
   alertsTitle: string;
   noAlerts: string;
   clearAlerts: string;
+  exportCsv: string;
+  tacticDetected: string;
+  share: string;
+  copied: string;
+  copy: string;
   // Settings
   settingsTitle: string;
   theme: string;
   language: string;
   debugMode: string;
+  aiProviders: string;
+  multiAiStrategy: string;
   // Analysis
   analyzeBtn: string;
   analyzing: string;
@@ -35,6 +52,19 @@ export interface TranslationSet {
   stopListening: string;
   startCamera: string;
   stopCamera: string;
+  // Image analyzer
+  uploadScreenshot: string;
+  uploadScreenshotDesc: string;
+  extractingOcr: string;
+  notEnoughText: string;
+  analyzingContent: string;
+  analyzeImage: string;
+  extractedText: string;
+  // Voice
+  liveAnalysis: string;
+  fragments: string;
+  suspiciousPattern: string;
+  transcript: string;
   // Results
   safe: string;
   suspicious: string;
@@ -58,13 +88,29 @@ const es: TranslationSet = {
   clipboard: 'Portapapeles',
   screen: 'Pantalla',
   voice: 'Voz',
+  localMode: 'Modo local',
+  localModeDesc: 'Sin IA conectada. Configura una API key en Ajustes para mejor deteccion.',
+  analyzeScreenshot: 'Analizar captura',
+  analyzeScreenshotDesc: 'Sube una imagen de WhatsApp, SMS o email',
+  scanning: 'Escaneando...',
+  active: 'Activo',
+  inactive: 'Inactivo',
+  totalScans: 'Escaneos totales',
+  threatsToday: 'Amenazas hoy',
   alertsTitle: 'Historial de Alertas',
-  noAlerts: 'Sin alertas. Estas seguro/a.',
+  noAlerts: 'Sin alertas. Estas a salvo.',
   clearAlerts: 'Limpiar historial',
+  exportCsv: 'Exportar CSV',
+  tacticDetected: 'Tactica detectada',
+  share: 'Compartir',
+  copied: 'Copiado',
+  copy: 'Copiar',
   settingsTitle: 'Configuracion',
   theme: 'Tema',
   language: 'Idioma',
   debugMode: 'Modo tecnico',
+  aiProviders: 'Proveedores de IA',
+  multiAiStrategy: 'Estrategia multi-IA',
   analyzeBtn: 'Analizar',
   analyzing: 'Analizando...',
   pasteText: 'Pega aqui el texto sospechoso...',
@@ -72,6 +118,17 @@ const es: TranslationSet = {
   stopListening: 'Detener',
   startCamera: 'Iniciar camara',
   stopCamera: 'Detener camara',
+  uploadScreenshot: 'Sube una captura de pantalla',
+  uploadScreenshotDesc: 'Arrastra o haz clic — WhatsApp, Telegram, SMS, email',
+  extractingOcr: 'Extrayendo texto con OCR...',
+  notEnoughText: 'No se detecto texto suficiente.',
+  analyzingContent: 'Analizando contenido...',
+  analyzeImage: 'Analizar imagen',
+  extractedText: 'Texto extraido:',
+  liveAnalysis: 'Analisis en vivo',
+  fragments: 'fragmentos',
+  suspiciousPattern: 'Patron sospechoso detectado',
+  transcript: 'Transcripcion:',
   safe: 'Seguro',
   suspicious: 'Sospechoso',
   dangerous: 'Peligroso',
@@ -94,13 +151,29 @@ const en: TranslationSet = {
   clipboard: 'Clipboard',
   screen: 'Screen',
   voice: 'Voice',
+  localMode: 'Local mode',
+  localModeDesc: 'No AI connected. Set an API key in Settings for better detection.',
+  analyzeScreenshot: 'Analyze screenshot',
+  analyzeScreenshotDesc: 'Upload a WhatsApp, SMS or email image',
+  scanning: 'Scanning...',
+  active: 'Active',
+  inactive: 'Inactive',
+  totalScans: 'Total scans',
+  threatsToday: 'Threats today',
   alertsTitle: 'Alert History',
   noAlerts: 'No alerts. You are safe.',
   clearAlerts: 'Clear history',
+  exportCsv: 'Export CSV',
+  tacticDetected: 'Detected tactic',
+  share: 'Share',
+  copied: 'Copied',
+  copy: 'Copy',
   settingsTitle: 'Settings',
   theme: 'Theme',
   language: 'Language',
   debugMode: 'Technical mode',
+  aiProviders: 'AI Providers',
+  multiAiStrategy: 'Multi-AI Strategy',
   analyzeBtn: 'Analyze',
   analyzing: 'Analyzing...',
   pasteText: 'Paste suspicious text here...',
@@ -108,6 +181,17 @@ const en: TranslationSet = {
   stopListening: 'Stop',
   startCamera: 'Start camera',
   stopCamera: 'Stop camera',
+  uploadScreenshot: 'Upload a screenshot',
+  uploadScreenshotDesc: 'Drag or click — WhatsApp, Telegram, SMS, email',
+  extractingOcr: 'Extracting text with OCR...',
+  notEnoughText: 'Not enough text detected.',
+  analyzingContent: 'Analyzing content...',
+  analyzeImage: 'Analyze image',
+  extractedText: 'Extracted text:',
+  liveAnalysis: 'Live analysis',
+  fragments: 'fragments',
+  suspiciousPattern: 'Suspicious pattern detected',
+  transcript: 'Transcript:',
   safe: 'Safe',
   suspicious: 'Suspicious',
   dangerous: 'Dangerous',

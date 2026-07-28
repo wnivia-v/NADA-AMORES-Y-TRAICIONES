@@ -78,7 +78,7 @@ export function AlertsView() {
               onClick={() => handleExport('csv')}
               className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg border cursor-pointer hover:scale-105 transition-transform"
               style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}
-              title={language === 'es' ? 'Exportar CSV' : 'Export CSV'}
+              title={t.exportCsv}
             >
               <Download className="w-3 h-3" />
               CSV
@@ -185,7 +185,7 @@ export function AlertsView() {
                     {alert.detectedTactic && (
                       <div className="p-2 rounded-lg" style={{ background: 'var(--bg-elevated)' }}>
                         <p className="text-[10px] font-bold mb-1" style={{ color: 'var(--text-muted)' }}>
-                          {language === 'es' ? 'Tactica detectada' : 'Detected tactic'}
+                          {t.tacticDetected}
                         </p>
                         <p className="text-xs font-medium" style={{ color: 'var(--accent)' }}>
                           {alert.detectedTactic}
@@ -201,9 +201,7 @@ export function AlertsView() {
                         style={{ background: 'var(--accent-light)', color: 'var(--accent)' }}
                       >
                         {isCopied ? <Check className="w-3 h-3" /> : <Share2 className="w-3 h-3" />}
-                        {isCopied
-                          ? (language === 'es' ? 'Copiado' : 'Copied')
-                          : (language === 'es' ? 'Compartir' : 'Share')}
+                        {isCopied ? t.copied : t.share}
                       </button>
                       <button
                         onClick={(e) => { e.stopPropagation(); copyToClipboard(alert.description, alert.id); }}
@@ -211,7 +209,7 @@ export function AlertsView() {
                         style={{ background: 'var(--bg-elevated)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}
                       >
                         <Copy className="w-3 h-3" />
-                        {language === 'es' ? 'Copiar' : 'Copy'}
+                        {t.copy}
                       </button>
                     </div>
                   </div>

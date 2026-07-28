@@ -3,10 +3,12 @@ import { Upload, Image, X, Send } from 'lucide-react';
 import { useNadaStore } from '@/store/useNadaStore';
 import { extractTextFromImage } from '@/services/ocrService';
 import { analyzeText, isAnalysisAborted } from '@/services/geminiService';
+import { translations } from '@/utils/translations';
 import { ResultPanel } from './ResultPanel';
 
 export function ImageAnalyzer() {
   const { language, isAnalyzing, analysisResult, setAnalyzing, setAnalysisResult, addLog } = useNadaStore();
+  const t = translations[language];
   const [preview, setPreview] = useState<string | null>(null);
   const [extractedText, setExtractedText] = useState('');
   const [ocrProgress, setOcrProgress] = useState('');
@@ -50,7 +52,7 @@ export function ImageAnalyzer() {
   const handleAnalyze = async () => {
     if (!preview || isAnalyzing) return;
     setAnalyzing(true);
-    setOcrProgress(language === 'es' ? 'Extrayendo texto con OCR...' : 'Extracting text with OCR...');
+    setOcrProgress(t.extractingOcr);
     addLog('IMAGEN: Iniciando OCR...', 'system');
 
     try {
@@ -60,13 +62,13 @@ export function ImageAnalyzer() {
 
       if (!text || text.length < 10) {
         addLog('IMAGEN: Poco o ningun texto detectado.', 'warning');
-        setOcrProgress(language === 'es' ? 'No se detecto texto suficiente.' : 'Not enough text detected.');
+        setOcrProgress(t.notEnoughText);
         setAnalyzing(false);
         return;
       }
 
       addLog(`IMAGEN: OCR extrajo ${text.length} caracteres. Analizando...`, 'info');
-      setOcrProgress(language === 'es' ? 'Analizando contenido...' : 'Analyzing content...');
+      setOcrProgress(t.analyzingContent);
 
       // Step 2: AI Analysis
       const result = await analyzeText(text, 'ui');
@@ -105,10 +107,10 @@ export function ImageAnalyzer() {
           >
             <Upload className="w-10 h-10 mx-auto mb-3" style={{ color: 'var(--text-muted)' }} />
             <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
-              {language === 'es' ? 'Sube una captura de pantalla' : 'Upload a screenshot'}
+              {t.uploadScreenshot}
             </p>
             <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
-              {language === 'es' ? 'Arrastra o haz clic — WhatsApp, Telegram, SMS, email' : 'Drag or click — WhatsApp, Telegram, SMS, email'}
+              {t.uploadScreenshotDesc}
             </p>
           </div>
         ) : (
@@ -136,7 +138,7 @@ export function ImageAnalyzer() {
             {extractedText && (
               <div className="p-3 rounded-lg max-h-24 overflow-y-auto" style={{ background: 'var(--bg-elevated)' }}>
                 <p className="text-[10px] font-mono mb-1" style={{ color: 'var(--text-muted)' }}>
-                  {language === 'es' ? 'Texto extraido:' : 'Extracted text:'}
+                  {t.extractedText}
                 </p>
                 <p className="text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
                   {extractedText.slice(0, 300)}{extractedText.length > 300 ? '...' : ''}
@@ -155,7 +157,7 @@ export function ImageAnalyzer() {
               ) : (
                 <Send className="w-4 h-4" />
               )}
-              {isAnalyzing ? (language === 'es' ? 'Analizando...' : 'Analyzing...') : (language === 'es' ? 'Analizar imagen' : 'Analyze image')}
+              {isAnalyzing ? t.analyzing : t.analyzeImage}
             </button>
           </div>
         )}

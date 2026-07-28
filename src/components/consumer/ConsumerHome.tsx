@@ -34,12 +34,10 @@ export function ConsumerHome() {
           <AlertTriangle className="w-5 h-5 shrink-0" style={{ color: 'var(--warning)' }} />
           <div>
             <p className="text-xs font-bold" style={{ color: 'var(--warning)' }}>
-              {language === 'es' ? 'Modo local' : 'Local mode'}
+              {t.localMode}
             </p>
             <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
-              {language === 'es'
-                ? 'Sin IA conectada. Configura una API key en Ajustes para mejor deteccion.'
-                : 'No AI connected. Set an API key in Settings for better detection.'}
+              {t.localModeDesc}
             </p>
           </div>
         </div>
@@ -94,10 +92,10 @@ export function ConsumerHome() {
         </div>
         <div className="text-left">
           <p className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
-            {language === 'es' ? 'Analizar captura' : 'Analyze screenshot'}
+            {t.analyzeScreenshot}
           </p>
           <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
-            {language === 'es' ? 'Sube una imagen de WhatsApp, SMS o email' : 'Upload a WhatsApp, SMS or email image'}
+            {t.analyzeScreenshotDesc}
           </p>
         </div>
       </button>
@@ -121,7 +119,7 @@ export function ConsumerHome() {
                 <Icon className="w-5 h-5 mx-auto mb-2" style={{ color: status.active ? 'var(--accent)' : 'var(--text-muted)' }} />
                 <p className="text-[11px] font-semibold" style={{ color: 'var(--text-primary)' }}>{label}</p>
                 <p className="text-[10px] mt-1" style={{ color: status.active ? 'var(--success)' : 'var(--text-muted)' }}>
-                  {status.active ? (status.scanning ? (language === 'es' ? 'Escaneando...' : 'Scanning...') : (language === 'es' ? 'Activo' : 'Active')) : (language === 'es' ? 'Inactivo' : 'Inactive')}
+                  {status.active ? (status.scanning ? t.scanning : t.active) : t.inactive}
                 </p>
               </div>
             );
@@ -137,7 +135,7 @@ export function ConsumerHome() {
         <div className="card p-4 text-center">
           <p className="text-2xl font-bold font-mono" style={{ color: 'var(--accent)' }}>{historyCount}</p>
           <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-            {language === 'es' ? 'Escaneos totales' : 'Total scans'}
+            {t.totalScans}
           </p>
         </div>
         <div className="card p-4 text-center">
@@ -145,7 +143,7 @@ export function ConsumerHome() {
             {threatsToday}
           </p>
           <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-            {language === 'es' ? 'Amenazas hoy' : 'Threats today'}
+            {t.threatsToday}
           </p>
         </div>
       </div>
