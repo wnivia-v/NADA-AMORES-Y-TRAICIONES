@@ -65,6 +65,9 @@ export interface TranslationSet {
   fragments: string;
   suspiciousPattern: string;
   transcript: string;
+  voiceShieldDesc: string;
+  screenNeedsDesktop: string;
+  tapToListen: string;
   // Results
   safe: string;
   suspicious: string;
@@ -129,6 +132,9 @@ const es: TranslationSet = {
   fragments: 'fragmentos',
   suspiciousPattern: 'Patron sospechoso detectado',
   transcript: 'Transcripcion:',
+  voiceShieldDesc: 'Toca para escuchar tu llamada y detectar estafas en vivo',
+  screenNeedsDesktop: 'Instala la app de escritorio (.exe) para vigilar tu pantalla completa',
+  tapToListen: 'Toca para activar',
   safe: 'Seguro',
   suspicious: 'Sospechoso',
   dangerous: 'Peligroso',
@@ -192,6 +198,9 @@ const en: TranslationSet = {
   fragments: 'fragments',
   suspiciousPattern: 'Suspicious pattern detected',
   transcript: 'Transcript:',
+  voiceShieldDesc: 'Tap to listen to your call and detect scams in real time',
+  screenNeedsDesktop: 'Install the desktop app (.exe) to monitor your full screen',
+  tapToListen: 'Tap to activate',
   safe: 'Safe',
   suspicious: 'Suspicious',
   dangerous: 'Dangerous',

@@ -1,6 +1,9 @@
-import { ShieldCheck, ShieldOff, Clipboard, Monitor, Mic, AlertTriangle, ImageIcon } from 'lucide-react';
+import { useState, useCallback } from 'react';
+import { ShieldCheck, ShieldOff, Clipboard, Monitor, Mic, AlertTriangle, ImageIcon, MicOff } from 'lucide-react';
 import { useNadaStore } from '@/store/useNadaStore';
 import { hasWorkingProvider } from '@/services/aiProviders';
+import { speechService } from '@/services/speechService';
+import { analyzeVoiceFragment, isAnalysisAborted } from '@/services/geminiService';
 import { translations } from '@/utils/translations';
 import { ThreatChart } from '@/components/ui/ThreatChart';
 import type { ShieldId } from '@/store/useNadaStore';
@@ -15,8 +18,34 @@ export function ConsumerHome() {
   const {
     language, isProtectionActive, setProtectionActive,
     shieldStatus, threatsToday, historyCount, setActiveTab,
+    addLog, setAnalysisResult,
   } = useNadaStore();
   const t = translations[language];
+
+  // Quick voice from home screen
+  const [listening, setListening] = useState(false);
+  const [voiceTranscript, setVoiceTranscript] = useState('');
+
+  const toggleVoice = useCallback(() => {
+    if (listening) {
+      speechService.stop();
+      setListening(false);
+      addLog('VOZ: Escucha detenida desde Inicio.', 'info');
+      if (voiceTranscript.length > 20) {
+        analyzeVoiceFragment(voiceTranscript, 'voice')
+          .then((result) => setAnalysisResult(result))
+          .catch((e) => { if (!isAnalysisAborted(e)) addLog('VOZ: Fallo al analizar.', 'error'); });
+      }
+      setVoiceTranscript('');
+    } else {
+      setVoiceTranscript('');
+      addLog('VOZ: Escucha iniciada desde Inicio.', 'system');
+      speechService.start((text, isFinal) => {
+        if (isFinal) setVoiceTranscript((prev) => prev + ' ' + text);
+      }, language === 'es' ? 'es-ES' : 'en-US');
+      setListening(true);
+    }
+  }, [listening, voiceTranscript, language, addLog, setAnalysisResult]);
 
   // True when some enabled provider is reachable AND still has quota left.
   // A provider whose free tier is exhausted is not "available" in any sense the
@@ -110,6 +139,48 @@ export function ConsumerHome() {
             const Icon = shieldIcons[id];
             const status = shieldStatus[id];
             const label = t[id];
+
+            // Voice card is interactive — lets you activate listening from home
+            if (id === 'voice') {
+              return (
+                <button
+                  key={id}
+                  onClick={toggleVoice}
+                  className="card p-4 text-center cursor-pointer"
+                  style={{ borderColor: listening ? 'var(--danger)' : status.active ? 'var(--accent)' : 'var(--border)' }}
+                  aria-label={listening ? t.stopListening : t.tapToListen}
+                >
+                  {listening
+                    ? <MicOff className="w-5 h-5 mx-auto mb-2 animate-pulse" style={{ color: 'var(--danger)' }} />
+                    : <Mic className="w-5 h-5 mx-auto mb-2" style={{ color: status.active ? 'var(--accent)' : 'var(--text-muted)' }} />
+                  }
+                  <p className="text-[11px] font-semibold" style={{ color: 'var(--text-primary)' }}>{label}</p>
+                  <p className="text-[10px] mt-1" style={{ color: listening ? 'var(--danger)' : 'var(--text-muted)' }}>
+                    {listening ? t.stopListening : t.tapToListen}
+                  </p>
+                </button>
+              );
+            }
+
+            // Screen card shows a helpful message about needing the desktop app
+            if (id === 'screen') {
+              const isElectron = typeof (window as any).electronAPI !== 'undefined';
+              return (
+                <div
+                  key={id}
+                  className="card p-4 text-center"
+                  style={{ borderColor: status.active ? 'var(--accent)' : 'var(--border)' }}
+                >
+                  <Icon className="w-5 h-5 mx-auto mb-2" style={{ color: status.active ? 'var(--accent)' : 'var(--text-muted)' }} />
+                  <p className="text-[11px] font-semibold" style={{ color: 'var(--text-primary)' }}>{label}</p>
+                  <p className="text-[10px] mt-1" style={{ color: status.active ? 'var(--success)' : 'var(--text-muted)' }}>
+                    {status.active ? (status.scanning ? t.scanning : t.active) : (isElectron ? t.inactive : '⬇ .exe')}
+                  </p>
+                </div>
+              );
+            }
+
+            // Clipboard card (default)
             return (
               <div
                 key={id}
@@ -125,6 +196,20 @@ export function ConsumerHome() {
             );
           })}
         </div>
+
+        {/* Voice transcript preview */}
+        {listening && voiceTranscript && (
+          <div className="mt-3 p-3 rounded-lg text-xs" style={{ background: 'var(--bg-elevated)', color: 'var(--text-secondary)' }}>
+            {voiceTranscript.slice(-120)}
+          </div>
+        )}
+
+        {/* Screen shield explanation in web mode */}
+        {!((window as any).electronAPI) && (
+          <p className="text-[10px] mt-2 text-center" style={{ color: 'var(--text-muted)' }}>
+            {t.screenNeedsDesktop}
+          </p>
+        )}
       </div>
 
       {/* Threat trend chart */}
