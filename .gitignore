@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.env
+.env.local
+*.local
+release/
+release-build/
+release-out/
+release-pkg/
+.vite/
+
+# Compiled Electron output (generated from electron/*.cts)
+electron/*.cjs
+*.tsbuildinfo

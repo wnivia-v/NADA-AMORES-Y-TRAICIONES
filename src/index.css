@@ -1,0 +1,236 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* =============================================================================
+   NADA v2 — Sistema de Temas (Velvet / Gamer)
+   Hackaton Kiro — 23 Julio 2026
+   ============================================================================= */
+
+:root {
+  --nada-font-sans: 'Inter', system-ui, sans-serif;
+  --nada-font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+/* =============================================================================
+   TEMA VELVET (Rosa elegante — publico general)
+   ============================================================================= */
+
+.theme-velvet {
+  --bg-primary: #FFF5F7;
+  --bg-secondary: #FFFFFF;
+  --bg-card: rgba(255, 255, 255, 0.92);
+  --bg-elevated: #FFF0F3;
+  --text-primary: #1A1A2E;
+  --text-secondary: #6B5B73;
+  --text-muted: #9B8FA3;
+  --accent: #E91E78;
+  --accent-light: rgba(233, 30, 120, 0.1);
+  --accent-glow: rgba(233, 30, 120, 0.3);
+  --border: rgba(233, 30, 120, 0.12);
+  --success: #10B981;
+  --warning: #F59E0B;
+  --danger: #EF4444;
+  --safe-bg: rgba(16, 185, 129, 0.1);
+  --suspicious-bg: rgba(245, 158, 11, 0.1);
+  --dangerous-bg: rgba(239, 68, 68, 0.1);
+}
+
+/* =============================================================================
+   TEMA GAMER (Neon cyberpunk — tech/hacker)
+   ============================================================================= */
+
+.theme-gamer {
+  --bg-primary: #0A0E17;
+  --bg-secondary: #0F1420;
+  --bg-card: rgba(15, 20, 32, 0.92);
+  --bg-elevated: #131A2B;
+  --text-primary: #E8F0FF;
+  --text-secondary: #7B8FA8;
+  --text-muted: #4A5568;
+  --accent: #00FF88;
+  --accent-light: rgba(0, 255, 136, 0.08);
+  --accent-glow: rgba(0, 255, 136, 0.25);
+  --border: rgba(0, 255, 136, 0.12);
+  --success: #00FF88;
+  --warning: #FFAA00;
+  --danger: #FF3366;
+  --safe-bg: rgba(0, 255, 136, 0.08);
+  --suspicious-bg: rgba(255, 170, 0, 0.08);
+  --dangerous-bg: rgba(255, 51, 102, 0.08);
+}
+
+/* =============================================================================
+   BASE
+   ============================================================================= */
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  font-family: var(--nada-font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  transition: background-color 0.4s ease, color 0.3s ease;
+  min-height: 100vh;
+}
+
+/* =============================================================================
+   COMPONENTES GLOBALES
+   ============================================================================= */
+
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.card:hover {
+  border-color: var(--accent);
+  box-shadow: 0 0 20px var(--accent-glow);
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: var(--bg-primary);
+  font-weight: 700;
+  border-radius: 0.75rem;
+  padding: 0.75rem 1.5rem;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 12px var(--accent-glow);
+}
+
+.btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px var(--accent-glow);
+}
+
+.btn-primary:active {
+  transform: translateY(0);
+}
+
+/* =============================================================================
+   VERDICT BADGES
+   ============================================================================= */
+
+.badge-safe {
+  background: var(--safe-bg);
+  color: var(--success);
+  border: 1px solid var(--success);
+}
+
+.badge-suspicious {
+  background: var(--suspicious-bg);
+  color: var(--warning);
+  border: 1px solid var(--warning);
+}
+
+.badge-dangerous {
+  background: var(--dangerous-bg);
+  color: var(--danger);
+  border: 1px solid var(--danger);
+}
+
+/* =============================================================================
+   SCANLINE EFFECT (Gamer theme)
+   ============================================================================= */
+
+.scanline-overlay {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 255, 136, 0.015) 2px,
+    rgba(0, 255, 136, 0.015) 4px
+  );
+  animation: scanline-scroll 8s linear infinite;
+}
+
+@keyframes scanline-scroll {
+  0% { background-position: 0 0; }
+  100% { background-position: 0 100vh; }
+}
+
+/* =============================================================================
+   ANIMACIONES
+   ============================================================================= */
+
+.fade-slide-in {
+  animation: fadeSlideIn 0.4s ease-out;
+}
+
+@keyframes fadeSlideIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse-ring {
+  0% { transform: scale(1); opacity: 0.8; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+
+.pulse-ring::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 2px solid var(--accent);
+  animation: pulse-ring 2s ease-out infinite;
+}
+
+/* Glow text for gamer theme */
+.text-shadow-green {
+  text-shadow: 0 0 8px rgba(0, 255, 136, 0.5);
+}
+
+/* =============================================================================
+   SCROLLBAR
+   ============================================================================= */
+
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--accent);
+  border-radius: 2px;
+  opacity: 0.5;
+}
+
+/* =============================================================================
+   REDUCED MOTION
+   ============================================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .scanline-overlay { display: none; }
+}
+
+/* =============================================================================
+   SPLASH SCREEN
+   ============================================================================= */
+
+@keyframes splash-pulse {
+  0%, 100% { opacity: 0.6; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.05); }
+}
+
+.splash-logo {
+  animation: splash-pulse 2s ease-in-out infinite;
+}

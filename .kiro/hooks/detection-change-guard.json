@@ -1,0 +1,15 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Detection Change Guard",
+      "trigger": "PostFileSave",
+      "description": "Fires when the detection layer or its corpus changes, reminding that pattern and weight edits require a measured before/after on the labeled corpus plus a regression test.",
+      "matcher": "(scamPatterns|riskScorer|scam-corpus)\\.(ts|json)$",
+      "action": {
+        "type": "agent",
+        "prompt": "Se acaba de modificar la capa de deteccion (scamPatterns.ts, riskScorer.ts o el corpus). Antes de dar el cambio por bueno: ejecuta `npx vitest run` y mide el corpus completo de `src/tests/fixtures/scam-corpus.json`, no solo el caso que estabas arreglando. Reporta la matriz de confusion antes/despues y cualquier caso cuyo veredicto haya cambiado como efecto colateral — subir el peso de un patron altera la puntuacion de todo texto que tambien lo active. Si la precision bajo mientras subia el recall, dilo explicitamente en lugar de reportar solo la mejora. Todo falso negativo corregido necesita un caso de regresion con el texto exacto que fallaba."
+      }
+    }
+  ]
+}
