@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 /* =============================================================================
-   NADA v2 — Sistema de Temas (Velvet / Gamer)
+   NADA v2 — Sistema de Temas Premium (Glassmorphism / Jelly)
    Hackaton Kiro — 23 Julio 2026
    ============================================================================= */
 
@@ -13,51 +13,61 @@
 }
 
 /* =============================================================================
-   TEMA VELVET (Rosa elegante — publico general)
+   TEMA VELVET (Rosa premium con cristal iridiscente)
    ============================================================================= */
 
 .theme-velvet {
-  --bg-primary: #FFF5F7;
-  --bg-secondary: #FFFFFF;
-  --bg-card: rgba(255, 255, 255, 0.92);
-  --bg-elevated: #FFF0F3;
-  --text-primary: #1A1A2E;
-  --text-secondary: #6B5B73;
-  --text-muted: #9B8FA3;
-  --accent: #E91E78;
-  --accent-light: rgba(233, 30, 120, 0.1);
-  --accent-glow: rgba(233, 30, 120, 0.3);
-  --border: rgba(233, 30, 120, 0.12);
-  --success: #10B981;
-  --warning: #F59E0B;
-  --danger: #EF4444;
-  --safe-bg: rgba(16, 185, 129, 0.1);
-  --suspicious-bg: rgba(245, 158, 11, 0.1);
-  --dangerous-bg: rgba(239, 68, 68, 0.1);
+  --bg-primary: #1A0A1E;
+  --bg-secondary: #220F28;
+  --bg-card: rgba(255, 255, 255, 0.06);
+  --bg-elevated: rgba(233, 30, 120, 0.06);
+  --text-primary: #F8E8FF;
+  --text-secondary: #C9A4D4;
+  --text-muted: #7A5A8A;
+  --accent: #FF3D9A;
+  --accent-light: rgba(255, 61, 154, 0.12);
+  --accent-glow: rgba(255, 61, 154, 0.4);
+  --border: rgba(255, 61, 154, 0.18);
+  --success: #00FFAA;
+  --warning: #FFD166;
+  --danger: #FF4D6D;
+  --safe-bg: rgba(0, 255, 170, 0.08);
+  --suspicious-bg: rgba(255, 209, 102, 0.08);
+  --dangerous-bg: rgba(255, 77, 109, 0.08);
+  --glass-blur: 20px;
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --glass-shine: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, transparent 50%);
+  --gradient-bg: radial-gradient(ellipse at 20% 0%, rgba(255, 61, 154, 0.15) 0%, transparent 50%),
+                 radial-gradient(ellipse at 80% 100%, rgba(120, 0, 255, 0.1) 0%, transparent 50%);
 }
 
 /* =============================================================================
-   TEMA GAMER (Neon cyberpunk — tech/hacker)
+   TEMA GAMER (Neon cyberpunk con cristal oscuro)
    ============================================================================= */
 
 .theme-gamer {
-  --bg-primary: #0A0E17;
-  --bg-secondary: #0F1420;
-  --bg-card: rgba(15, 20, 32, 0.92);
-  --bg-elevated: #131A2B;
-  --text-primary: #E8F0FF;
-  --text-secondary: #7B8FA8;
-  --text-muted: #4A5568;
+  --bg-primary: #050810;
+  --bg-secondary: #0A0F1A;
+  --bg-card: rgba(0, 255, 136, 0.03);
+  --bg-elevated: rgba(0, 255, 136, 0.05);
+  --text-primary: #E8FFF0;
+  --text-secondary: #7BCCAA;
+  --text-muted: #3A6B55;
   --accent: #00FF88;
-  --accent-light: rgba(0, 255, 136, 0.08);
-  --accent-glow: rgba(0, 255, 136, 0.25);
-  --border: rgba(0, 255, 136, 0.12);
+  --accent-light: rgba(0, 255, 136, 0.1);
+  --accent-glow: rgba(0, 255, 136, 0.35);
+  --border: rgba(0, 255, 136, 0.15);
   --success: #00FF88;
   --warning: #FFAA00;
   --danger: #FF3366;
-  --safe-bg: rgba(0, 255, 136, 0.08);
-  --suspicious-bg: rgba(255, 170, 0, 0.08);
-  --dangerous-bg: rgba(255, 51, 102, 0.08);
+  --safe-bg: rgba(0, 255, 136, 0.06);
+  --suspicious-bg: rgba(255, 170, 0, 0.06);
+  --dangerous-bg: rgba(255, 51, 102, 0.06);
+  --glass-blur: 24px;
+  --glass-border: rgba(0, 255, 136, 0.08);
+  --glass-shine: linear-gradient(135deg, rgba(0,255,136,0.05) 0%, transparent 50%);
+  --gradient-bg: radial-gradient(ellipse at 30% 0%, rgba(0, 255, 136, 0.08) 0%, transparent 50%),
+                 radial-gradient(ellipse at 70% 100%, rgba(0, 100, 255, 0.06) 0%, transparent 50%);
 }
 
 /* =============================================================================
@@ -76,69 +86,143 @@ html, body {
 body {
   background-color: var(--bg-primary);
   color: var(--text-primary);
-  transition: background-color 0.4s ease, color 0.3s ease;
+  transition: background-color 0.5s ease, color 0.3s ease;
   min-height: 100vh;
 }
 
+/* Ambient gradient background */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: var(--gradient-bg);
+  pointer-events: none;
+  z-index: 0;
+}
+
+#root {
+  position: relative;
+  z-index: 1;
+}
+
 /* =============================================================================
-   COMPONENTES GLOBALES
+   GLASS CARDS — El efecto premium gelatinoso
    ============================================================================= */
 
 .card {
   background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 1rem;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+  border: 1px solid var(--glass-border);
+  border-radius: 1.25rem;
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 var(--glass-border);
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
+              border-color 0.3s ease,
+              box-shadow 0.4s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Brillo superior tipo gel / cristal */
+.card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--glass-shine);
+  border-radius: inherit;
+  pointer-events: none;
 }
 
 .card:hover {
+  transform: translateY(-2px) scale(1.01);
   border-color: var(--accent);
-  box-shadow: 0 0 20px var(--accent-glow);
+  box-shadow:
+    0 12px 40px rgba(0, 0, 0, 0.4),
+    0 0 30px var(--accent-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15);
 }
 
-.btn-primary {
-  background: var(--accent);
-  color: var(--bg-primary);
-  font-weight: 700;
-  border-radius: 0.75rem;
-  padding: 0.75rem 1.5rem;
-  border: none;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  box-shadow: 0 4px 12px var(--accent-glow);
-}
-
-.btn-primary:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 6px 20px var(--accent-glow);
-}
-
-.btn-primary:active {
-  transform: translateY(0);
+.card:active {
+  transform: translateY(0) scale(0.99);
+  transition-duration: 0.1s;
 }
 
 /* =============================================================================
-   VERDICT BADGES
+   BOTONES PREMIUM
+   ============================================================================= */
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 70%, white));
+  color: var(--bg-primary);
+  font-weight: 700;
+  border-radius: 0.875rem;
+  padding: 0.75rem 1.5rem;
+  border: none;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow:
+    0 4px 16px var(--accent-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-primary::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255,255,255,0.3) 0%, transparent 50%);
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.btn-primary:hover {
+  transform: translateY(-2px) scale(1.03);
+  box-shadow:
+    0 8px 24px var(--accent-glow),
+    0 0 40px var(--accent-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.btn-primary:active {
+  transform: translateY(0) scale(0.97);
+  transition-duration: 0.1s;
+}
+
+/* =============================================================================
+   VERDICT BADGES — glassmorphism
    ============================================================================= */
 
 .badge-safe {
   background: var(--safe-bg);
   color: var(--success);
-  border: 1px solid var(--success);
+  border: 1px solid rgba(0, 255, 170, 0.3);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 0 12px rgba(0, 255, 170, 0.15);
 }
 
 .badge-suspicious {
   background: var(--suspicious-bg);
   color: var(--warning);
-  border: 1px solid var(--warning);
+  border: 1px solid rgba(255, 209, 102, 0.3);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 0 12px rgba(255, 209, 102, 0.15);
 }
 
 .badge-dangerous {
   background: var(--dangerous-bg);
   color: var(--danger);
-  border: 1px solid var(--danger);
+  border: 1px solid rgba(255, 77, 109, 0.3);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 0 12px rgba(255, 77, 109, 0.2);
+  animation: danger-pulse 2s ease-in-out infinite;
+}
+
+@keyframes danger-pulse {
+  0%, 100% { box-shadow: 0 0 12px rgba(255, 77, 109, 0.2); }
+  50% { box-shadow: 0 0 20px rgba(255, 77, 109, 0.4); }
 }
 
 /* =============================================================================
@@ -154,10 +238,10 @@ body {
     0deg,
     transparent,
     transparent 2px,
-    rgba(0, 255, 136, 0.015) 2px,
-    rgba(0, 255, 136, 0.015) 4px
+    rgba(0, 255, 136, 0.012) 2px,
+    rgba(0, 255, 136, 0.012) 4px
   );
-  animation: scanline-scroll 8s linear infinite;
+  animation: scanline-scroll 10s linear infinite;
 }
 
 @keyframes scanline-scroll {
@@ -166,47 +250,79 @@ body {
 }
 
 /* =============================================================================
-   ANIMACIONES
+   ANIMACIONES PREMIUM
    ============================================================================= */
 
 .fade-slide-in {
-  animation: fadeSlideIn 0.4s ease-out;
+  animation: fadeSlideIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 @keyframes fadeSlideIn {
-  from { opacity: 0; transform: translateY(12px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; transform: translateY(16px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 @keyframes pulse-ring {
-  0% { transform: scale(1); opacity: 0.8; }
-  100% { transform: scale(1.6); opacity: 0; }
+  0% { transform: scale(1); opacity: 0.7; }
+  100% { transform: scale(1.8); opacity: 0; }
+}
+
+.pulse-ring {
+  position: relative;
 }
 
 .pulse-ring::after {
   content: '';
   position: absolute;
-  inset: -4px;
+  inset: -8px;
   border-radius: 50%;
   border: 2px solid var(--accent);
-  animation: pulse-ring 2s ease-out infinite;
+  animation: pulse-ring 2.5s ease-out infinite;
+  filter: blur(1px);
 }
 
-/* Glow text for gamer theme */
+/* Glow text */
 .text-shadow-green {
-  text-shadow: 0 0 8px rgba(0, 255, 136, 0.5);
+  text-shadow: 0 0 12px rgba(0, 255, 136, 0.6), 0 0 4px rgba(0, 255, 136, 0.3);
 }
 
 /* =============================================================================
-   SCROLLBAR
+   BOTTOM NAV GLASS
    ============================================================================= */
 
-::-webkit-scrollbar { width: 4px; }
+nav {
+  backdrop-filter: blur(24px) saturate(1.4) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(1.4) !important;
+  box-shadow: 0 -4px 30px rgba(0, 0, 0, 0.3) !important;
+  border-top: 1px solid var(--glass-border) !important;
+}
+
+/* =============================================================================
+   SCROLLBAR PREMIUM
+   ============================================================================= */
+
+::-webkit-scrollbar { width: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
-  background: var(--accent);
-  border-radius: 2px;
-  opacity: 0.5;
+  background: linear-gradient(180deg, var(--accent), transparent);
+  border-radius: 4px;
+}
+
+/* =============================================================================
+   INPUT FIELDS GLASS
+   ============================================================================= */
+
+textarea, input[type="text"], input[type="email"], input[type="password"] {
+  background: rgba(255, 255, 255, 0.03) !important;
+  border: 1px solid var(--glass-border);
+  border-radius: 0.75rem;
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+textarea:focus, input:focus {
+  outline: none;
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 16px var(--accent-glow);
 }
 
 /* =============================================================================
@@ -220,6 +336,8 @@ body {
     transition-duration: 0.01ms !important;
   }
   .scanline-overlay { display: none; }
+  .card:hover { transform: none; }
+  .btn-primary:hover { transform: none; }
 }
 
 /* =============================================================================
@@ -227,8 +345,8 @@ body {
    ============================================================================= */
 
 @keyframes splash-pulse {
-  0%, 100% { opacity: 0.6; transform: scale(1); }
-  50% { opacity: 1; transform: scale(1.05); }
+  0%, 100% { opacity: 0.6; transform: scale(1); filter: drop-shadow(0 0 8px var(--accent-glow)); }
+  50% { opacity: 1; transform: scale(1.08); filter: drop-shadow(0 0 20px var(--accent-glow)); }
 }
 
 .splash-logo {
