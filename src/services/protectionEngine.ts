@@ -28,6 +28,20 @@ class ProtectionEngine {
   private screenInterval: ReturnType<typeof setInterval> | null = null;
   private lastClipboardText = '';
 
+  /**
+   * Persists the last clipboard text so a page reload does not re-analyze
+   * the same content the user already saw an alert for.
+   */
+  private loadLastClipboard(): string {
+    try { return sessionStorage.getItem('nada-last-clipboard') ?? ''; }
+    catch { return ''; }
+  }
+  private saveLastClipboard(text: string) {
+    this.lastClipboardText = text;
+    try { sessionStorage.setItem('nada-last-clipboard', text); }
+    catch { /* noop */ }
+  }
+
   // Rate limiting for clipboard analysis.
   //
   // These intervals are set by the free-tier quota, not by how fast we could
@@ -113,6 +127,7 @@ class ProtectionEngine {
   // ── Clipboard Shield (with rate limiting) ─────────────────────
   private startClipboardMonitor() {
     this.callbacks?.onShieldStatusChange('clipboard', { active: true });
+    this.lastClipboardText = this.loadLastClipboard();
 
     this.clipboardInterval = setInterval(() => {
       if (!this.running) return;
@@ -126,7 +141,7 @@ class ProtectionEngine {
       const text = await navigator.clipboard.readText().catch(() => '');
       if (!text || text === this.lastClipboardText || text.length < 15) return;
 
-      this.lastClipboardText = text;
+      this.saveLastClipboard(text);
 
       // Rate limiting: debounce rapid clipboard changes
       const now = Date.now();

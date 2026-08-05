@@ -14,6 +14,7 @@ export function VoiceAnalyzer() {
   const t = translations[language];
   const [listening, setListening] = useState(false);
   const [transcript, setTranscript] = useState('');
+  const [micError, setMicError] = useState<string | null>(null);
   const [realtimeVerdict, setRealtimeVerdict] = useState<ScamAnalysis | null>(null);
   const [fragmentCount, setFragmentCount] = useState(0);
 
@@ -100,17 +101,36 @@ export function VoiceAnalyzer() {
       }
     } else {
       setTranscript('');
+      setMicError(null);
       setAnalysisResult(null);
       setRealtimeVerdict(null);
       setFragmentCount(0);
       lastAnalyzedRef.current = '';
       addLog('VOZ: Iniciando escucha con analisis en tiempo real...', 'system');
 
-      speechService.start((text, isFinal) => {
-        if (isFinal) {
-          setTranscript((prev) => prev + ' ' + text);
+      speechService.start(
+        (text, isFinal) => {
+          // Show interim results too so users see it's working
+          if (isFinal) {
+            setTranscript((prev) => prev + ' ' + text);
+          } else {
+            // Update ref with interim so real-time loop can use it
+            transcriptRef.current = transcriptRef.current + ' ' + text;
+          }
+        },
+        language === 'es' ? 'es-ES' : 'en-US',
+        (error) => {
+          let msg = 'Error de microfono.';
+          if (error === 'not-allowed') msg = '❌ Permiso de microfono denegado. Habilita el microfono en el navegador.';
+          else if (error === 'no-microphone') msg = '❌ No se encontro microfono. Conecta uno e intenta de nuevo.';
+          else if (error === 'not-supported') msg = '❌ Este navegador no soporta reconocimiento de voz. Usa Chrome.';
+          else if (error === 'network') msg = '⚠️ Error de red en reconocimiento de voz. Verifica tu conexion.';
+          setMicError(msg);
+          setListening(false);
+          stopRealtimeAnalysis();
+          addLog(`VOZ ERROR: ${msg}`, 'error');
         }
-      }, language === 'es' ? 'es-ES' : 'en-US');
+      );
 
       setListening(true);
       startRealtimeAnalysis();
@@ -138,6 +158,16 @@ export function VoiceAnalyzer() {
         <p className="mt-4 text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
           {listening ? t.stopListening : t.startListening}
         </p>
+
+        {/* Mic error message */}
+        {micError && !listening && (
+          <div
+            className="mt-3 p-3 rounded-lg text-sm font-medium"
+            style={{ background: 'rgba(255,70,70,0.12)', border: '1px solid var(--danger)', color: 'var(--danger)' }}
+          >
+            {micError}
+          </div>
+        )}
 
         {/* Real-time status indicator */}
         {listening && (

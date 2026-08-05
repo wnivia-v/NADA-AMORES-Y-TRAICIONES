@@ -60,8 +60,8 @@ export function ImageAnalyzer() {
       const text = await extractTextFromImage(preview);
       setExtractedText(text);
 
-      if (!text || text.length < 10) {
-        addLog('IMAGEN: Poco o ningun texto detectado.', 'warning');
+      if (!text || text.length < 5) {
+        addLog('IMAGEN: Poco o ningun texto detectado. Intenta con una imagen mas clara o con mas texto visible.', 'warning');
         setOcrProgress(t.notEnoughText);
         setAnalyzing(false);
         return;

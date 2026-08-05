@@ -12,7 +12,16 @@
 
 import type { AIProvider, AIAnalysisResult } from './types';
 
-const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
+// In dev mode (browser on localhost) calls to api.groq.com are blocked by CORS.
+// The Vite server proxies /api/groq/* -> https://api.groq.com/* to work around it.
+// In production (Electron desktop, where CORS doesn't apply) we call the real URL.
+const IS_DEV_BROWSER =
+  typeof window !== 'undefined' &&
+  (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+const GROQ_API_URL = IS_DEV_BROWSER
+  ? '/api/groq/openai/v1/chat/completions'
+  : 'https://api.groq.com/openai/v1/chat/completions';
 
 function getApiKey(): string {
   return import.meta.env.VITE_GROQ_API_KEY || '';

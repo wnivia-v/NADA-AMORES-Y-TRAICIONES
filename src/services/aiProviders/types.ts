@@ -61,12 +61,12 @@ export interface ProviderOrchestrationConfig {
 export const DEFAULT_PROVIDER_CONFIG: ProviderOrchestrationConfig = {
   strategy: 'fallback',
   providers: {
-    local: { enabled: true, priority: 1 },
-    gemini: { enabled: true, priority: 2 },
-    groq: { enabled: true, priority: 3 },
+    local: { enabled: true, priority: 1 },  // Primero: siempre disponible, sin red, sin clave
+    groq: { enabled: true, priority: 2 },   // Segundo: gratis, rápido, si hay API key
+    gemini: { enabled: true, priority: 3 }, // Tercero: Firebase AI
     claude: { enabled: false, priority: 4 },
     bedrock: { enabled: false, priority: 5 },
   },
-  timeoutMs: 15000,
+  timeoutMs: 8000, // Reducido de 15s a 8s para evitar que se quede colgado
   consensusThreshold: 0.66,
 };

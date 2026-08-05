@@ -23,7 +23,9 @@ NADA es una aplicacion de proteccion contra estafas, fraudes romanticos y manipu
 │  Motor de Proteccion (Background)                           │
 │  ├── Clipboard Shield (portapapeles c/rate limiting)        │
 │  ├── Screen Shield (OCR + desktopCapturer en Electron)      │
-│  └── Voice Shield (Web Speech API + analisis live)          │
+│  ├── Voice Shield (Web Speech API + analisis live)          │
+│  └── Video Shield (deepfake en videollamada, activacion     │
+│      manual: getDisplayMedia + biometria + lip-sync)        │
 ├─────────────────────────────────────────────────────────────┤
 │  Pipeline de Analisis (5 capas)                             │
 │  1. ScamDB (IndexedDB) — cache local, lookup instantaneo   │
@@ -44,7 +46,7 @@ NADA es una aplicacion de proteccion contra estafas, fraudes romanticos y manipu
 - **Funciona sin pagar y sin claves**: analisis en el dispositivo con un modelo de embeddings local + 25 patrones regex. Los proveedores en la nube son opcionales.
 - **Multi-AI**: local, Gemini (gratis), Groq (gratis), Claude y Bedrock, con 4 estrategias de orquestacion: fallback, carrera, mejor resultado y consenso.
 - **Privacidad**: en el camino local, los mensajes de la victima nunca salen de su equipo.
-- **Deteccion de Deepfakes**: MediaPipe Face Landmarker con analisis biometrico (EAR, blink rate, jitter).
+- **Deteccion de Deepfakes en videollamada**: captura la ventana/pestana de la llamada (no tu propia camara) y analiza con MediaPipe Face Landmarker: EAR, blink rate, jitter, y sincronia labial real (correlacion entre apertura de boca y energia de audio, no un valor fijo).
 - **OCR de capturas**: Tesseract.js para extraer texto de screenshots de WhatsApp/Telegram/SMS.
 - **Analisis de voz en tiempo real**: Fragmentos analizados cada 15 segundos durante la escucha.
 - **Base de datos local**: IndexedDB con hashes SHA-256 para deteccion instantanea de estafas recurrentes.
@@ -66,7 +68,7 @@ NADA es una aplicacion de proteccion contra estafas, fraudes romanticos y manipu
 | Speech | Web Speech API |
 | Desktop | Electron 33, electron-builder |
 | Build | Vite 6, vite-plugin-pwa |
-| Tests | Vitest 4 (jsdom, fake-indexeddb) — 75 tests |
+| Tests | Vitest 4 (jsdom, fake-indexeddb) — 115 tests |
 | URLs | Google Safe Browsing API v4 |
 
 ## Inicio Rapido
@@ -88,7 +90,7 @@ npm run dev
 npm run electron:dev
 
 # 5. Tests
-npm test                   # 75 tests, una pasada
+npm test                   # 115 tests, una pasada
 npm run test:watch         # modo watch
 
 # 6. Build produccion
@@ -166,6 +168,7 @@ Honestidad sobre lo que funciona hoy:
 | AWS Bedrock | **No funciona sin trabajo extra.** `bedrockProvider.ts` es el cliente de un proxy que no viene incluido. |
 | Deteccion local (regex) | Funciona. Precision y recall aun sin medir contra el corpus. |
 | OCR en produccion | Sin verificar en runtime. Tesseract carga su worker desde `cdn.jsdelivr.net`; la CSP ya lo permite, pero no se ha ejecutado un OCR real en el build empaquetado. |
+| Escudo de video (deepfake) | Implementado: captura la videollamada via `getDisplayMedia`, biometria facial (EAR/jitter) + sincronia labial real (correlacion boca-audio, sin placeholder). Es heuristica, no un clasificador entrenado contra deepfakes reales, y sin pista de audio la sincronia labial queda explicitamente sin medir en vez de asumir que esta bien. Activacion manual (requiere permiso del navegador), no arranca solo con el resto de la proteccion. |
 
 Dos advertencias que importan antes de publicar:
 

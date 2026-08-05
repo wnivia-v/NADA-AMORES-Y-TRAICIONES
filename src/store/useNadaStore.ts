@@ -11,7 +11,7 @@ export type Language = 'es' | 'en';
 export type TabId = 'home' | 'alerts' | 'settings' | 'debug';
 export type Verdict = 'SEGURO' | 'SOSPECHOSO' | 'PELIGROSO';
 export type LogType = 'info' | 'success' | 'warning' | 'error' | 'system';
-export type ShieldId = 'clipboard' | 'screen' | 'voice';
+export type ShieldId = 'clipboard' | 'screen' | 'voice' | 'video';
 
 export interface LogEntry {
   timestamp: string;
@@ -146,6 +146,7 @@ export const useNadaStore = create<NadaState & NadaActions>()(
         clipboard: { ...DEFAULT_SHIELD },
         screen: { ...DEFAULT_SHIELD },
         voice: { ...DEFAULT_SHIELD },
+        video: { ...DEFAULT_SHIELD },
       },
       alerts: [],
       logs: [

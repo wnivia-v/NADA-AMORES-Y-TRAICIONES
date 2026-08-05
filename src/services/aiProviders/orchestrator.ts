@@ -43,7 +43,25 @@ function getConfig(): ProviderOrchestrationConfig {
     const stored = localStorage.getItem('nada-ai-config');
     if (stored) {
       const parsed = JSON.parse(stored);
-      return { ...DEFAULT_PROVIDER_CONFIG, ...parsed };
+      // Merge provider-level config but always respect DEFAULT priorities
+      // so that code changes take effect even when localStorage has old data.
+      const mergedProviders = { ...DEFAULT_PROVIDER_CONFIG.providers };
+      if (parsed.providers) {
+        for (const id of Object.keys(mergedProviders) as Array<keyof typeof mergedProviders>) {
+          if (parsed.providers[id]) {
+            mergedProviders[id] = {
+              ...DEFAULT_PROVIDER_CONFIG.providers[id],
+              // Only inherit user-chosen enabled flag, not stale priorities
+              enabled: parsed.providers[id].enabled ?? DEFAULT_PROVIDER_CONFIG.providers[id].enabled,
+            };
+          }
+        }
+      }
+      return {
+        ...DEFAULT_PROVIDER_CONFIG,
+        ...parsed,
+        providers: mergedProviders,
+      };
     }
   } catch { /* use defaults */ }
   return DEFAULT_PROVIDER_CONFIG;

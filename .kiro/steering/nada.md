@@ -22,7 +22,7 @@ Windows con PowerShell: usar `;` como separador, nunca `&&`. Rutas con espacios 
 ```
 npx tsc --noEmit                     # typecheck app
 npx tsc -p tsconfig.electron.json    # compila electron/*.cts -> *.cjs
-npx vitest run                       # 55+ tests
+npx vitest run                       # 115 tests
 npx vite build                       # build web/PWA
 ```
 
@@ -42,17 +42,36 @@ El análisis atraviesa cinco capas, en este orden:
 
 Umbrales: `SEGURO` 0-39, `SOSPECHOSO` 40-69, `PELIGROSO` 70-100. Están codificados en varios sitios; cambiarlos altera lo que la app le dice a una víctima y requiere aprobación explícita.
 
+## Escudo de video (deepfake en videollamada)
+
+`CameraAnalyzer.tsx` captura, por defecto, la **ventana/pestaña de la videollamada** vía `getDisplayMedia` (compartir pantalla), no la webcam propia — el fraude está del otro lado de la llamada, no en el propio reflejo. El modo "Mi cámara" (`getUserMedia`) sigue existiendo para pruebas/autochequeo, pero no es el caso de uso principal.
+
+`visionService.ts` calcula señales biométricas por frame (EAR/parpadeo, jitter de landmarks, y **sincronía labial real**: correlación de Pearson entre la apertura de boca — MAR — y la energía RMS del audio capturado junto con el video). La correlación vive en `src/utils/lipSync.ts` como funciones puras, testeadas sin mocks de DOM/MediaPipe.
+
+Puntos a no olvidar:
+
+- **Sin pista de audio, la sincronía labial queda `measured: false`** y no cuenta como evidencia en `evaluateDeepfake`/`calculateConfidence`. Nunca inventar una confianza para eso — antes era un placeholder fijo en 0.9, lo que daba falsa sensación de verificación.
+- `video` es un `ShieldId` más (`clipboard | screen | voice | video`) y reporta a `riskScorer` (`video-deepfake`) igual que los demás, pero **no puede arrancar solo con `protectionEngine.start()`**: `getDisplayMedia`/`getUserMedia` exigen gesto de usuario y permiso explícito, así que el usuario lo activa a mano desde `CameraAnalyzer` (patrón similar al de voz).
+- Las alertas de deepfake tienen cooldown de 20s (`ALERT_COOLDOWN_MS` en `CameraAnalyzer.tsx`) porque se re-evalúan en cada frame (`requestAnimationFrame`); sin eso, un deepfake sostenido spamearía el historial de alertas.
+- Es heurística basada en biometría facial (EAR, jitter, MAR/audio), no un clasificador entrenado contra deepfakes reales — comunicarlo así, no como detección infalible.
+
 ## Trampas conocidas del código
 
 No razonar sobre estos puntos de memoria — están así hoy:
 
-- **`geminiService.ts` tiene un único `currentAbortController` a nivel de módulo.** `analyzeText` y `analyzeVoiceFragment` lo abortan al entrar. El escudo de portapapeles, el de pantalla, el bucle de voz de 15 s y la UI pasan todos por ahí, así que se cancelan entre sí y el resultado degrada a local sin avisar.
-- **Contadores duplicados.** `addAlert` y `setAnalysisResult` incrementan ambos `historyCount` y `threatsToday`, y `triggerThreatAlert` llama a los dos.
 - **`partialize` en `useNadaStore`** define qué sobrevive a un recargado. Un campo nuevo que no esté en esa lista se resetea en silencio.
-- **`startScreenMonitor` registra el listener `onScreenCapture` en cada `start()`**, así que alternar la protección acumula listeners.
 - **`noUncheckedIndexedAccess` está activo.** `arr[0]` es `T | undefined`. Resolver con `?? fallback`, nunca con `!`.
-- **Worker OCR único sin control de concurrencia** en `ocrService.ts`, compartido por el escudo de pantalla y `ImageAnalyzer`.
-- **Windows no acepta SVG para iconos de Electron.** `main.cts` pasa `favicon.svg` a `BrowserWindow` y al tray; hace falta `.ico`.
+- **`getByteTimeDomainData` (Web Audio API) exige `Uint8Array<ArrayBuffer>`, no `Uint8Array<ArrayBufferLike>`.** Desde TypeScript 5.7, `new Uint8Array(n)` sola ya no alcanza para ese tipo; hace falta `new Uint8Array(new ArrayBuffer(n))` y anotar el campo como `Uint8Array<ArrayBuffer>`. Ver `visionService.ts`.
+
+### Ya resueltos (no reabrir sin evidencia nueva)
+
+Estos bugs figuraban antes en esta lista; el código actual ya los corrige. Si algo de esto vuelve a fallar, es una regresión, no un bug conocido pendiente:
+
+- `geminiService.ts` cancelaba análisis entre sí por un `AbortController` único. Ahora `controllers` es un `Map<AnalysisScope, AbortController>` — cada lane (`ui`/`clipboard`/`screen`/`voice`) se cancela solo a sí misma.
+- `addAlert` y `setAnalysisResult` contaban el mismo evento dos veces. `addAlert` ya no toca contadores; `setAnalysisResult`/`recordDailyScan` son la única fuente de verdad.
+- `startScreenMonitor` duplicaba el listener `onScreenCapture` en cada `start()`. Ahora se registra una sola vez en `init()` vía `bindScreenCaptureListener` con una bandera de guardia.
+- El worker de OCR no serializaba trabajos concurrentes. `ocrService.ts` ahora encola cada `recognize()` en una cadena de promesas (`enqueue`).
+- El icono de Electron era un SVG (`favicon.svg`), que Windows no acepta para `BrowserWindow`/`Tray`. Ahora usa `build/icon.png` vía `scripts/generate-icon.mjs`.
 
 ## Estado real de las integraciones
 

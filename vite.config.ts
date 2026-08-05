@@ -39,6 +39,8 @@ export default defineConfig(({ mode }) => {
       'import.meta.env.VITE_BEDROCK_ENDPOINT': JSON.stringify(env.VITE_BEDROCK_ENDPOINT || ''),
       'import.meta.env.VITE_BEDROCK_API_KEY': JSON.stringify(env.VITE_BEDROCK_API_KEY || ''),
       'import.meta.env.VITE_BEDROCK_MODEL': JSON.stringify(env.VITE_BEDROCK_MODEL || 'anthropic.claude-3-haiku-20240307-v1:0'),
+      // Firebase App Check — needed for Gemini to work
+      'import.meta.env.VITE_RECAPTCHA_ENTERPRISE_KEY': JSON.stringify(env.VITE_RECAPTCHA_ENTERPRISE_KEY || ''),
     },
     plugins: [
       react(),
@@ -94,6 +96,18 @@ export default defineConfig(({ mode }) => {
         },
       }),
     ],
-    server: { host: '127.0.0.1', port: 5173 },
+    server: {
+      host: '127.0.0.1',
+      port: 5173,
+      // Proxy Groq API calls to avoid CORS errors in the browser.
+      // The browser cannot call api.groq.com directly from localhost.
+      proxy: {
+        '/api/groq': {
+          target: 'https://api.groq.com',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/api\/groq/, ''),
+        },
+      },
+    },
   };
 });

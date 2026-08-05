@@ -92,8 +92,8 @@ export default function App() {
 
       {/* Debug mode: technical dashboard */}
       {activeTab === 'debug' ? (
-        <main className="flex-1 p-4 lg:p-6 max-w-4xl w-full mx-auto fade-slide-in" key="debug">
-          <div className="flex gap-2 mb-4 overflow-x-auto">
+        <main className="flex-1 p-4 lg:p-6 max-w-4xl w-full mx-auto fade-slide-in">
+          <div className="flex gap-2 mb-4 overflow-x-auto pb-1">
             {debugModes.map((mode) => (
               <button
                 key={mode}
@@ -101,7 +101,8 @@ export default function App() {
                 className="px-4 py-2 rounded-lg text-xs font-bold cursor-pointer transition-all whitespace-nowrap"
                 style={{
                   background: activeMode === mode ? 'var(--accent)' : 'var(--bg-elevated)',
-                  color: activeMode === mode ? 'var(--bg-primary)' : 'var(--text-secondary)',
+                  color: activeMode === mode ? '#fff' : 'var(--text-secondary)',
+                  boxShadow: activeMode === mode ? '0 0 12px var(--accent-glow)' : 'none',
                 }}
               >
                 {mode}
@@ -114,11 +115,17 @@ export default function App() {
           {(activeMode as string) === 'IMAGEN' && <ImageAnalyzer />}
         </main>
       ) : (
-        /* Consumer mode */
-        <main className="flex-1 p-4 max-w-lg w-full mx-auto mt-2 fade-slide-in" key={`consumer-${activeTab}`}>
-          {activeTab === 'home' && <ConsumerHome />}
-          {activeTab === 'alerts' && <AlertsView />}
-          {activeTab === 'settings' && <SettingsView />}
+        /* Consumer mode — no key prop to avoid unmounting on tab switch */
+        <main className="flex-1 p-4 max-w-lg w-full mx-auto mt-2">
+          <div className={activeTab === 'home' ? 'fade-slide-in' : 'hidden'}>
+            <ConsumerHome />
+          </div>
+          <div className={activeTab === 'alerts' ? 'fade-slide-in' : 'hidden'}>
+            <AlertsView />
+          </div>
+          <div className={activeTab === 'settings' ? 'fade-slide-in' : 'hidden'}>
+            <SettingsView />
+          </div>
         </main>
       )}
 

@@ -19,6 +19,7 @@ export interface TranslationSet {
   clipboard: string;
   screen: string;
   voice: string;
+  video: string;
   localMode: string;
   localModeDesc: string;
   analyzeScreenshot: string;
@@ -52,6 +53,12 @@ export interface TranslationSet {
   stopListening: string;
   startCamera: string;
   stopCamera: string;
+  cameraSourceLabel: string;
+  cameraSourceOwn: string;
+  cameraSourceCall: string;
+  cameraSourceCallHint: string;
+  noAudioForLipSync: string;
+  deepfakeDetected: string;
   // Image analyzer
   uploadScreenshot: string;
   uploadScreenshotDesc: string;
@@ -91,6 +98,7 @@ const es: TranslationSet = {
   clipboard: 'Portapapeles',
   screen: 'Pantalla',
   voice: 'Voz',
+  video: 'Video',
   localMode: 'Modo local',
   localModeDesc: 'Sin IA conectada. Configura una API key en Ajustes para mejor deteccion.',
   analyzeScreenshot: 'Analizar captura',
@@ -121,6 +129,12 @@ const es: TranslationSet = {
   stopListening: 'Detener',
   startCamera: 'Iniciar camara',
   stopCamera: 'Detener camara',
+  cameraSourceLabel: 'Que queres analizar',
+  cameraSourceOwn: 'Mi camara',
+  cameraSourceCall: 'Videollamada',
+  cameraSourceCallHint: 'Comparte la ventana o pestana de tu videollamada (Zoom, Meet, WhatsApp) para analizar a la otra persona',
+  noAudioForLipSync: 'Sin audio: no se puede verificar la sincronia labial',
+  deepfakeDetected: 'Posible deepfake detectado en videollamada',
   uploadScreenshot: 'Sube una captura de pantalla',
   uploadScreenshotDesc: 'Arrastra o haz clic — WhatsApp, Telegram, SMS, email',
   extractingOcr: 'Extrayendo texto con OCR...',
@@ -157,6 +171,7 @@ const en: TranslationSet = {
   clipboard: 'Clipboard',
   screen: 'Screen',
   voice: 'Voice',
+  video: 'Video',
   localMode: 'Local mode',
   localModeDesc: 'No AI connected. Set an API key in Settings for better detection.',
   analyzeScreenshot: 'Analyze screenshot',
@@ -187,6 +202,12 @@ const en: TranslationSet = {
   stopListening: 'Stop',
   startCamera: 'Start camera',
   stopCamera: 'Stop camera',
+  cameraSourceLabel: 'What do you want to analyze',
+  cameraSourceOwn: 'My camera',
+  cameraSourceCall: 'Video call',
+  cameraSourceCallHint: 'Share your video call window or tab (Zoom, Meet, WhatsApp) to analyze the other person',
+  noAudioForLipSync: 'No audio: lip-sync cannot be verified',
+  deepfakeDetected: 'Possible deepfake detected in video call',
   uploadScreenshot: 'Upload a screenshot',
   uploadScreenshotDesc: 'Drag or click — WhatsApp, Telegram, SMS, email',
   extractingOcr: 'Extracting text with OCR...',

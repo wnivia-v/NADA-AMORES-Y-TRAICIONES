@@ -47,9 +47,12 @@ class SpeechService {
     return 'webkitSpeechRecognition' in window || 'SpeechRecognition' in window;
   }
 
-  start(callback: TranscriptCallback, lang = 'es-ES') {
+  start(callback: TranscriptCallback, lang = 'es-ES', onError?: (error: string) => void) {
     if (this.running) return;
-    if (!this.isSupported()) return;
+    if (!this.isSupported()) {
+      onError?.('not-supported');
+      return;
+    }
 
     this.callback = callback;
     this.restartCount = 0;
@@ -82,12 +85,25 @@ class SpeechService {
 
     this.recognition.onerror = (event) => {
       if (event.error === 'not-allowed') {
+        onError?.('not-allowed');
         this.stop();
+      } else if (event.error === 'audio-capture') {
+        onError?.('no-microphone');
+        this.stop();
+      } else if (event.error === 'network') {
+        onError?.('network');
+        // Speech API needs network for recognition — keep trying
       }
+      // 'no-speech' is normal — user is just not talking, keep listening
     };
 
     this.running = true;
-    this.recognition.start();
+    try {
+      this.recognition.start();
+    } catch {
+      onError?.('start-failed');
+      this.running = false;
+    }
   }
 
   stop() {
