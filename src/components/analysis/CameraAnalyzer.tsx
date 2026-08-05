@@ -26,6 +26,14 @@ export function CameraAnalyzer() {
   const streamRef = useRef<MediaStream | null>(null);
   const rafRef = useRef<number>(0);
   const lastAlertAtRef = useRef(0);
+  const hasResultRef = useRef(false); // true once the first frame has been analyzed
+  const sourceRef = useRef<CameraSource>(source);
+  const tRef = useRef(t);
+
+  // Keep refs in sync with the latest rendered values so stable callbacks
+  // (triggerDeepfakeAlert) always read the current source/language.
+  sourceRef.current = source;
+  tRef.current = t;
 
   const stopCamera = useCallback(() => {
     cancelAnimationFrame(rafRef.current);
@@ -66,17 +74,18 @@ export function CameraAnalyzer() {
     addAlert({
       verdict,
       riskScore: confidence,
-      description: t.deepfakeDetected,
+      description: tRef.current.deepfakeDetected,
       detectedTactic: result.tactics[0] ?? null,
-      app: source === 'call' ? t.cameraSourceCall : t.cameraSourceOwn,
+      app: sourceRef.current === 'call' ? tRef.current.cameraSourceCall : tRef.current.cameraSourceOwn,
     });
-  }, [addAlert, setAnalysisResult, source, t]);
+  }, [addAlert, setAnalysisResult]);
 
   const analyzeLoop = useCallback(() => {
     const loop = () => {
       if (!videoRef.current || !streamRef.current) return;
       const result = visionService.analyzeFrame(videoRef.current, performance.now());
       if (result) {
+        hasResultRef.current = true;
         setDeepfakeScore(result.confidence);
         setLipSyncMeasured(result.signals.lipSyncMeasured);
         setStatus(result.isLikelyDeepfake ? `DEEPFAKE: ${result.explanation}` : 'Normal');
@@ -124,6 +133,7 @@ export function CameraAnalyzer() {
       }
 
       setActive(true);
+      hasResultRef.current = false; // reset so warning doesn't flash from a prior session
       lastAlertAtRef.current = 0;
       updateShieldStatus('video', { active: true, scanning: true });
       addLog(`CAMARA: Deteccion deepfake activa (${source === 'call' ? t.cameraSourceCall : t.cameraSourceOwn}).`, 'success');
@@ -199,7 +209,9 @@ export function CameraAnalyzer() {
           )}
         </div>
 
-        {active && !lipSyncMeasured && (
+        {/* Only show the warning once we've actually received a frame — prevents
+            a false flash on startup while MediaPipe is still processing. */}
+        {active && hasResultRef.current && !lipSyncMeasured && (
           <div className="flex items-center gap-2 mt-3">
             <AlertTriangle className="w-3.5 h-3.5 shrink-0" style={{ color: 'var(--warning)' }} />
             <p className="text-[10px]" style={{ color: 'var(--warning)' }}>

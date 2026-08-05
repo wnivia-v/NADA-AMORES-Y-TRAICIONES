@@ -37,7 +37,6 @@ const SYNC_SAMPLE_LIMIT = 90;
 class VisionService {
   private landmarker: any = null;
   private blinkHistory: number[] = [];
-  private frameCount = 0;
   private lastLandmarks: any = null;
 
   // Lip-sync: audio graph attached separately from the video stream, since
@@ -124,7 +123,6 @@ class VisionService {
       }
 
       const landmarks = results.faceLandmarks[0];
-      this.frameCount++;
 
       // Calculate EAR (Eye Aspect Ratio)
       const earLeft = this.calculateEAR(landmarks, 'left');
