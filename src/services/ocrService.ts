@@ -28,7 +28,7 @@ async function getWorker(): Promise<TesseractWorker | null> {
       try {
         const Tesseract = await import('tesseract.js');
         // Use both Spanish + English for better results on mixed-language screenshots
-        worker = (await Tesseract.createWorker(['spa', 'eng'])) as unknown as TesseractWorker;
+        worker = (await Tesseract.createWorker(['spa', 'eng'] as any)) as unknown as TesseractWorker;
         return worker;
       } catch (e) {
         console.warn('[NADA] OCR worker init failed:', e);
