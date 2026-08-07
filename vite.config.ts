@@ -50,7 +50,7 @@ export default defineConfig(({ mode }) => {
         manifest: {
           name: 'NADA Amores y Traiciones — Scam Shield',
           short_name: 'NADA Shield',
-          description: 'Deteccion de fraude en tiempo real con IA — Hackaton Kiro 2026',
+          description: 'Deteccion de fraude en tiempo real con IA',
           theme_color: '#0A0E17',
           background_color: '#0A0E17',
           display: 'standalone',

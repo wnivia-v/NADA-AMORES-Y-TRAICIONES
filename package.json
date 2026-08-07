@@ -1,11 +1,11 @@
 {
-  "name": "nada-amores-y-traiciones-kiro",
+  "name": "nada-amores-y-traiciones",
   "private": true,
   "version": "2.0.0",
   "type": "module",
   "main": "electron/main.cjs",
-  "author": "Antigravity — Hackaton Kiro 2026",
-  "description": "NADA Amores y Traiciones v2 — Deteccion de Fraude en Tiempo Real con IA (Hackaton Kiro, 23 Julio 2026)",
+  "author": "Antigravity",
+  "description": "NADA Amores y Traiciones v2 — Deteccion de Fraude en Tiempo Real con IA",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",

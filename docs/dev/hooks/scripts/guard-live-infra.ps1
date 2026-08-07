@@ -3,8 +3,8 @@
 # or make something publicly reachable.
 #
 # Receives the tool invocation as JSON on stdin. Exits 0 always; when a risky
-# pattern matches it emits a permissionDecision of "ask" so Kiro prompts the
-# user before the command runs.
+# pattern matches it emits a permissionDecision of "ask" so the agent prompts
+# the user before the command runs.
 # =============================================================================
 
 $ErrorActionPreference = 'Stop'

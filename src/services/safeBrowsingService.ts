@@ -18,7 +18,7 @@ export async function checkUrlSafety(url: string): Promise<SafeBrowsingResult> {
 
   try {
     const body = {
-      client: { clientId: 'nada-kiro', clientVersion: '2.0.0' },
+      client: { clientId: 'nada-shield', clientVersion: '2.0.0' },
       threatInfo: {
         threatTypes: ['MALWARE', 'SOCIAL_ENGINEERING', 'UNWANTED_SOFTWARE', 'POTENTIALLY_HARMFUL_APPLICATION'],
         platformTypes: ['ANY_PLATFORM'],

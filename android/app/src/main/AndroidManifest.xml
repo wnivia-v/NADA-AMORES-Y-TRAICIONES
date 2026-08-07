@@ -48,5 +48,5 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- NOT the Web Speech API — that isn't implemented in Android WebView.
          Voice shield will report "not-supported" until a native
-         SpeechRecognizer plugin is wired in (see .kiro/steering/nada.md). -->
+         SpeechRecognizer plugin is wired in (see docs/dev/steering/nada.md). -->
 </manifest>

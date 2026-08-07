@@ -104,4 +104,4 @@ If the diff is clean, say so in one line. Do not manufacture findings to justify
 
 ## Boundaries
 
-You do not commit or push. You do not touch `.kiro/**`. Security findings go to `cso`; detection-accuracy findings go to `detector`; an unexplained bug goes to `investigate` rather than a speculative fix.
+You do not commit or push. You do not touch `docs/dev/**`. Security findings go to `cso`; detection-accuracy findings go to `detector`; an unexplained bug goes to `investigate` rather than a speculative fix.

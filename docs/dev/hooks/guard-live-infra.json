@@ -8,7 +8,7 @@
       "matcher": "execute_pwsh|control_pwsh_process",
       "action": {
         "type": "command",
-        "command": "powershell -NoProfile -ExecutionPolicy Bypass -File .kiro/hooks/scripts/guard-live-infra.ps1",
+        "command": "powershell -NoProfile -ExecutionPolicy Bypass -File docs/dev/hooks/scripts/guard-live-infra.ps1",
         "timeout": 15
       }
     }

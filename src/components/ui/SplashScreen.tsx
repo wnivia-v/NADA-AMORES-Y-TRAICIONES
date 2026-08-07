@@ -106,7 +106,7 @@ export function SplashScreen({ onFinished }: SplashScreenProps) {
         className="absolute bottom-8 px-3 py-1 rounded-full text-xs font-mono"
         style={{ background: 'var(--bg-elevated)', color: 'var(--text-muted)' }}
       >
-        v2.0 · Hackathon Kiro 2026
+        v2.0
       </div>
     </div>
   );
