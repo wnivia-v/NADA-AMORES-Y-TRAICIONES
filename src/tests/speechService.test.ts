@@ -1,0 +1,81 @@
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+
+// Minimal fake of the Web Speech API's SpeechRecognition — just enough surface
+// for speechService.ts to drive, with handlers the test can trigger directly
+// to simulate the browser ending a recognition session.
+class FakeRecognition {
+  continuous = false;
+  interimResults = false;
+  lang = '';
+  onresult: ((event: unknown) => void) | null = null;
+  onend: (() => void) | null = null;
+  onerror: ((event: { error: string }) => void) | null = null;
+  onspeechstart: (() => void) | null = null;
+  onspeechend: (() => void) | null = null;
+  start = vi.fn();
+  abort = vi.fn();
+
+  constructor() {
+    lastInstance = this;
+  }
+}
+
+let lastInstance: FakeRecognition | null = null;
+
+describe('speechService restart loop', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    lastInstance = null;
+    (window as unknown as { SpeechRecognition: unknown }).SpeechRecognition = FakeRecognition;
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.resetModules();
+  });
+
+  /** Simulates the recognizer ending on its own and the 200ms restart timer firing. */
+  function endAndAdvance() {
+    lastInstance?.onend?.();
+    vi.advanceTimersByTime(200);
+  }
+
+  it('reports mic-unresponsive and stops instead of silently dying after repeated restarts with zero results', async () => {
+    const { speechService } = await import('@/services/speechService');
+    const onError = vi.fn();
+    speechService.start(() => {}, 'es-ES', onError);
+
+    expect(speechService.isRunning()).toBe(true);
+
+    // 51 consecutive end-without-result cycles (the 51st is the one that
+    // crosses the maxRestarts=50 threshold) — nothing ever came back, as if
+    // the mic were muted or routed to a silent input device.
+    for (let i = 0; i < 51; i++) endAndAdvance();
+
+    expect(onError).toHaveBeenCalledWith('mic-unresponsive');
+    expect(speechService.isRunning()).toBe(false);
+
+    speechService.stop();
+  });
+
+  it('never gives up as long as real results keep arriving between restarts', async () => {
+    const { speechService } = await import('@/services/speechService');
+    const onError = vi.fn();
+    speechService.start(() => {}, 'es-ES', onError);
+
+    // A long, healthy session: pauses (restarts) interleaved with real speech,
+    // well past what would have been the old flat restart cap.
+    for (let i = 0; i < 80; i++) {
+      lastInstance?.onresult?.({
+        resultIndex: 0,
+        results: { length: 1, 0: { isFinal: true, 0: { transcript: 'hola', confidence: 1 } } },
+      });
+      endAndAdvance();
+    }
+
+    expect(onError).not.toHaveBeenCalled();
+    expect(speechService.isRunning()).toBe(true);
+
+    speechService.stop();
+  });
+});

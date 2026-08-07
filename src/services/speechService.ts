@@ -79,6 +79,10 @@ class SpeechService {
     this.recognition.lang = lang;
 
     this.recognition.onresult = (event) => {
+      // A real result proves the mic path genuinely works right now — reset
+      // the restart counter so a long, healthy session with normal pauses
+      // never drifts toward the give-up threshold below.
+      this.restartCount = 0;
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const result = event.results[i];
         if (result) {
@@ -92,12 +96,25 @@ class SpeechService {
     this.recognition.onspeechend = () => this.activityCallback?.(false);
 
     this.recognition.onend = () => {
-      if (this.running && this.restartCount < this.maxRestarts) {
-        this.restartCount++;
-        setTimeout(() => {
-          if (this.running) this.recognition?.start();
-        }, 200);
+      if (!this.running) return;
+
+      if (this.restartCount >= this.maxRestarts) {
+        // 50 consecutive restarts with not a single result in between means
+        // something is actually broken (mic muted, wrong input device, OS
+        // permission silently revoked mid-session) — not just a normal pause
+        // in conversation, which the onresult reset above already protects
+        // against. Doing nothing here used to leave `running` true forever
+        // with a dead recognizer underneath: the UI kept showing "listening"
+        // while nothing was, or could ever again be, captured.
+        this.errorCallback?.('mic-unresponsive');
+        this.stop();
+        return;
       }
+
+      this.restartCount++;
+      setTimeout(() => {
+        if (this.running) this.recognition?.start();
+      }, 200);
     };
 
     this.recognition.onerror = (event) => {
