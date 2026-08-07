@@ -23,31 +23,32 @@
    ============================================================================= */
 
 .theme-velvet {
-  --bg-primary:    #F4F4F8;
-  --bg-secondary:  #FAFAFC;
-  --bg-card:       rgba(255,255,255,0.92);
-  --bg-elevated:   rgba(246,243,255,0.9);
-  --header-bg:     rgba(255,255,255,0.85);
-  --text-primary:  #1A1A2E;
-  --text-secondary:#4A4A6A;
-  --text-muted:    #9898B8;
-  --accent:        #7C3AED;
-  --accent-2:      #A855F7;
-  --accent-light:  rgba(124, 58, 237, 0.10);
-  --accent-glow:   rgba(124, 58, 237, 0.30);
-  --border:        rgba(124, 58, 237, 0.10);
-  --border-subtle: rgba(0, 0, 0, 0.06);
-  --success:       #10B981;
-  --warning:       #F59E0B;
-  --danger:        #EF4444;
-  --safe-bg:       rgba(16, 185, 129, 0.08);
-  --suspicious-bg: rgba(245, 158, 11, 0.10);
-  --dangerous-bg:  rgba(239, 68, 68, 0.08);
-  --gradient-hero: linear-gradient(135deg, #7C3AED 0%, #A855F7 50%, #EC4899 100%);
-  --gradient-card: linear-gradient(145deg, rgba(255,255,255,0.95) 0%, rgba(246,243,255,0.90) 100%);
-  --shadow-card:   0 1px 3px rgba(0,0,0,0.05), 0 8px 24px rgba(124,58,237,0.08);
-  --shadow-hover:  0 4px 24px rgba(124,58,237,0.18), 0 1px 4px rgba(0,0,0,0.06);
-  --shadow-glow:   0 0 32px rgba(124,58,237,0.25);
+  --bg-primary:    #F6F7FB;
+  --bg-secondary:  #FFFFFF;
+  --bg-card:       rgba(255,255,255,0.94);
+  --bg-elevated:   rgba(238,241,250,0.92);
+  --header-bg:     rgba(255,255,255,0.88);
+  --text-primary:  #10121B;
+  --text-secondary:#464B62;
+  --text-muted:    #8A8FA8;
+  --accent:        #4338CA;
+  --accent-2:      #7C3AED;
+  --accent-premium:#B08D3E;
+  --accent-light:  rgba(67, 56, 202, 0.09);
+  --accent-glow:   rgba(67, 56, 202, 0.30);
+  --border:        rgba(67, 56, 202, 0.12);
+  --border-subtle: rgba(16, 18, 27, 0.06);
+  --success:       #059669;
+  --warning:       #D97706;
+  --danger:        #DC2626;
+  --safe-bg:       rgba(5, 150, 105, 0.08);
+  --suspicious-bg: rgba(217, 119, 6, 0.10);
+  --dangerous-bg:  rgba(220, 38, 38, 0.08);
+  --gradient-hero: linear-gradient(135deg, #312E81 0%, #4338CA 45%, #7C3AED 100%);
+  --gradient-card: linear-gradient(145deg, rgba(255,255,255,0.96) 0%, rgba(238,241,250,0.92) 100%);
+  --shadow-card:   0 1px 2px rgba(16,18,32,0.04), 0 10px 28px rgba(67,56,202,0.09);
+  --shadow-hover:  0 6px 28px rgba(67,56,202,0.20), 0 2px 6px rgba(16,18,32,0.07);
+  --shadow-glow:   0 0 36px rgba(67,56,202,0.26);
 }
 
 /* =============================================================================
@@ -55,31 +56,32 @@
    ============================================================================= */
 
 .theme-gamer {
-  --bg-primary:    #07070F;
-  --bg-secondary:  #0E0E1C;
-  --bg-card:       rgba(18,18,36,0.95);
-  --bg-elevated:   rgba(28,28,52,0.90);
-  --header-bg:     rgba(10,10,20,0.90);
-  --text-primary:  #F0F0FF;
-  --text-secondary:#9090C0;
-  --text-muted:    #4A4A7A;
-  --accent:        #00E5FF;
-  --accent-2:      #7B2FFF;
-  --accent-light:  rgba(0, 229, 255, 0.08);
-  --accent-glow:   rgba(0, 229, 255, 0.35);
-  --border:        rgba(0, 229, 255, 0.12);
-  --border-subtle: rgba(255,255,255,0.04);
-  --success:       #00FF87;
-  --warning:       #FFD600;
-  --danger:        #FF3366;
-  --safe-bg:       rgba(0, 255, 135, 0.07);
-  --suspicious-bg: rgba(255, 214, 0, 0.07);
-  --dangerous-bg:  rgba(255, 51, 102, 0.08);
-  --gradient-hero: linear-gradient(135deg, #7B2FFF 0%, #00E5FF 100%);
-  --gradient-card: linear-gradient(145deg, rgba(18,18,36,0.98) 0%, rgba(28,28,52,0.92) 100%);
-  --shadow-card:   0 2px 12px rgba(0,0,0,0.5), 0 0 1px rgba(0,229,255,0.20);
-  --shadow-hover:  0 8px 32px rgba(0,0,0,0.6), 0 0 20px rgba(0,229,255,0.25);
-  --shadow-glow:   0 0 40px rgba(0,229,255,0.30);
+  --bg-primary:    #05060D;
+  --bg-secondary:  #0A0C18;
+  --bg-card:       rgba(14,16,28,0.95);
+  --bg-elevated:   rgba(20,23,40,0.92);
+  --header-bg:     rgba(6,8,14,0.92);
+  --text-primary:  #EEF0FF;
+  --text-secondary:#9498C0;
+  --text-muted:    #4E5280;
+  --accent:        #22D3EE;
+  --accent-2:      #6366F1;
+  --accent-premium:#E8C468;
+  --accent-light:  rgba(34, 211, 238, 0.08);
+  --accent-glow:   rgba(34, 211, 238, 0.35);
+  --border:        rgba(34, 211, 238, 0.14);
+  --border-subtle: rgba(255,255,255,0.05);
+  --success:       #10E58A;
+  --warning:       #FFC53D;
+  --danger:        #FF4D6D;
+  --safe-bg:       rgba(16, 229, 138, 0.08);
+  --suspicious-bg: rgba(255, 197, 61, 0.08);
+  --dangerous-bg:  rgba(255, 77, 109, 0.09);
+  --gradient-hero: linear-gradient(135deg, #6366F1 0%, #22D3EE 100%);
+  --gradient-card: linear-gradient(145deg, rgba(14,16,28,0.98) 0%, rgba(20,23,40,0.93) 100%);
+  --shadow-card:   0 2px 14px rgba(0,0,0,0.55), 0 0 1px rgba(34,211,238,0.22);
+  --shadow-hover:  0 10px 36px rgba(0,0,0,0.62), 0 0 22px rgba(34,211,238,0.28);
+  --shadow-glow:   0 0 44px rgba(34,211,238,0.32);
 }
 
 /* =============================================================================
@@ -111,13 +113,13 @@ body {
 .theme-velvet body,
 .theme-velvet {
   background-image:
-    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(124,58,237,0.10) 0%, transparent 60%);
+    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(67,56,202,0.10) 0%, transparent 60%);
 }
 
 .theme-gamer {
   background-image:
-    radial-gradient(ellipse 80% 60% at 80% 0%, rgba(123,47,255,0.12) 0%, transparent 50%),
-    radial-gradient(ellipse 60% 50% at 20% 100%, rgba(0,229,255,0.08) 0%, transparent 50%);
+    radial-gradient(ellipse 80% 60% at 80% 0%, rgba(99,102,241,0.12) 0%, transparent 50%),
+    radial-gradient(ellipse 60% 50% at 20% 100%, rgba(34,211,238,0.08) 0%, transparent 50%);
 }
 
 /* =============================================================================
@@ -151,7 +153,7 @@ body {
 }
 
 .theme-gamer .card::before {
-  background: linear-gradient(90deg, transparent, rgba(0,229,255,0.15), transparent);
+  background: linear-gradient(90deg, transparent, rgba(34,211,238,0.15), transparent);
 }
 
 .card:hover {
@@ -230,6 +232,16 @@ body {
   border: 1px solid rgba(239,68,68,0.35);
 }
 
+/* Metallic "certified/premium" accent — used sparingly (splash version pill,
+   verified badges) so it reads as an award-grade finish, not a fourth verdict color. */
+.pill-premium {
+  border: 1px solid color-mix(in srgb, var(--accent-premium) 45%, transparent);
+  background: linear-gradient(135deg,
+    color-mix(in srgb, var(--accent-premium) 16%, transparent) 0%,
+    color-mix(in srgb, var(--accent-premium) 6%, transparent) 100%);
+  color: var(--accent-premium);
+}
+
 /* =============================================================================
    SCANLINE (Gamer only — muy sutil)
    ============================================================================= */
@@ -243,8 +255,8 @@ body {
     0deg,
     transparent,
     transparent 3px,
-    rgba(0, 229, 255, 0.015) 3px,
-    rgba(0, 229, 255, 0.015) 4px
+    rgba(34, 211, 238, 0.015) 3px,
+    rgba(34, 211, 238, 0.015) 4px
   );
   animation: scanline-scroll 12s linear infinite;
 }

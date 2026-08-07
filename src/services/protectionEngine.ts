@@ -1,6 +1,6 @@
 import { analyzeText, analyzeVoiceFragment, cancelAnalysis, isAnalysisAborted } from './geminiService';
 import { extractTextFromCanvas, extractTextFromImage } from './ocrService';
-import { speechService } from './speechService';
+import { speechRecognitionService as speechService } from './speechRecognitionService';
 import { playAlertTone } from '@/utils/audioAlert';
 import { notificationService } from './notificationService';
 import type { ScamAnalysis, ShieldId, Verdict } from '@/store/useNadaStore';
@@ -294,7 +294,7 @@ class ProtectionEngine {
     if (this.voiceActive) return;
 
     if (!speechService.isSupported()) {
-      const msg = '❌ Este navegador no soporta reconocimiento de voz. Usa Chrome o Edge.';
+      const msg = '❌ Reconocimiento de voz no disponible en este dispositivo. En el navegador usa Chrome o Edge.';
       this.log(`ESCUDO VOZ: ${msg}`, 'error');
       this.callbacks?.onShieldStatusChange('voice', { active: false, scanning: false });
       this.callbacks?.onVoiceError(msg);
@@ -373,7 +373,7 @@ class ProtectionEngine {
         'audio-capture': '❌ No se detecto ningun microfono conectado.',
         'service-not-allowed': '❌ El navegador bloqueo el reconocimiento de voz.',
         'start-failed': '❌ No se pudo iniciar el reconocimiento de voz. Intenta de nuevo.',
-        'not-supported': '❌ Este navegador no soporta reconocimiento de voz. Usa Chrome o Edge.',
+        'not-supported': '❌ Reconocimiento de voz no disponible en este dispositivo. En el navegador usa Chrome o Edge.',
       };
       const msg = messages[error] ?? '❌ El escudo de voz se detuvo por un error.';
       this.callbacks?.onVoiceError(msg);

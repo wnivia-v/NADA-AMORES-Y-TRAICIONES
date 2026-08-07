@@ -43,10 +43,10 @@
          mode) does NOT work in an Android WebView regardless of this
          permission — it needs a native MediaProjection plugin, not built yet. -->
     <uses-permission android:name="android.permission.CAMERA" />
+    <!-- Also covers the voice shield: android.speech.SpeechRecognizer (native
+         plugin, see SpeechRecognitionPlugin.java) — NOT the Web Speech API,
+         which does not exist in Android's WebView. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <!-- Required on Android 13+ to show threat notifications. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <!-- NOT the Web Speech API — that isn't implemented in Android WebView.
-         Voice shield will report "not-supported" until a native
-         SpeechRecognizer plugin is wired in (see docs/dev/steering/nada.md). -->
 </manifest>
