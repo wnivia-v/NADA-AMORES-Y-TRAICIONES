@@ -12,6 +12,7 @@ class FakeRecognition {
   onerror: ((event: { error: string }) => void) | null = null;
   onspeechstart: (() => void) | null = null;
   onspeechend: (() => void) | null = null;
+  onaudiostart: (() => void) | null = null;
   start = vi.fn();
   abort = vi.fn();
 
@@ -34,10 +35,13 @@ describe('speechService restart loop', () => {
     vi.resetModules();
   });
 
-  /** Simulates the recognizer ending on its own and the 200ms restart timer firing. */
+  /**
+   * Simulates the recognizer ending on its own and the restart timer firing.
+   * Advances past the maximum backoff so the restart always lands.
+   */
   function endAndAdvance() {
     lastInstance?.onend?.();
-    vi.advanceTimersByTime(200);
+    vi.advanceTimersByTime(1000);
   }
 
   it('reports mic-unresponsive and stops instead of silently dying after repeated restarts with zero results', async () => {
@@ -54,6 +58,39 @@ describe('speechService restart loop', () => {
 
     expect(onError).toHaveBeenCalledWith('mic-unresponsive');
     expect(speechService.isRunning()).toBe(false);
+
+    speechService.stop();
+  });
+
+  it('distinguishes a dead speech backend from a dead mic when audio WAS reaching the recognizer', async () => {
+    const { speechService } = await import('@/services/speechService');
+    const onError = vi.fn();
+    speechService.start(() => {}, 'es-ES', onError);
+
+    // Same silent restart loop, except the recognizer confirms each time that
+    // it is receiving audio — so the microphone is fine and the fault is
+    // downstream, in the browser's recognition service.
+    for (let i = 0; i < 51; i++) {
+      lastInstance?.onaudiostart?.();
+      endAndAdvance();
+    }
+
+    expect(onError).toHaveBeenCalledWith('speech-service-unavailable');
+    expect(onError).not.toHaveBeenCalledWith('mic-unresponsive');
+
+    speechService.stop();
+  });
+
+  it('builds a fresh recognizer per restart instead of reusing a possibly-wedged one', async () => {
+    const { speechService } = await import('@/services/speechService');
+    speechService.start(() => {}, 'es-ES');
+
+    const first = lastInstance;
+    endAndAdvance();
+    const second = lastInstance;
+
+    expect(second).not.toBe(first);
+    expect(second?.start).toHaveBeenCalled();
 
     speechService.stop();
   });

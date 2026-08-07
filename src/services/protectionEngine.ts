@@ -413,7 +413,7 @@ class ProtectionEngine {
   }
 
   private handleVoiceError(error: string) {
-    const FATAL = new Set(['not-allowed', 'audio-capture', 'service-not-allowed', 'start-failed', 'not-supported', 'mic-unresponsive']);
+    const FATAL = new Set(['not-allowed', 'audio-capture', 'service-not-allowed', 'start-failed', 'not-supported', 'mic-unresponsive', 'speech-service-unavailable']);
     if (FATAL.has(error)) {
       // The recognizer is genuinely dead — speechService already called its
       // own stop(). Reflect that here instead of leaving shieldStatus.voice
@@ -429,6 +429,7 @@ class ProtectionEngine {
         'start-failed': '❌ No se pudo iniciar el reconocimiento de voz. Intenta de nuevo.',
         'not-supported': '❌ Reconocimiento de voz no disponible en este dispositivo. En el navegador usa Chrome o Edge.',
         'mic-unresponsive': '❌ El microfono no esta captando audio. Revisa que el dispositivo de entrada correcto este seleccionado en el sistema y volve a activar el escudo.',
+        'speech-service-unavailable': '❌ El microfono si capta audio, pero el servicio de reconocimiento de voz del navegador no responde. Suele ser una VPN, firewall o bloqueador cortando la conexion a los servidores de Google. Proba desactivarlos o usar otra red.',
       };
       const msg = messages[error] ?? '❌ El escudo de voz se detuvo por un error.';
       this.callbacks?.onVoiceError(msg);

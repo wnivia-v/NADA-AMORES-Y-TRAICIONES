@@ -38,6 +38,8 @@ interface SpeechRecognitionLike {
   onerror: ((event: SpeechRecognitionErrorLike) => void) | null;
   onspeechstart: (() => void) | null;
   onspeechend: (() => void) | null;
+  /** Fires when the recognizer actually begins receiving audio from the mic. */
+  onaudiostart: (() => void) | null;
   start: () => void;
   abort: () => void;
 }
@@ -52,8 +54,18 @@ class SpeechService {
   private callback: TranscriptCallback | null = null;
   private errorCallback: ErrorCallback | null = null;
   private activityCallback: SpeechActivityCallback | null = null;
+  private lang = 'es-ES';
   private restartCount = 0;
   private maxRestarts = 50;
+  /**
+   * Whether the recognizer ever reported receiving audio during this session.
+   *
+   * This is the signal that separates the two failure modes that otherwise
+   * look identical from the outside (silent restart loop, no error event):
+   * the recognizer never getting audio at all vs. getting audio that never
+   * resolves into words. Only the first one is a microphone/routing problem.
+   */
+  private audioStartedEver = false;
 
   isSupported(): boolean {
     return 'webkitSpeechRecognition' in window || 'SpeechRecognition' in window;
@@ -69,16 +81,33 @@ class SpeechService {
     this.callback = callback;
     this.errorCallback = onError ?? null;
     this.activityCallback = onActivity ?? null;
+    this.lang = lang;
     this.restartCount = 0;
+    this.audioStartedEver = false;
+    this.running = true;
 
+    this.launchRecognition();
+  }
+
+  /**
+   * Builds a FRESH recognizer and starts it.
+   *
+   * Reusing one instance across restarts (calling start() again on the same
+   * object after onend) is the documented-flaky path in Chrome: the instance
+   * can land in a state where start() resolves but the session ends within a
+   * few hundred milliseconds, forever, with no error event ever firing. That
+   * produces exactly the symptom seen here — ~50 restarts in ~27s, silent.
+   * A new instance per attempt costs nothing and avoids that state entirely.
+   */
+  private launchRecognition() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const SpeechAPI = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    this.recognition = new SpeechAPI() as SpeechRecognitionLike;
-    this.recognition.continuous = true;
-    this.recognition.interimResults = true;
-    this.recognition.lang = lang;
+    const recognition = new SpeechAPI() as SpeechRecognitionLike;
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = this.lang;
 
-    this.recognition.onresult = (event) => {
+    recognition.onresult = (event) => {
       // A real result proves the mic path genuinely works right now — reset
       // the restart counter so a long, healthy session with normal pauses
       // never drifts toward the give-up threshold below.
@@ -92,32 +121,42 @@ class SpeechService {
       }
     };
 
-    this.recognition.onspeechstart = () => this.activityCallback?.(true);
-    this.recognition.onspeechend = () => this.activityCallback?.(false);
+    recognition.onaudiostart = () => { this.audioStartedEver = true; };
+    recognition.onspeechstart = () => this.activityCallback?.(true);
+    recognition.onspeechend = () => this.activityCallback?.(false);
 
-    this.recognition.onend = () => {
+    recognition.onend = () => {
       if (!this.running) return;
 
       if (this.restartCount >= this.maxRestarts) {
-        // 50 consecutive restarts with not a single result in between means
-        // something is actually broken (mic muted, wrong input device, OS
-        // permission silently revoked mid-session) — not just a normal pause
-        // in conversation, which the onresult reset above already protects
+        // Many consecutive restarts with not a single result in between means
+        // something is actually broken — not just a normal pause in
+        // conversation, which the onresult reset above already protects
         // against. Doing nothing here used to leave `running` true forever
         // with a dead recognizer underneath: the UI kept showing "listening"
         // while nothing was, or could ever again be, captured.
-        this.errorCallback?.('mic-unresponsive');
+        //
+        // Which of the two codes is reported matters for the user: one points
+        // at their microphone, the other at the browser's speech backend.
+        // Reporting the mic one in both cases sends them to fix a device that
+        // was never the problem.
+        this.errorCallback?.(this.audioStartedEver ? 'speech-service-unavailable' : 'mic-unresponsive');
         this.stop();
         return;
       }
 
       this.restartCount++;
+      // Gentle backoff: an instant-death loop should not hammer the speech
+      // backend 5x/second, but a normal conversational pause must resume
+      // fast. Ramps 250ms -> 1s only while restarts keep failing, and
+      // onresult resets restartCount, so healthy sessions stay at 250ms.
+      const delay = Math.min(250 + this.restartCount * 15, 1000);
       setTimeout(() => {
-        if (this.running) this.recognition?.start();
-      }, 200);
+        if (this.running) this.launchRecognition();
+      }, delay);
     };
 
-    this.recognition.onerror = (event) => {
+    recognition.onerror = (event) => {
       // Every error is surfaced — previously 'not-allowed' silently called
       // stop() with no callback, so the UI kept showing "listening" while the
       // mic session was actually dead underneath it.
@@ -129,14 +168,15 @@ class SpeechService {
       // loop already recovers from those while `running` stays true.
     };
 
-    this.running = true;
+    this.recognition = recognition;
+
     try {
-      this.recognition.start();
+      recognition.start();
     } catch {
       // Synchronous throw from the browser (e.g. called in a bad state) —
       // go through stop() so `running` and the recognition handle are
       // cleared consistently, not just the flag.
-      onError?.('start-failed');
+      this.errorCallback?.('start-failed');
       this.stop();
     }
   }
