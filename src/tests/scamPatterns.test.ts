@@ -106,6 +106,23 @@ describe('scanLocalPatterns', () => {
       const insultPlusThreat = scanLocalPatterns('Idiota, si no pagas vas a tener problemas');
       expect(insultPlusThreat.riskScore).toBeGreaterThanOrEqual(40);
     });
+
+    it('flags a real bullying message with no financial signal as dangerous, not safe', () => {
+      // A real screenshot that used to score 0/100: pure insults and rejection,
+      // zero money/urgency/impersonation content — this app is supposed to
+      // catch acoso/bullying, not just financial scams.
+      const text = 'Cerda Te gusta el mal trato eso las matan Bye Pudrete Cerda Perra Mal educada';
+      const result = scanLocalPatterns(text);
+      expect(result.riskScore).toBeGreaterThanOrEqual(40);
+      expect(result.tactics).toContain('Lenguaje agresivo u ofensivo');
+      expect(result.tactics).toContain('Acoso / hostigamiento severo');
+    });
+
+    it('scales harassment weight with repetition, up to a cap', () => {
+      const one = scanLocalPatterns('idiota');
+      const many = scanLocalPatterns('idiota perra cerda zorra puta fea asquerosa');
+      expect(many.riskScore).toBeGreaterThan(one.riskScore);
+    });
   });
 
   describe('impersonation', () => {

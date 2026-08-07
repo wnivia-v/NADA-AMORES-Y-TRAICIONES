@@ -95,14 +95,24 @@ export function VoiceAnalyzer() {
           </div>
         )}
 
-        {(voiceTranscript || voiceInterim) && (
+        {/* Always visible while listening — same "always-on" feel as the
+            clipboard shield's own panel — instead of only appearing once
+            text exists, which is what made it look like the mic wasn't
+            listening at all during the silence before the first word lands. */}
+        {(listening || voiceTranscript || voiceInterim) && (
           <div className="mt-4 p-3 rounded-lg text-left text-sm max-h-32 overflow-y-auto" style={{ background: 'var(--bg-elevated)', color: 'var(--text-primary)' }}>
             <p className="text-xs font-mono mb-1" style={{ color: 'var(--text-muted)' }}>
               {t.transcript}
             </p>
-            {voiceTranscript}
-            {voiceInterim && (
-              <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}> {voiceInterim}</span>
+            {voiceTranscript || voiceInterim ? (
+              <>
+                {voiceTranscript}
+                {voiceInterim && (
+                  <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}> {voiceInterim}</span>
+                )}
+              </>
+            ) : (
+              <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>{t.transcriptPlaceholder}</span>
             )}
           </div>
         )}

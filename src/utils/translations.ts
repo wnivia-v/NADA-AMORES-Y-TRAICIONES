@@ -73,6 +73,7 @@ export interface TranslationSet {
   voiceHearingYou: string;
   suspiciousPattern: string;
   transcript: string;
+  transcriptPlaceholder: string;
   voiceShieldDesc: string;
   screenNeedsDesktop: string;
   tapToListen: string;
@@ -148,6 +149,7 @@ const es: TranslationSet = {
   voiceHearingYou: 'Te estamos escuchando ahora',
   suspiciousPattern: 'Patron sospechoso detectado',
   transcript: 'Transcripcion:',
+  transcriptPlaceholder: 'Escuchando... habla para ver el texto aqui en vivo.',
   voiceShieldDesc: 'Toca para escuchar tu llamada y detectar estafas en vivo',
   screenNeedsDesktop: 'Instala la app de escritorio (.exe) para vigilar tu pantalla completa',
   tapToListen: 'Toca para activar',
@@ -222,6 +224,7 @@ const en: TranslationSet = {
   voiceHearingYou: 'We are hearing you right now',
   suspiciousPattern: 'Suspicious pattern detected',
   transcript: 'Transcript:',
+  transcriptPlaceholder: 'Listening... speak to see the text appear here live.',
   voiceShieldDesc: 'Tap to listen to your call and detect scams in real time',
   screenNeedsDesktop: 'Install the desktop app (.exe) to monitor your full screen',
   tapToListen: 'Tap to activate',

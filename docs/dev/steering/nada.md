@@ -54,6 +54,8 @@ Puntos a no olvidar:
 - `video` es un `ShieldId` más (`clipboard | screen | voice | video`) y reporta a `riskScorer` (`video-deepfake`) igual que los demás, pero **no puede arrancar solo con `protectionEngine.start()`**: `getDisplayMedia`/`getUserMedia` exigen gesto de usuario y permiso explícito, así que el usuario lo activa a mano desde `CameraAnalyzer` (patrón similar al de voz).
 - Las alertas de deepfake tienen cooldown de 20s (`ALERT_COOLDOWN_MS` en `CameraAnalyzer.tsx`) porque se re-evalúan en cada frame (`requestAnimationFrame`); sin eso, un deepfake sostenido spamearía el historial de alertas.
 - Es heurística basada en biometría facial (EAR, jitter, MAR/audio), no un clasificador entrenado contra deepfakes reales — comunicarlo así, no como detección infalible.
+- **`blinkRate` tiene un warm-up de 20s (`BLINK_WARMUP_MS` en `visionService.ts`) antes de contar como evidencia.** Es una ventana rodante de 60s medida desde que arranca el análisis — en los primeros segundos de CUALQUIER sesión, incluida una persona real, todavía no hubo tiempo de acumular parpadeos normales. Sin el warm-up esto era un falso positivo sistemático justo al inicio de cada sesión, que es exactamente cuando alguien está mirando de cerca (demo, primera prueba). Jitter y sincronía labial no tienen ese problema (no dependen de una ventana de tiempo acumulada) y siguen contando desde el primer frame.
+- **Consenso multi-IA para video (confirmar con una IA de visión en la nube antes de alertar) no está construido.** Es lo que pidió el usuario para bajar falsos positivos aún más, pero implica costo real de API por cada verificación — pendiente de decisión explícita, igual que el escaneo pasivo de fotos/video (ver "Estado real de las integraciones").
 
 ## Escudos que sobreviven la navegación (voz y video)
 
@@ -111,6 +113,8 @@ Estos bugs figuraban antes en esta lista; el código actual ya los corrige. Si a
 - `startScreenMonitor` duplicaba el listener `onScreenCapture` en cada `start()`. Ahora se registra una sola vez en `init()` vía `bindScreenCaptureListener` con una bandera de guardia.
 - El worker de OCR no serializaba trabajos concurrentes. `ocrService.ts` ahora encola cada `recognize()` en una cadena de promesas (`enqueue`).
 - El icono de Electron era un SVG (`favicon.svg`), que Windows no acepta para `BrowserWindow`/`Tray`. Ahora usa `build/icon.png` vía `scripts/generate-icon.mjs`.
+- `ocrService.ts` mandaba la imagen cruda a Tesseract sin preprocesar. Capturas de chat (texto chico, burbujas de color) salían ilegibles ("borroso") aunque la imagen fuera nítida. Ahora hay un paso de escalado + escala de grises + contraste antes del OCR (`preprocess()` en `ocrService.ts`); si el preprocesado falla por lo que sea, cae de vuelta a la imagen original en vez de perder el OCR entero.
+- `scamPatterns.ts` solo cubría fraude financiero — un mensaje de puro acoso/bullying (insultos, sin ninguna señal de dinero/urgencia) daba 0/100. Ahora hay categorías de lenguaje agresivo y hostigamiento severo con peso `repeatable` (escala con cuántos insultos distintos aparecen, no un peso fijo) — un insulto suelto sigue sin disparar alerta, varios en la misma conversación sí.
 
 ## Estado real de las integraciones
 
