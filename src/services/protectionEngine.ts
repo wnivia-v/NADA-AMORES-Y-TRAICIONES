@@ -159,8 +159,36 @@ class ProtectionEngine {
 
   private async checkClipboard() {
     try {
-      // Web API clipboard (requires focus)
-      const text = await navigator.clipboard.readText().catch(() => '');
+      // Skip if the page doesn't have focus — calling readText() without focus
+      // either fails silently or triggers a blocking permission prompt that
+      // freezes the UI until the user dismisses it.
+      if (typeof document !== 'undefined' && !document.hasFocus()) return;
+
+      // Check the clipboard-read permission without triggering a prompt.
+      // If the permission is "prompt" (not yet decided) or "denied", we skip
+      // the read entirely. The user will be asked the next time they manually
+      // paste something; we should never force the browser dialog from a
+      // background interval.
+      if (navigator.permissions) {
+        try {
+          const perm = await navigator.permissions.query({ name: 'clipboard-read' as PermissionName });
+          if (perm.state !== 'granted') return;
+        } catch {
+          // Some browsers don't support querying clipboard-read — fall through
+          // and let readText() decide, but guard with the focus check above.
+        }
+      }
+
+      // Add a short timeout so readText() can never block the interval loop
+      // (e.g. when the clipboard contains an image on some browsers).
+      const readWithTimeout = Promise.race([
+        navigator.clipboard.readText(),
+        new Promise<string>((_, reject) =>
+          setTimeout(() => reject(new Error('clipboard-timeout')), 2000)
+        ),
+      ]);
+
+      const text = await readWithTimeout.catch(() => '');
       if (!text || text === this.lastClipboardText || text.length < 15) return;
 
       this.saveLastClipboard(text);
