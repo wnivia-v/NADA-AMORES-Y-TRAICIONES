@@ -55,6 +55,44 @@ Puntos a no olvidar:
 - Las alertas de deepfake tienen cooldown de 20s (`ALERT_COOLDOWN_MS` en `CameraAnalyzer.tsx`) porque se re-evalúan en cada frame (`requestAnimationFrame`); sin eso, un deepfake sostenido spamearía el historial de alertas.
 - Es heurística basada en biometría facial (EAR, jitter, MAR/audio), no un clasificador entrenado contra deepfakes reales — comunicarlo así, no como detección infalible.
 
+## Escudos que sobreviven la navegación (voz y video)
+
+`VoiceAnalyzer.tsx` y `CameraAnalyzer.tsx` ya NO son dueños de `speechService`/`MediaStream`. Antes cada uno tenía su propio `useState('listening')`, y `ConsumerHome.tsx` además mantenía una TERCERA copia independiente con su propio `toggleVoice` — desmontar cualquiera de esos componentes (cambiar de pestaña) dejaba el reconocimiento de voz corriendo invisible mientras la UI volvía a mostrar "inactivo", y volver a tocar el botón era un no-op silencioso porque `speechService.start()` ya estaba corriendo. Eso es lo que se reportó como "parece que escucha pero no responde".
+
+Ahora:
+
+- **`protectionEngine.ts`** posee el ciclo de vida completo de voz (`startVoiceMonitoring`/`stopVoiceMonitoring`, transcript, análisis por fragmento con cooldown de 6s en vez de un poll fijo de 15s). `VoiceAnalyzer` y el card de voz en `ConsumerHome` son vistas delgadas sobre el mismo estado (`shieldStatus.voice`, `voiceTranscript`, `voiceRealtimeVerdict`, `voiceSpeechActive` en el store) — llamar a la acción desde cualquiera de los dos lugares mueve la MISMA sesión.
+- **`videoShieldService.ts`** (nuevo) posee el `MediaStream` y el loop de `requestAnimationFrame`, con un `<video>` desprendido del DOM como fuente de frames para MediaPipe. `CameraAnalyzer` solo pide `attachPreview(videoEl)` para mostrar la imagen; cerrar la pestaña de cámara ya no mata la sesión.
+- **`speechService.ts`** ahora expone `onError`/`onSpeechActivity` además del callback de transcript. Antes `onerror` con `'not-allowed'` llamaba a `stop()` sin avisarle a nadie — el shield quedaba "activo" en la UI para una sesión que ya estaba muerta. `onspeechstart`/`onspeechend` alimentan `voiceSpeechActive`, que es la única fuente real de "te estamos escuchando ahora" (antes era una suposición optimista, no una confirmación).
+- `protectionEngine.start()` ahora también arranca voz automáticamente (el permiso de micrófono, una vez concedido, no vuelve a pedirse). Video NO se puede auto-arrancar — `getDisplayMedia` exige gesto de usuario fresco cada vez, no hay forma de saltarse eso — así que sigue siendo manual desde `CameraAnalyzer`/el card de video en Home.
+- `FloatingBubble` se renderiza en TODAS las pestañas de `App.tsx` (incluida `debug`), no solo en modo consumidor — antes desaparecía justo al entrar a las herramientas técnicas donde vive `VoiceAnalyzer`/`CameraAnalyzer`.
+
+## Overlay de escritorio (Electron)
+
+Un `BrowserWindow` sin marco, transparente y `alwaysOnTop`, creado en `electron/main.cts` (`createOverlayWindow`) cuando `isProtectionActive` es true y destruido cuando se desactiva — es la respuesta real a "el escudo debe verse siempre encima de todo". Solo existe en Electron: ninguna pestaña de navegador puede dibujar sobre otras apps nativas del sistema operativo, es una barrera de seguridad de la plataforma, no una limitación de este código.
+
+- Carga el mismo `dist/index.html`/servidor de Vite con `?overlay=1`; `main.tsx` detecta ese query param y renderiza `OverlayShield.tsx` en vez de `<App />` — sin store, sin router, un árbol de React aparte.
+- El estado (activo/escaneando/último veredicto) viaja por IPC desde la ventana principal (`App.tsx` → `electronAPI.updateOverlayStatus`) hacia `main.cts` (`update-overlay-status`) y de ahí a la ventana overlay (`overlay-status-update`). No comparte Zustand/localStorage entre ventanas — cada `BrowserWindow` tiene su propio contexto de JS y el store no sincroniza entre procesos de renderer por sí solo.
+- Clic en el overlay solo hace foco en la ventana principal (`focus-main-window`); apagar la protección de verdad exige la acción explícita en la ventana principal — evita que un toque accidental en una burbuja de 64px desactive la protección.
+- **No probado en runtime** (este entorno no tiene display ni Electron corriendo) — verificar con `npm run electron:dev` que la ventana aparece, se mantiene encima de otras apps, y sobrevive a cambiar de espacio de trabajo/pantalla completa.
+
+## Android (Capacitor)
+
+`capacitor.config.ts` + carpeta `android/` envuelven el mismo `dist/` web en un WebView nativo — cero duplicación de UI/logica, es el mismo bundle de React. `android/app/src/main/assets/public` (la copia sincronizada de `dist/`) está en `.gitignore`, igual que `dist/` — se regenera con `npm run android:sync` antes de abrir el proyecto en Android Studio. `npm run android:open` abre Android Studio (o falla si no está instalado/en el PATH).
+
+**Lo que funciona igual que en web/PWA sin tocar nada**: TextAnalyzer, ImageAnalyzer (OCR), clipboard shield, notificaciones locales del sistema (con matices, ver abajo), y el modo "Mi camara" de CameraAnalyzer (usa `getUserMedia`, que el WebView de Android sí soporta con el permiso `CAMERA`/`RECORD_AUDIO` ya declarado en el manifest).
+
+**Lo que NO funciona sin un plugin nativo nuevo** — no asumir que "ya está" solo porque compila:
+
+- **Escudo de voz**: la Web Speech API (`SpeechRecognition`) no está implementada en el WebView de Android. `speechService.isSupported()` va a devolver `false` ahí, y el motor ya maneja ese caso (mensaje "not-supported", no crashea) — pero la funcionalidad en sí no existe hasta integrar un plugin como `@capacitor-community/speech-recognition` (usa `android.speech.SpeechRecognizer` nativo) y adaptar `speechService.ts` para usarlo cuando corre dentro de Capacitor.
+- **Modo "Videollamada" del escudo de video**: `getDisplayMedia` no existe en un WebView de Android. Capturar la pantalla en Android requiere la API nativa `MediaProjection` vía un plugin propio — no hay un plugin comunitario maduro y listo para esto, es trabajo nativo real (Kotlin) a construir.
+- **Overlay flotante siempre-encima** (el equivalente al de Electron): en Android existe (`SYSTEM_ALERT_WINDOW`, "dibujar sobre otras apps"), pero exige un plugin nativo que pida ese permiso especial (no es un permiso de manifest normal, el usuario lo concede en una pantalla de Ajustes aparte) y dibuje la ventana. No implementado todavía; el permiso ni siquiera está declarado en el manifest hasta que se construya.
+- **Notificaciones**: el código actual usa la Web Notification API (`notificationService.ts`), cuyo soporte dentro de un WebView es inconsistente entre versiones de Android System WebView. Para notificaciones confiables hace falta `@capacitor/local-notifications` en vez de la API web.
+
+**Distribución**: pensado para APK directo (sin Play Store) — sin cuenta de desarrollador ni revisión de Google, el usuario instala habilitando "origenes desconocidos". Requiere generar un keystore de firma (`keytool -genkeypair ...`) y configurar `android/app/build.gradle` con `signingConfigs` antes de `./gradlew assembleRelease`; sin eso solo se puede generar un APK de debug (`assembleDebug`), instalable pero sin firma de release.
+
+**No compilado en este entorno** (sin SDK/JDK de Android acá) — el andamiaje (`npx cap add android`) se generó y el manifest se edito a mano, pero nunca se corrió `./gradlew` de verdad. Verificar en una maquina con Android Studio.
+
 ## Trampas conocidas del código
 
 No razonar sobre estos puntos de memoria — están así hoy:
