@@ -4,6 +4,10 @@
 // =============================================================================
 
 type TranscriptCallback = (text: string, isFinal: boolean) => void;
+/** Fired on every recognition error, even ones that don't stop the session. */
+type ErrorCallback = (error: string) => void;
+/** Fired when the browser detects speech starting/ending — real proof the mic is live. */
+type SpeechActivityCallback = (active: boolean) => void;
 
 // Web Speech API types (not in all TS libs)
 interface SpeechRecognitionResultItem {
@@ -32,14 +36,22 @@ interface SpeechRecognitionLike {
   onresult: ((event: SpeechRecognitionEventLike) => void) | null;
   onend: (() => void) | null;
   onerror: ((event: SpeechRecognitionErrorLike) => void) | null;
+  onspeechstart: (() => void) | null;
+  onspeechend: (() => void) | null;
   start: () => void;
   abort: () => void;
 }
+
+// Errors that mean the recognition session is actually dead and won't recover
+// on its own — the caller must be told so it can stop pretending to listen.
+const FATAL_ERRORS = new Set(['not-allowed', 'audio-capture', 'service-not-allowed']);
 
 class SpeechService {
   private recognition: SpeechRecognitionLike | null = null;
   private running = false;
   private callback: TranscriptCallback | null = null;
+  private errorCallback: ErrorCallback | null = null;
+  private activityCallback: SpeechActivityCallback | null = null;
   private restartCount = 0;
   private maxRestarts = 50;
 
@@ -47,7 +59,7 @@ class SpeechService {
     return 'webkitSpeechRecognition' in window || 'SpeechRecognition' in window;
   }
 
-  start(callback: TranscriptCallback, lang = 'es-ES', onError?: (error: string) => void) {
+  start(callback: TranscriptCallback, lang = 'es-ES', onError?: ErrorCallback, onActivity?: SpeechActivityCallback) {
     if (this.running) return;
     if (!this.isSupported()) {
       onError?.('not-supported');
@@ -55,6 +67,8 @@ class SpeechService {
     }
 
     this.callback = callback;
+    this.errorCallback = onError ?? null;
+    this.activityCallback = onActivity ?? null;
     this.restartCount = 0;
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -74,6 +88,9 @@ class SpeechService {
       }
     };
 
+    this.recognition.onspeechstart = () => this.activityCallback?.(true);
+    this.recognition.onspeechend = () => this.activityCallback?.(false);
+
     this.recognition.onend = () => {
       if (this.running && this.restartCount < this.maxRestarts) {
         this.restartCount++;
@@ -84,31 +101,34 @@ class SpeechService {
     };
 
     this.recognition.onerror = (event) => {
-      if (event.error === 'not-allowed') {
-        onError?.('not-allowed');
+      // Every error is surfaced — previously 'not-allowed' silently called
+      // stop() with no callback, so the UI kept showing "listening" while the
+      // mic session was actually dead underneath it.
+      this.errorCallback?.(event.error);
+      if (FATAL_ERRORS.has(event.error)) {
         this.stop();
-      } else if (event.error === 'audio-capture') {
-        onError?.('no-microphone');
-        this.stop();
-      } else if (event.error === 'network') {
-        onError?.('network');
-        // Speech API needs network for recognition — keep trying
       }
-      // 'no-speech' is normal — user is just not talking, keep listening
+      // 'no-speech' / 'network' / 'aborted' are transient — onend's restart
+      // loop already recovers from those while `running` stays true.
     };
 
     this.running = true;
     try {
       this.recognition.start();
     } catch {
+      // Synchronous throw from the browser (e.g. called in a bad state) —
+      // go through stop() so `running` and the recognition handle are
+      // cleared consistently, not just the flag.
       onError?.('start-failed');
-      this.running = false;
+      this.stop();
     }
   }
 
   stop() {
     this.running = false;
     this.callback = null;
+    this.errorCallback = null;
+    this.activityCallback = null;
     if (this.recognition) {
       this.recognition.onend = null;
       this.recognition.abort();

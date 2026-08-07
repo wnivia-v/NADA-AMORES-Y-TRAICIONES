@@ -8,8 +8,12 @@ const path = require('path');
 
 let mainWindow: any = null;
 let tray: any = null;
+let overlayWindow: any = null;
 let clipboardInterval: any = null;
 let lastClipboard = '';
+// Cached so a freshly-created overlay window (or one that reloads) shows the
+// real current state instead of its hardcoded default until the next push.
+let lastOverlayStatus: any = { active: false, scanning: false, verdict: null };
 
 const isDev = !app.isPackaged;
 
@@ -70,6 +74,70 @@ function createMainWindow() {
       mainWindow.hide();
     }
   });
+}
+
+/**
+ * Small always-on-top widget shown while protection is active, positioned in
+ * the corner of the primary display. This is the desktop answer to "the
+ * shield icon must stay visible over everything, even other apps, until the
+ * user explicitly turns it off" — a browser tab can never draw over other
+ * native applications (no web API grants that, by design), so this only
+ * exists in the Electron build.
+ */
+function createOverlayWindow() {
+  if (overlayWindow) return;
+
+  const { screen } = require('electron');
+  const display = screen.getPrimaryDisplay();
+  const SIZE = 64;
+  const MARGIN = 16;
+
+  overlayWindow = new BrowserWindow({
+    width: SIZE,
+    height: SIZE,
+    x: display.workArea.x + display.workArea.width - SIZE - MARGIN,
+    y: display.workArea.y + display.workArea.height - SIZE - MARGIN,
+    frame: false,
+    transparent: true,
+    resizable: false,
+    movable: true,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    skipTaskbar: true,
+    hasShadow: false,
+    icon: iconPath(),
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.cjs'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+
+  // 'screen-saver' level keeps it above fullscreen apps on macOS; combined
+  // with setVisibleOnAllWorkspaces this is the strongest "always on top" the
+  // OS allows a normal (non-kiosk) app to request.
+  overlayWindow.setAlwaysOnTop(true, 'screen-saver');
+  overlayWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+
+  if (isDev) {
+    overlayWindow.loadURL('http://127.0.0.1:5173/?overlay=1');
+  } else {
+    overlayWindow.loadFile(path.join(__dirname, '../dist/index.html'), { search: 'overlay=1' });
+  }
+
+  overlayWindow.webContents.once('did-finish-load', () => {
+    overlayWindow?.webContents.send('overlay-status-update', lastOverlayStatus);
+  });
+
+  overlayWindow.on('closed', () => { overlayWindow = null; });
+}
+
+function destroyOverlayWindow() {
+  if (overlayWindow) {
+    overlayWindow.close();
+    overlayWindow = null;
+  }
 }
 
 function createTray() {
@@ -133,6 +201,7 @@ app.on('activate', () => {
 
 app.on('before-quit', () => {
   if (clipboardInterval) clearInterval(clipboardInterval);
+  destroyOverlayWindow();
 });
 
 // =============================================================================
@@ -154,6 +223,23 @@ ipcMain.on('toggle-protection', (_event: any, active: boolean) => {
       clipboardInterval = null;
     }
   }
+});
+
+// Always-on-top overlay: created/destroyed as the renderer's protection
+// toggle changes, kept in sync via pushed status updates.
+ipcMain.on('set-overlay-visible', (_event: any, visible: boolean) => {
+  if (visible) createOverlayWindow();
+  else destroyOverlayWindow();
+});
+
+ipcMain.on('update-overlay-status', (_event: any, status: any) => {
+  lastOverlayStatus = status;
+  overlayWindow?.webContents.send('overlay-status-update', status);
+});
+
+ipcMain.on('focus-main-window', () => {
+  mainWindow?.show();
+  mainWindow?.focus();
 });
 
 // Screen capture for OCR-based screen shield

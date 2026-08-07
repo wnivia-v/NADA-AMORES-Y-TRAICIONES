@@ -1,12 +1,13 @@
-import { analyzeText, cancelAnalysis, isAnalysisAborted } from './geminiService';
+import { analyzeText, analyzeVoiceFragment, cancelAnalysis, isAnalysisAborted } from './geminiService';
 import { extractTextFromCanvas, extractTextFromImage } from './ocrService';
+import { speechService } from './speechService';
 import { playAlertTone } from '@/utils/audioAlert';
 import { notificationService } from './notificationService';
 import type { ScamAnalysis, ShieldId, Verdict } from '@/store/useNadaStore';
 
 // =============================================================================
 // Protection Engine — Singleton Orchestrator
-// Manages clipboard, screen, and voice shields in background
+// Manages clipboard, screen, voice and video shields in background
 // With rate limiting, OCR screen scanning, audio alerts, and push notifications
 // =============================================================================
 
@@ -19,6 +20,13 @@ interface EngineCallbacks {
   onShieldStatusChange: (shield: ShieldId, status: Record<string, unknown>) => void;
   onNotification: (title: string, body: string) => void;
   onLog: (message: string, type: 'info' | 'success' | 'warning' | 'error' | 'system') => void;
+  onVoiceTranscript: (text: string) => void;
+  onVoiceRealtimeVerdict: (result: ScamAnalysis | null) => void;
+  onVoiceSpeechActive: (active: boolean) => void;
+  /** null clears the error banner — called on every successful (re)start. */
+  onVoiceError: (message: string | null) => void;
+  /** Read fresh at every voice start — the UI language can change between sessions. */
+  getLanguage: () => 'es' | 'en';
 }
 
 class ProtectionEngine {
@@ -61,6 +69,16 @@ class ProtectionEngine {
   // Electron screen-capture listener must be registered only once
   private screenCaptureListenerBound = false;
 
+  // Voice shield state — owned here (not by any React component) so it
+  // survives navigating between tabs/views inside the app. A component
+  // unmounting must never silently kill an active listening session.
+  private voiceActive = false;
+  private voiceTranscript = '';
+  private lastVoiceAnalyzed = '';
+  private lastVoiceAnalysisAt = 0;
+  private readonly VOICE_ANALYSIS_COOLDOWN_MS = 6_000;
+  private readonly VOICE_MIN_FRAGMENT_LEN = 12;
+
   init(callbacks: EngineCallbacks) {
     this.callbacks = callbacks;
     this.bindScreenCaptureListener();
@@ -93,6 +111,10 @@ class ProtectionEngine {
 
     this.startClipboardMonitor();
     this.startScreenMonitor();
+    // Mic permission persists once granted, so this only shows a native
+    // prompt on the very first activation; every activation after that
+    // starts silently. If the user denies it, handleVoiceError reports why.
+    void this.startVoiceMonitoring();
   }
 
   stop() {
@@ -117,10 +139,10 @@ class ProtectionEngine {
     // user has switched protection off.
     cancelAnalysis('clipboard');
     cancelAnalysis('screen');
+    this.stopVoiceMonitoring();
 
     this.callbacks?.onShieldStatusChange('clipboard', { active: false, scanning: false });
     this.callbacks?.onShieldStatusChange('screen', { active: false, scanning: false });
-    this.callbacks?.onShieldStatusChange('voice', { active: false, scanning: false });
     this.log('Proteccion DESACTIVADA.', 'warning');
   }
 
@@ -260,15 +282,136 @@ class ProtectionEngine {
   }
 
   // ── Voice Shield ──────────────────────────────────────────────
+  //
+  // Lives entirely in this singleton, not in a React component. Previously
+  // ConsumerHome and VoiceAnalyzer each drove speechService with their own
+  // local `listening` state — navigating away from one left the recognizer
+  // running invisibly while the other screen's UI reset to "not listening",
+  // and pressing the mic again was a silent no-op (speechService.start()
+  // returns immediately when already running). That split-brain state is
+  // exactly what looked like "parece que escucha pero no responde".
   async startVoiceMonitoring() {
-    if (!this.running) return;
+    if (this.voiceActive) return;
+
+    if (!speechService.isSupported()) {
+      const msg = '❌ Este navegador no soporta reconocimiento de voz. Usa Chrome o Edge.';
+      this.log(`ESCUDO VOZ: ${msg}`, 'error');
+      this.callbacks?.onShieldStatusChange('voice', { active: false, scanning: false });
+      this.callbacks?.onVoiceError(msg);
+      return;
+    }
+
+    this.voiceActive = true;
+    this.voiceTranscript = '';
+    this.lastVoiceAnalyzed = '';
+    this.callbacks?.onVoiceTranscript('');
+    this.callbacks?.onVoiceRealtimeVerdict(null);
+    this.callbacks?.onVoiceError(null);
+
+    const lang = this.callbacks?.getLanguage() === 'en' ? 'en-US' : 'es-ES';
+
+    speechService.start(
+      (text, isFinal) => {
+        if (!isFinal) return;
+        this.voiceTranscript = `${this.voiceTranscript} ${text}`.trim();
+        this.callbacks?.onVoiceTranscript(this.voiceTranscript);
+        this.maybeAnalyzeVoiceFragment();
+      },
+      lang,
+      (error) => this.handleVoiceError(error),
+      (active) => this.callbacks?.onVoiceSpeechActive(active),
+    );
+
     this.callbacks?.onShieldStatusChange('voice', { active: true, scanning: true });
-    this.log('ESCUDO VOZ: Monitoreo de llamada activado.', 'success');
+    this.log('ESCUDO VOZ: Escucha en tiempo real activa.', 'success');
   }
 
   stopVoiceMonitoring() {
+    if (!this.voiceActive) return;
+    this.voiceActive = false;
+
+    speechService.stop();
+    cancelAnalysis('voice');
+
+    const finalTranscript = this.voiceTranscript;
     this.callbacks?.onShieldStatusChange('voice', { active: false, scanning: false });
+    this.callbacks?.onVoiceSpeechActive(false);
     this.log('ESCUDO VOZ: Monitoreo detenido.', 'info');
+
+    // Final pass over whatever was captured, same as the old per-component
+    // "stop" behavior, now happening regardless of which screen triggered stop.
+    if (finalTranscript.length > this.VOICE_MIN_FRAGMENT_LEN) {
+      analyzeText(finalTranscript, 'voice')
+        .then((result) => {
+          this.callbacks?.onAnalysisResult(result);
+          this.log(`VEREDICTO VOZ FINAL: [${result.verdict}] — ${result.riskScore}/100`, result.verdict === 'PELIGROSO' ? 'error' : 'success');
+        })
+        .catch((e) => {
+          if (!isAnalysisAborted(e)) {
+            this.log('VOZ: El analisis final fallo. Ese tramo de la conversacion no fue verificado.', 'warning');
+          }
+        });
+    }
+  }
+
+  isVoiceActive() {
+    return this.voiceActive;
+  }
+
+  private handleVoiceError(error: string) {
+    const FATAL = new Set(['not-allowed', 'audio-capture', 'service-not-allowed', 'start-failed', 'not-supported']);
+    if (FATAL.has(error)) {
+      // The recognizer is genuinely dead — speechService already called its
+      // own stop(). Reflect that here instead of leaving shieldStatus.voice
+      // showing "active" for a session that silently died.
+      this.voiceActive = false;
+      this.callbacks?.onShieldStatusChange('voice', { active: false, scanning: false });
+      this.callbacks?.onVoiceSpeechActive(false);
+
+      const messages: Record<string, string> = {
+        'not-allowed': '❌ Permiso de microfono denegado. Habilitalo en los ajustes del navegador/sistema.',
+        'audio-capture': '❌ No se detecto ningun microfono conectado.',
+        'service-not-allowed': '❌ El navegador bloqueo el reconocimiento de voz.',
+        'start-failed': '❌ No se pudo iniciar el reconocimiento de voz. Intenta de nuevo.',
+        'not-supported': '❌ Este navegador no soporta reconocimiento de voz. Usa Chrome o Edge.',
+      };
+      const msg = messages[error] ?? '❌ El escudo de voz se detuvo por un error.';
+      this.callbacks?.onVoiceError(msg);
+      this.log(`ESCUDO VOZ: Detenido — ${msg}`, 'error');
+      return;
+    }
+    // 'no-speech' / 'network' / 'aborted' are transient — speechService's own
+    // onend handler restarts the recognizer automatically while running stays
+    // true, so there is nothing to do here besides not treating it as fatal.
+  }
+
+  private maybeAnalyzeVoiceFragment() {
+    const text = this.voiceTranscript;
+    if (text.length < this.VOICE_MIN_FRAGMENT_LEN || text === this.lastVoiceAnalyzed) return;
+
+    const now = Date.now();
+    if (now - this.lastVoiceAnalysisAt < this.VOICE_ANALYSIS_COOLDOWN_MS) return;
+
+    this.lastVoiceAnalysisAt = now;
+    this.lastVoiceAnalyzed = text;
+    const fragment = text.length > 200 ? text.slice(-200) : text;
+
+    analyzeVoiceFragment(fragment, 'voice')
+      .then((result) => {
+        this.callbacks?.onVoiceRealtimeVerdict(result);
+        const nowStr = new Date().toLocaleTimeString();
+        this.callbacks?.onShieldStatusChange('voice', { scanning: true, lastScan: nowStr, lastThreatLevel: result.verdict });
+
+        if (result.verdict !== 'SEGURO') {
+          this.log(`VOZ LIVE [${result.verdict}]: ${result.riskScore}/100 — ${result.tactics[0] ?? 'patron detectado'}`, result.verdict === 'PELIGROSO' ? 'error' : 'warning');
+          this.triggerThreatAlert(result, 'Patron sospechoso detectado en conversacion de voz', 'Voz');
+        }
+      })
+      .catch((e) => {
+        if (!isAnalysisAborted(e)) {
+          this.log('VOZ: Un fragmento no pudo analizarse.', 'warning');
+        }
+      });
   }
 
   // ── Screen capture analysis (shared by Electron and web) ──────
@@ -300,7 +443,7 @@ class ProtectionEngine {
   }
 
   // ── Threat Alert with Audio + Push Notification ───────────────
-  private triggerThreatAlert(result: ScamAnalysis, description: string, app: string) {
+  triggerThreatAlert(result: ScamAnalysis, description: string, app: string) {
     // Play audio alert based on severity
     if (result.verdict === 'PELIGROSO') {
       playAlertTone('high');

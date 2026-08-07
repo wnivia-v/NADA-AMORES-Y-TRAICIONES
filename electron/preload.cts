@@ -58,4 +58,20 @@ contextBridge.exposeInMainWorld('electronAPI', {
   requestScreenCapture: () => {
     ipcRenderer.send('request-screen-capture');
   },
+
+  // Always-on-top overlay window — called by the main app window
+  setOverlayVisible: (visible: boolean) => {
+    ipcRenderer.send('set-overlay-visible', visible);
+  },
+  updateOverlayStatus: (status: { active: boolean; scanning: boolean; verdict: string | null }) => {
+    ipcRenderer.send('update-overlay-status', status);
+  },
+
+  // Always-on-top overlay window — called by the overlay window itself
+  onOverlayStatus: (callback: (status: { active: boolean; scanning: boolean; verdict: string | null }) => void) => {
+    ipcRenderer.on('overlay-status-update', (_event: any, status: any) => callback(status));
+  },
+  focusMainWindow: () => {
+    ipcRenderer.send('focus-main-window');
+  },
 });

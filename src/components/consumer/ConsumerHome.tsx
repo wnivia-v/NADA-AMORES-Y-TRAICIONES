@@ -1,12 +1,10 @@
-import { useState, useCallback } from 'react';
 import {
   ShieldCheck, ShieldOff, Clipboard, Monitor, Mic, AlertTriangle,
   Scan, MicOff, TrendingUp, TrendingDown, Activity, Camera,
 } from 'lucide-react';
 import { useNadaStore } from '@/store/useNadaStore';
 import { hasWorkingProvider } from '@/services/aiProviders';
-import { speechService } from '@/services/speechService';
-import { analyzeVoiceFragment, isAnalysisAborted } from '@/services/geminiService';
+import { protectionEngine } from '@/services/protectionEngine';
 import { translations } from '@/utils/translations';
 import { ThreatChart } from '@/components/ui/ThreatChart';
 import type { ShieldId } from '@/store/useNadaStore';
@@ -22,38 +20,21 @@ export function ConsumerHome() {
   const {
     language, isProtectionActive, setProtectionActive,
     shieldStatus, threatsToday, historyCount, setActiveTab, setActiveMode,
-    addLog, setAnalysisResult,
+    voiceTranscript,
   } = useNadaStore();
   const t = translations[language];
+  const voiceActive = shieldStatus.voice.active;
 
-  const [listening, setListening] = useState(false);
-  const [voiceTranscript, setVoiceTranscript] = useState('');
-
-  const toggleVoice = useCallback(() => {
-    if (!speechService.isSupported()) {
-      addLog('VOZ: Tu navegador no soporta reconocimiento de voz. Usa Chrome o Edge.', 'error');
-      return;
-    }
-
-    if (listening) {
-      speechService.stop();
-      setListening(false);
-      addLog('VOZ: Escucha detenida desde Inicio.', 'info');
-      if (voiceTranscript.length > 20) {
-        analyzeVoiceFragment(voiceTranscript, 'voice')
-          .then((result) => setAnalysisResult(result))
-          .catch((e) => { if (!isAnalysisAborted(e)) addLog('VOZ: Fallo al analizar.', 'error'); });
-      }
-      setVoiceTranscript('');
+  // Toggles the SAME engine-owned session VoiceAnalyzer uses — pressing it
+  // here and checking the debug tab now always show the same state, instead
+  // of two independent toggles each driving speechService on their own.
+  const toggleVoice = () => {
+    if (voiceActive) {
+      protectionEngine.stopVoiceMonitoring();
     } else {
-      setVoiceTranscript('');
-      addLog('VOZ: Escucha iniciada desde Inicio.', 'system');
-      speechService.start((text, isFinal) => {
-        if (isFinal) setVoiceTranscript((prev) => prev + ' ' + text);
-      }, language === 'es' ? 'es-ES' : 'en-US');
-      setListening(true);
+      void protectionEngine.startVoiceMonitoring();
     }
-  }, [listening, voiceTranscript, language, addLog, setAnalysisResult]);
+  };
 
   const anyProviderAvailable = hasWorkingProvider();
   const activeShields = Object.values(shieldStatus).filter((s) => s.active).length;
@@ -170,7 +151,9 @@ export function ConsumerHome() {
         </div>
       </button>
 
-      {/* ── Shields grid ────────────────────────────────────────────────────── */}
+      {/* ── Shields grid — clipboard, screen, voice and video all share the
+          same visual language (green = active) so an active shield never
+          looks different from another and reads as "on". ─────────────────── */}
       <div>
         <div className="flex items-center justify-between mb-3 px-1">
           <h3 className="text-xs font-bold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>
@@ -185,7 +168,7 @@ export function ConsumerHome() {
             const status = shieldStatus[id];
             const label = t[id];
             const isVoice = id === 'voice';
-            const isActive = isVoice ? listening : status.active;
+            const isActive = isVoice ? voiceActive : status.active;
             const isScanning = status.scanning;
 
             // Video card navigates to the camera analyzer — it needs an
@@ -197,10 +180,10 @@ export function ConsumerHome() {
                   key={id}
                   onClick={() => { setActiveMode('CAMARA'); setActiveTab('debug'); }}
                   className="card p-3 text-center cursor-pointer"
-                  style={{ borderColor: status.active ? 'var(--accent)' : 'var(--border)' }}
+                  style={{ borderColor: status.active ? 'var(--success)' : 'var(--border)' }}
                   aria-label={label}
                 >
-                  <Icon className="w-5 h-5 mx-auto mb-2" style={{ color: status.active ? 'var(--accent)' : 'var(--text-muted)' }} />
+                  <Icon className="w-5 h-5 mx-auto mb-2" style={{ color: status.active ? 'var(--success)' : 'var(--text-muted)' }} />
                   <p className="text-[11px] font-semibold" style={{ color: 'var(--text-primary)' }}>{label}</p>
                   <p className="text-[10px] mt-1" style={{ color: status.active ? 'var(--success)' : 'var(--text-muted)' }}>
                     {status.active ? (status.scanning ? t.scanning : t.active) : t.tapToListen}
@@ -214,42 +197,36 @@ export function ConsumerHome() {
                 <div
                   className="w-9 h-9 rounded-xl flex items-center justify-center mx-auto mb-2.5 transition-all"
                   style={{
-                    background: isActive
-                      ? 'var(--accent-light)'
-                      : 'var(--bg-elevated)',
-                    boxShadow: isActive ? '0 0 12px var(--accent-glow)' : 'none',
+                    background: isActive ? 'var(--accent-light)' : 'var(--bg-elevated)',
+                    boxShadow: isActive ? '0 0 12px var(--success)' : 'none',
                   }}
                 >
-                  {isVoice && listening
-                    ? <MicOff className="w-4 h-4 animate-pulse" style={{ color: 'var(--danger)' }} />
-                    : <Icon className="w-4 h-4" style={{ color: isActive ? 'var(--accent)' : 'var(--text-muted)' }} />
+                  {isVoice && isActive
+                    ? <MicOff className="w-4 h-4" style={{ color: 'var(--success)' }} />
+                    : <Icon className="w-4 h-4" style={{ color: isActive ? 'var(--success)' : 'var(--text-muted)' }} />
                   }
                 </div>
                 <p className="text-[11px] font-bold" style={{ color: 'var(--text-primary)' }}>{label}</p>
-                <p
-                  className="text-[10px] mt-0.5"
-                  style={{
-                    color: isVoice
-                      ? (listening ? 'var(--danger)' : 'var(--text-muted)')
-                      : (isActive ? 'var(--success)' : 'var(--text-muted)'),
-                  }}
-                >
+                <p className="text-[10px] mt-0.5" style={{ color: isActive ? 'var(--success)' : 'var(--text-muted)' }}>
                   {isVoice
-                    ? (listening ? t.stopListening : t.tapToListen)
+                    ? (isActive ? t.stopListening : t.tapToListen)
                     : (isActive ? (isScanning ? t.scanning : t.active) : t.inactive)
                   }
                 </p>
               </>
             );
 
+            // Voice card toggles the SAME engine-owned session VoiceAnalyzer
+            // uses — pressing it here and checking the debug tab now always
+            // show the same state, instead of two independent toggles.
             if (isVoice) {
               return (
                 <button
                   key={id}
                   onClick={toggleVoice}
                   className="card p-3 text-center cursor-pointer"
-                  style={{ borderColor: listening ? 'var(--danger)' : isActive ? 'var(--accent)' : 'var(--border)' }}
-                  aria-label={listening ? t.stopListening : t.tapToListen}
+                  style={{ borderColor: isActive ? 'var(--success)' : 'var(--border)' }}
+                  aria-label={isActive ? t.stopListening : t.tapToListen}
                 >
                   {cardContent}
                 </button>
@@ -260,7 +237,7 @@ export function ConsumerHome() {
               <div
                 key={id}
                 className="card p-3 text-center"
-                style={{ borderColor: isActive ? 'var(--accent)' : 'var(--border)' }}
+                style={{ borderColor: isActive ? 'var(--success)' : 'var(--border)' }}
               >
                 {cardContent}
               </div>
@@ -268,8 +245,8 @@ export function ConsumerHome() {
           })}
         </div>
 
-        {/* Voice transcript preview */}
-        {listening && voiceTranscript && (
+        {/* Voice transcript preview — same global transcript VoiceAnalyzer shows */}
+        {voiceActive && voiceTranscript && (
           <div
             className="mt-3 p-3 rounded-xl text-xs leading-relaxed fade-slide-in"
             style={{ background: 'var(--bg-elevated)', color: 'var(--text-secondary)', borderLeft: '2px solid var(--accent)' }}

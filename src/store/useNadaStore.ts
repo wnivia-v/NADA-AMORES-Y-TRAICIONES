@@ -77,6 +77,20 @@ interface NadaState {
   isProtectionActive: boolean;
   shieldStatus: Record<ShieldId, ShieldStatus>;
 
+  // Escudo de voz — estado global para que ConsumerHome y VoiceAnalyzer lean
+  // exactamente lo mismo en vez de mantener cada uno su propia copia local
+  // (eso era lo que producia el desincronizado "parece que escucha pero no").
+  voiceTranscript: string;
+  voiceRealtimeVerdict: ScamAnalysis | null;
+  voiceSpeechActive: boolean;
+  /** Set when the recognizer actually dies (permission denied, no mic, unsupported browser). */
+  voiceError: string | null;
+
+  // Escudo de video — estado global derivado del ultimo frame analizado,
+  // visible aunque CameraAnalyzer no este montado.
+  videoDeepfakeScore: number;
+  videoLipSyncMeasured: boolean;
+
   // Alertas y Logs
   alerts: AlertEntry[];
   logs: LogEntry[];
@@ -97,6 +111,12 @@ interface NadaActions {
   updateShieldStatus: (shield: ShieldId, status: Partial<ShieldStatus>) => void;
   resetSession: () => void;
   recordDailyScan: (isThreat: boolean) => void;
+  setVoiceTranscript: (text: string) => void;
+  setVoiceRealtimeVerdict: (v: ScamAnalysis | null) => void;
+  setVoiceSpeechActive: (active: boolean) => void;
+  setVoiceError: (message: string | null) => void;
+  resetVoiceSession: () => void;
+  setVideoStatus: (score: number, lipSyncMeasured: boolean) => void;
 }
 
 // =============================================================================
@@ -148,6 +168,12 @@ export const useNadaStore = create<NadaState & NadaActions>()(
         voice: { ...DEFAULT_SHIELD },
         video: { ...DEFAULT_SHIELD },
       },
+      voiceTranscript: '',
+      voiceRealtimeVerdict: null,
+      voiceSpeechActive: false,
+      voiceError: null,
+      videoDeepfakeScore: 0,
+      videoLipSyncMeasured: false,
       alerts: [],
       logs: [
         { timestamp: timestamp(), message: 'SISTEMA: Motor NADA v2 iniciado.', type: 'system' },
@@ -241,6 +267,13 @@ export const useNadaStore = create<NadaState & NadaActions>()(
         });
         get().addLog('SESION: Reset de analisis.', 'system');
       },
+
+      setVoiceTranscript: (text) => set({ voiceTranscript: text }),
+      setVoiceRealtimeVerdict: (v) => set({ voiceRealtimeVerdict: v }),
+      setVoiceSpeechActive: (active) => set({ voiceSpeechActive: active }),
+      setVoiceError: (message) => set({ voiceError: message }),
+      resetVoiceSession: () => set({ voiceTranscript: '', voiceRealtimeVerdict: null, voiceSpeechActive: false, voiceError: null }),
+      setVideoStatus: (score, lipSyncMeasured) => set({ videoDeepfakeScore: score, videoLipSyncMeasured: lipSyncMeasured }),
 
       recordDailyScan: (isThreat) => {
         set((s) => {

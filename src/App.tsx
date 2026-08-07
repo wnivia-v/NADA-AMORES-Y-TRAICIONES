@@ -15,6 +15,7 @@ import { AlertsView } from '@/components/consumer/AlertsView';
 import { SettingsView } from '@/components/consumer/SettingsView';
 import { FloatingBubble } from '@/components/consumer/FloatingBubble';
 import { protectionEngine } from '@/services/protectionEngine';
+import { videoShieldService } from '@/services/videoShieldService';
 import { translations } from '@/utils/translations';
 import { Home, Bell, Settings } from 'lucide-react';
 
@@ -23,8 +24,9 @@ type DebugMode = 'TEXTO' | 'VOZ' | 'CAMARA' | 'IMAGEN';
 export default function App() {
   const {
     activeMode, theme, language, activeTab, setActiveTab,
-    alerts, isProtectionActive,
+    alerts, isProtectionActive, shieldStatus,
     addAlert, setAnalysisResult, addLog, updateShieldStatus,
+    setVoiceTranscript, setVoiceRealtimeVerdict, setVoiceSpeechActive, setVoiceError, setVideoStatus,
   } = useNadaStore();
 
   const t = translations[language];
@@ -45,6 +47,24 @@ export default function App() {
         notificationService.send(title, body);
       },
       onLog: (message, type) => addLog(message, type),
+      onVoiceTranscript: (text) => setVoiceTranscript(text),
+      onVoiceRealtimeVerdict: (result) => setVoiceRealtimeVerdict(result),
+      onVoiceSpeechActive: (active) => setVoiceSpeechActive(active),
+      onVoiceError: (message) => setVoiceError(message),
+      getLanguage: () => useNadaStore.getState().language,
+    });
+
+    videoShieldService.init({
+      onAlert: (alert) => addAlert(alert),
+      onAnalysisResult: (result) => setAnalysisResult(result),
+      onShieldStatusChange: (status) => updateShieldStatus('video', status as any),
+      onFrame: (score, lipSyncMeasured) => setVideoStatus(score, lipSyncMeasured),
+      onLog: (message, type) => addLog(message, type),
+      labelForSource: (source) => {
+        const tt = translations[useNadaStore.getState().language];
+        return source === 'call' ? tt.cameraSourceCall : tt.cameraSourceOwn;
+      },
+      getDeepfakeDetectedLabel: () => translations[useNadaStore.getState().language].deepfakeDetected,
     });
   }, []);
 
@@ -56,6 +76,24 @@ export default function App() {
       protectionEngine.stop();
     }
   }, [isProtectionActive]);
+
+  // Electron always-on-top overlay: mirrors real protection state so it
+  // never claims "protegido" when a shield actually stopped. Web/PWA has no
+  // electronAPI, so these calls are no-ops there.
+  useEffect(() => {
+    (window as any).electronAPI?.setOverlayVisible?.(isProtectionActive);
+  }, [isProtectionActive]);
+
+  useEffect(() => {
+    if (!isProtectionActive) return;
+    const scanning = Object.values(shieldStatus).some((s) => s.scanning);
+    const latestAlert = alerts[0] ?? null;
+    (window as any).electronAPI?.updateOverlayStatus?.({
+      active: true,
+      scanning,
+      verdict: latestAlert?.verdict ?? null,
+    });
+  }, [isProtectionActive, shieldStatus, alerts]);
 
   const handleSplashDone = useCallback(() => setShowSplash(false), []);
   const handleOnboardingDone = useCallback(() => setShowOnboarding(false), []);
@@ -129,8 +167,10 @@ export default function App() {
         </main>
       )}
 
-      {/* Floating bubble (consumer mode only) */}
-      {activeTab !== 'debug' && <FloatingBubble />}
+      {/* Floating bubble: visible on every section while protection is active,
+          including the technical/debug tabs — leaving it tied to a single
+          section made switching tabs look like protection had turned off. */}
+      <FloatingBubble />
 
       {/* Bottom navigation (consumer mode only) */}
       {activeTab !== 'debug' && (

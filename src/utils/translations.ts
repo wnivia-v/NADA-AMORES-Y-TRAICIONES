@@ -70,6 +70,7 @@ export interface TranslationSet {
   // Voice
   liveAnalysis: string;
   fragments: string;
+  voiceHearingYou: string;
   suspiciousPattern: string;
   transcript: string;
   voiceShieldDesc: string;
@@ -144,6 +145,7 @@ const es: TranslationSet = {
   extractedText: 'Texto extraido:',
   liveAnalysis: 'Analisis en vivo',
   fragments: 'fragmentos',
+  voiceHearingYou: 'Te estamos escuchando ahora',
   suspiciousPattern: 'Patron sospechoso detectado',
   transcript: 'Transcripcion:',
   voiceShieldDesc: 'Toca para escuchar tu llamada y detectar estafas en vivo',
@@ -217,6 +219,7 @@ const en: TranslationSet = {
   extractedText: 'Extracted text:',
   liveAnalysis: 'Live analysis',
   fragments: 'fragments',
+  voiceHearingYou: 'We are hearing you right now',
   suspiciousPattern: 'Suspicious pattern detected',
   transcript: 'Transcript:',
   voiceShieldDesc: 'Tap to listen to your call and detect scams in real time',

@@ -1,0 +1,1720 @@
+From 0e45be2b95579f3075f71f8e267736dff961c353 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 7 Aug 2026 01:20:54 +0000
+Subject: [PATCH] fix: centralizar escudos de voz/video y agregar overlay
+ always-on-top en Electron
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Causa raiz del bug reportado ("parece que escucha pero no responde"):
+ConsumerHome, VoiceAnalyzer y (para video) CameraAnalyzer mantenian cada
+uno su propia copia local de "listening"/stream, todas manejando el mismo
+singleton (speechService) por separado. Navegar entre pestanas dejaba el
+reconocimiento corriendo invisible mientras la UI volvia a mostrar
+"inactivo", y volver a tocar el boton era un no-op silencioso.
+
+- speechService: agrega callbacks onError/onSpeechActivity. Antes
+  'not-allowed' llamaba a stop() sin avisarle a nadie -> el shield seguia
+  mostrando "activo" para una sesion ya muerta.
+- protectionEngine: nuevo dueno real del ciclo de vida de voz (antes
+  startVoiceMonitoring/stopVoiceMonitoring eran stubs que solo tocaban
+  flags). Analisis por fragmento pasa de poll fijo de 15s a evento +
+  cooldown de 6s (reacciona a una frase de ataque corta mucho mas rapido).
+  start() ahora arranca voz automaticamente junto con clipboard/pantalla.
+- videoShieldService (nuevo): dueno del MediaStream + loop de
+  requestAnimationFrame para el escudo de video, con un <video>
+  desprendido del DOM como fuente de frames — sobrevive a desmontar
+  CameraAnalyzer.
+- VoiceAnalyzer/CameraAnalyzer/ConsumerHome: vistas delgadas sobre estado
+  compartido en el store (voiceTranscript, voiceRealtimeVerdict,
+  voiceSpeechActive, videoDeepfakeScore, videoLipSyncMeasured) en vez de
+  useState local duplicado. El card de voz en Home ahora es verde igual
+  que portapapeles/pantalla en vez de rojo pulsante.
+- App.tsx: FloatingBubble se renderiza en todas las pestanas (incluida
+  debug), no solo en modo consumidor.
+- Electron: ventana overlay always-on-top (BrowserWindow transparente,
+  sin marco, alwaysOnTop + setVisibleOnAllWorkspaces) que se crea/destruye
+  junto con la proteccion. Carga el mismo bundle con ?overlay=1
+  (main.tsx/OverlayShield.tsx), sincronizada por IPC
+  (set-overlay-visible/update-overlay-status/focus-main-window). Solo
+  existe en Electron: un navegador no puede dibujar sobre otras apps del
+  SO. No probado en runtime (sin display en este entorno) — verificar con
+  npm run electron:dev.
+
+Cadena de verificacion (tsc app, tsc electron, vitest, vite build) en
+verde; 115 tests sin cambios.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_018S8AuK3RUWqmHXieTLaVqX
+---
+ .kiro/steering/nada.md                     |  25 ++-
+ README.md                                  |   8 +-
+ electron/main.cts                          |  86 ++++++++++
+ electron/preload.cts                       |  16 ++
+ src/App.tsx                                |  46 ++++-
+ src/components/analysis/CameraAnalyzer.tsx | 173 ++++---------------
+ src/components/analysis/VoiceAnalyzer.tsx  | 189 +++++----------------
+ src/components/consumer/ConsumerHome.tsx   |  87 ++++------
+ src/components/overlay/OverlayShield.tsx   |  65 +++++++
+ src/main.tsx                               |  24 ++-
+ src/services/protectionEngine.ts           | 153 ++++++++++++++++-
+ src/services/speechService.ts              |  42 +++--
+ src/services/videoShieldService.ts         | 168 ++++++++++++++++++
+ src/store/useNadaStore.ts                  |  33 ++++
+ src/utils/translations.ts                  |   3 +
+ 15 files changed, 756 insertions(+), 362 deletions(-)
+ create mode 100644 src/components/overlay/OverlayShield.tsx
+ create mode 100644 src/services/videoShieldService.ts
+
+diff --git a/.kiro/steering/nada.md b/.kiro/steering/nada.md
+index 52031c5..709a6a8 100644
+--- a/.kiro/steering/nada.md
++++ b/.kiro/steering/nada.md
+@@ -51,10 +51,31 @@ Umbrales: `SEGURO` 0-39, `SOSPECHOSO` 40-69, `PELIGROSO` 70-100. Están codifica
+ Puntos a no olvidar:
+ 
+ - **Sin pista de audio, la sincronía labial queda `measured: false`** y no cuenta como evidencia en `evaluateDeepfake`/`calculateConfidence`. Nunca inventar una confianza para eso — antes era un placeholder fijo en 0.9, lo que daba falsa sensación de verificación.
+-- `video` es un `ShieldId` más (`clipboard | screen | voice | video`) y reporta a `riskScorer` (`video-deepfake`) igual que los demás, pero **no puede arrancar solo con `protectionEngine.start()`**: `getDisplayMedia`/`getUserMedia` exigen gesto de usuario y permiso explícito, así que el usuario lo activa a mano desde `CameraAnalyzer` (patrón similar al de voz).
+-- Las alertas de deepfake tienen cooldown de 20s (`ALERT_COOLDOWN_MS` en `CameraAnalyzer.tsx`) porque se re-evalúan en cada frame (`requestAnimationFrame`); sin eso, un deepfake sostenido spamearía el historial de alertas.
++- `video` es un `ShieldId` más (`clipboard | screen | voice | video`) y reporta a `riskScorer` (`video-deepfake`) igual que los demás, pero **no puede arrancar solo con `protectionEngine.start()`**: `getDisplayMedia`/`getUserMedia` exigen gesto de usuario y permiso explícito cada vez (el navegador nunca deja saltarse ese diálogo, por diseño de seguridad), así que el usuario lo activa a mano desde `CameraAnalyzer`.
++- Las alertas de deepfake tienen cooldown de 20s (`ALERT_COOLDOWN_MS` en `videoShieldService.ts`) porque se re-evalúan en cada frame (`requestAnimationFrame`); sin eso, un deepfake sostenido spamearía el historial de alertas.
+ - Es heurística basada en biometría facial (EAR, jitter, MAR/audio), no un clasificador entrenado contra deepfakes reales — comunicarlo así, no como detección infalible.
+ 
++## Escudos que sobreviven la navegación (voz y video)
++
++`VoiceAnalyzer.tsx` y `CameraAnalyzer.tsx` ya NO son dueños de `speechService`/`MediaStream`. Antes cada uno tenía su propio `useState('listening')`, y `ConsumerHome.tsx` además mantenía una TERCERA copia independiente con su propio `toggleVoice` — desmontar cualquiera de esos componentes (cambiar de pestaña) dejaba el reconocimiento de voz corriendo invisible mientras la UI volvía a mostrar "inactivo", y volver a tocar el botón era un no-op silencioso porque `speechService.start()` ya estaba corriendo. Eso es lo que se reportó como "parece que escucha pero no responde".
++
++Ahora:
++
++- **`protectionEngine.ts`** posee el ciclo de vida completo de voz (`startVoiceMonitoring`/`stopVoiceMonitoring`, transcript, análisis por fragmento con cooldown de 6s en vez de un poll fijo de 15s). `VoiceAnalyzer` y el card de voz en `ConsumerHome` son vistas delgadas sobre el mismo estado (`shieldStatus.voice`, `voiceTranscript`, `voiceRealtimeVerdict`, `voiceSpeechActive` en el store) — llamar a la acción desde cualquiera de los dos lugares mueve la MISMA sesión.
++- **`videoShieldService.ts`** (nuevo) posee el `MediaStream` y el loop de `requestAnimationFrame`, con un `<video>` desprendido del DOM como fuente de frames para MediaPipe. `CameraAnalyzer` solo pide `attachPreview(videoEl)` para mostrar la imagen; cerrar la pestaña de cámara ya no mata la sesión.
++- **`speechService.ts`** ahora expone `onError`/`onSpeechActivity` además del callback de transcript. Antes `onerror` con `'not-allowed'` llamaba a `stop()` sin avisarle a nadie — el shield quedaba "activo" en la UI para una sesión que ya estaba muerta. `onspeechstart`/`onspeechend` alimentan `voiceSpeechActive`, que es la única fuente real de "te estamos escuchando ahora" (antes era una suposición optimista, no una confirmación).
++- `protectionEngine.start()` ahora también arranca voz automáticamente (el permiso de micrófono, una vez concedido, no vuelve a pedirse). Video NO se puede auto-arrancar — `getDisplayMedia` exige gesto de usuario fresco cada vez, no hay forma de saltarse eso — así que sigue siendo manual desde `CameraAnalyzer`/el card de video en Home.
++- `FloatingBubble` se renderiza en TODAS las pestañas de `App.tsx` (incluida `debug`), no solo en modo consumidor — antes desaparecía justo al entrar a las herramientas técnicas donde vive `VoiceAnalyzer`/`CameraAnalyzer`.
++
++## Overlay de escritorio (Electron)
++
++Un `BrowserWindow` sin marco, transparente y `alwaysOnTop`, creado en `electron/main.cts` (`createOverlayWindow`) cuando `isProtectionActive` es true y destruido cuando se desactiva — es la respuesta real a "el escudo debe verse siempre encima de todo". Solo existe en Electron: ninguna pestaña de navegador puede dibujar sobre otras apps nativas del sistema operativo, es una barrera de seguridad de la plataforma, no una limitación de este código.
++
++- Carga el mismo `dist/index.html`/servidor de Vite con `?overlay=1`; `main.tsx` detecta ese query param y renderiza `OverlayShield.tsx` en vez de `<App />` — sin store, sin router, un árbol de React aparte.
++- El estado (activo/escaneando/último veredicto) viaja por IPC desde la ventana principal (`App.tsx` → `electronAPI.updateOverlayStatus`) hacia `main.cts` (`update-overlay-status`) y de ahí a la ventana overlay (`overlay-status-update`). No comparte Zustand/localStorage entre ventanas — cada `BrowserWindow` tiene su propio contexto de JS y el store no sincroniza entre procesos de renderer por sí solo.
++- Clic en el overlay solo hace foco en la ventana principal (`focus-main-window`); apagar la protección de verdad exige la acción explícita en la ventana principal — evita que un toque accidental en una burbuja de 64px desactive la protección.
++- **No probado en runtime** (este entorno no tiene display ni Electron corriendo) — verificar con `npm run electron:dev` que la ventana aparece, se mantiene encima de otras apps, y sobrevive a cambiar de espacio de trabajo/pantalla completa.
++
+ ## Trampas conocidas del código
+ 
+ No razonar sobre estos puntos de memoria — están así hoy:
+diff --git a/README.md b/README.md
+index 06d9e40..b650add 100644
+--- a/README.md
++++ b/README.md
+@@ -37,10 +37,16 @@ NADA es una aplicacion de proteccion contra estafas, fraudes romanticos y manipu
+ │  Electron (Desktop)                                         │
+ │  ├── System tray + clipboard monitor nativo                 │
+ │  ├── desktopCapturer para OCR de pantalla                   │
+-│  └── Notificaciones nativas del OS                          │
++│  ├── Notificaciones nativas del OS                          │
++│  └── Overlay always-on-top (icono de escudo visible sobre   │
++│      otras apps, se activa/desactiva junto con la           │
++│      proteccion — solo existe en Electron, un navegador no  │
++│      puede dibujar sobre otras apps del sistema)            │
+ └─────────────────────────────────────────────────────────────┘
+ ```
+ 
++Voz y video ya no viven dentro de los componentes de UI (`VoiceAnalyzer`/`CameraAnalyzer`): el ciclo de vida real esta en `protectionEngine.ts` y `videoShieldService.ts`, para que cambiar de pestana dentro de la app no corte la sesion de escucha/deteccion.
++
+ ## Features
+ 
+ - **Funciona sin pagar y sin claves**: analisis en el dispositivo con un modelo de embeddings local + 25 patrones regex. Los proveedores en la nube son opcionales.
+diff --git a/electron/main.cts b/electron/main.cts
+index 55165d8..e0ce60f 100644
+--- a/electron/main.cts
++++ b/electron/main.cts
+@@ -8,8 +8,12 @@ const path = require('path');
+ 
+ let mainWindow: any = null;
+ let tray: any = null;
++let overlayWindow: any = null;
+ let clipboardInterval: any = null;
+ let lastClipboard = '';
++// Cached so a freshly-created overlay window (or one that reloads) shows the
++// real current state instead of its hardcoded default until the next push.
++let lastOverlayStatus: any = { active: false, scanning: false, verdict: null };
+ 
+ const isDev = !app.isPackaged;
+ 
+@@ -72,6 +76,70 @@ function createMainWindow() {
+   });
+ }
+ 
++/**
++ * Small always-on-top widget shown while protection is active, positioned in
++ * the corner of the primary display. This is the desktop answer to "the
++ * shield icon must stay visible over everything, even other apps, until the
++ * user explicitly turns it off" — a browser tab can never draw over other
++ * native applications (no web API grants that, by design), so this only
++ * exists in the Electron build.
++ */
++function createOverlayWindow() {
++  if (overlayWindow) return;
++
++  const { screen } = require('electron');
++  const display = screen.getPrimaryDisplay();
++  const SIZE = 64;
++  const MARGIN = 16;
++
++  overlayWindow = new BrowserWindow({
++    width: SIZE,
++    height: SIZE,
++    x: display.workArea.x + display.workArea.width - SIZE - MARGIN,
++    y: display.workArea.y + display.workArea.height - SIZE - MARGIN,
++    frame: false,
++    transparent: true,
++    resizable: false,
++    movable: true,
++    minimizable: false,
++    maximizable: false,
++    fullscreenable: false,
++    skipTaskbar: true,
++    hasShadow: false,
++    icon: iconPath(),
++    webPreferences: {
++      preload: path.join(__dirname, 'preload.cjs'),
++      contextIsolation: true,
++      nodeIntegration: false,
++    },
++  });
++
++  // 'screen-saver' level keeps it above fullscreen apps on macOS; combined
++  // with setVisibleOnAllWorkspaces this is the strongest "always on top" the
++  // OS allows a normal (non-kiosk) app to request.
++  overlayWindow.setAlwaysOnTop(true, 'screen-saver');
++  overlayWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
++
++  if (isDev) {
++    overlayWindow.loadURL('http://127.0.0.1:5173/?overlay=1');
++  } else {
++    overlayWindow.loadFile(path.join(__dirname, '../dist/index.html'), { search: 'overlay=1' });
++  }
++
++  overlayWindow.webContents.once('did-finish-load', () => {
++    overlayWindow?.webContents.send('overlay-status-update', lastOverlayStatus);
++  });
++
++  overlayWindow.on('closed', () => { overlayWindow = null; });
++}
++
++function destroyOverlayWindow() {
++  if (overlayWindow) {
++    overlayWindow.close();
++    overlayWindow = null;
++  }
++}
++
+ function createTray() {
+   const source = nativeImage.createFromPath(iconPath());
+   if (source.isEmpty()) {
+@@ -133,6 +201,7 @@ app.on('activate', () => {
+ 
+ app.on('before-quit', () => {
+   if (clipboardInterval) clearInterval(clipboardInterval);
++  destroyOverlayWindow();
+ });
+ 
+ // =============================================================================
+@@ -156,6 +225,23 @@ ipcMain.on('toggle-protection', (_event: any, active: boolean) => {
+   }
+ });
+ 
++// Always-on-top overlay: created/destroyed as the renderer's protection
++// toggle changes, kept in sync via pushed status updates.
++ipcMain.on('set-overlay-visible', (_event: any, visible: boolean) => {
++  if (visible) createOverlayWindow();
++  else destroyOverlayWindow();
++});
++
++ipcMain.on('update-overlay-status', (_event: any, status: any) => {
++  lastOverlayStatus = status;
++  overlayWindow?.webContents.send('overlay-status-update', status);
++});
++
++ipcMain.on('focus-main-window', () => {
++  mainWindow?.show();
++  mainWindow?.focus();
++});
++
+ // Screen capture for OCR-based screen shield
+ ipcMain.on('request-screen-capture', async (_event: any) => {
+   try {
+diff --git a/electron/preload.cts b/electron/preload.cts
+index 20743ba..68a845b 100644
+--- a/electron/preload.cts
++++ b/electron/preload.cts
+@@ -58,4 +58,20 @@ contextBridge.exposeInMainWorld('electronAPI', {
+   requestScreenCapture: () => {
+     ipcRenderer.send('request-screen-capture');
+   },
++
++  // Always-on-top overlay window — called by the main app window
++  setOverlayVisible: (visible: boolean) => {
++    ipcRenderer.send('set-overlay-visible', visible);
++  },
++  updateOverlayStatus: (status: { active: boolean; scanning: boolean; verdict: string | null }) => {
++    ipcRenderer.send('update-overlay-status', status);
++  },
++
++  // Always-on-top overlay window — called by the overlay window itself
++  onOverlayStatus: (callback: (status: { active: boolean; scanning: boolean; verdict: string | null }) => void) => {
++    ipcRenderer.on('overlay-status-update', (_event: any, status: any) => callback(status));
++  },
++  focusMainWindow: () => {
++    ipcRenderer.send('focus-main-window');
++  },
+ });
+diff --git a/src/App.tsx b/src/App.tsx
+index 60aaa46..97f3ac5 100644
+--- a/src/App.tsx
++++ b/src/App.tsx
+@@ -15,6 +15,7 @@ import { AlertsView } from '@/components/consumer/AlertsView';
+ import { SettingsView } from '@/components/consumer/SettingsView';
+ import { FloatingBubble } from '@/components/consumer/FloatingBubble';
+ import { protectionEngine } from '@/services/protectionEngine';
++import { videoShieldService } from '@/services/videoShieldService';
+ import { translations } from '@/utils/translations';
+ import { Home, Bell, Settings } from 'lucide-react';
+ 
+@@ -23,8 +24,9 @@ type DebugMode = 'TEXTO' | 'VOZ' | 'CAMARA' | 'IMAGEN';
+ export default function App() {
+   const {
+     activeMode, theme, language, activeTab, setActiveTab,
+-    alerts, isProtectionActive,
++    alerts, isProtectionActive, shieldStatus,
+     addAlert, setAnalysisResult, addLog, updateShieldStatus,
++    setVoiceTranscript, setVoiceRealtimeVerdict, setVoiceSpeechActive, setVoiceError, setVideoStatus,
+   } = useNadaStore();
+ 
+   const t = translations[language];
+@@ -45,6 +47,24 @@ export default function App() {
+         notificationService.send(title, body);
+       },
+       onLog: (message, type) => addLog(message, type),
++      onVoiceTranscript: (text) => setVoiceTranscript(text),
++      onVoiceRealtimeVerdict: (result) => setVoiceRealtimeVerdict(result),
++      onVoiceSpeechActive: (active) => setVoiceSpeechActive(active),
++      onVoiceError: (message) => setVoiceError(message),
++      getLanguage: () => useNadaStore.getState().language,
++    });
++
++    videoShieldService.init({
++      onAlert: (alert) => addAlert(alert),
++      onAnalysisResult: (result) => setAnalysisResult(result),
++      onShieldStatusChange: (status) => updateShieldStatus('video', status),
++      onFrame: (score, lipSyncMeasured) => setVideoStatus(score, lipSyncMeasured),
++      onLog: (message, type) => addLog(message, type),
++      labelForSource: (source) => {
++        const tt = translations[useNadaStore.getState().language];
++        return source === 'call' ? tt.cameraSourceCall : tt.cameraSourceOwn;
++      },
++      getDeepfakeDetectedLabel: () => translations[useNadaStore.getState().language].deepfakeDetected,
+     });
+   }, []);
+ 
+@@ -57,6 +77,24 @@ export default function App() {
+     }
+   }, [isProtectionActive]);
+ 
++  // Electron always-on-top overlay: mirrors real protection state so it
++  // never claims "protegido" when a shield actually stopped. Web/PWA has no
++  // electronAPI, so these calls are no-ops there.
++  useEffect(() => {
++    (window as any).electronAPI?.setOverlayVisible?.(isProtectionActive);
++  }, [isProtectionActive]);
++
++  useEffect(() => {
++    if (!isProtectionActive) return;
++    const scanning = Object.values(shieldStatus).some((s) => s.scanning);
++    const latestAlert = alerts[0] ?? null;
++    (window as any).electronAPI?.updateOverlayStatus?.({
++      active: true,
++      scanning,
++      verdict: latestAlert?.verdict ?? null,
++    });
++  }, [isProtectionActive, shieldStatus, alerts]);
++
+   const handleSplashDone = useCallback(() => setShowSplash(false), []);
+   const handleOnboardingDone = useCallback(() => setShowOnboarding(false), []);
+ 
+@@ -129,8 +167,10 @@ export default function App() {
+         </main>
+       )}
+ 
+-      {/* Floating bubble (consumer mode only) */}
+-      {activeTab !== 'debug' && <FloatingBubble />}
++      {/* Floating bubble: visible on every section while protection is active,
++          including the technical/debug tabs — leaving it tied to a single
++          section made switching tabs look like protection had turned off. */}
++      <FloatingBubble />
+ 
+       {/* Bottom navigation (consumer mode only) */}
+       {activeTab !== 'debug' && (
+diff --git a/src/components/analysis/CameraAnalyzer.tsx b/src/components/analysis/CameraAnalyzer.tsx
+index 5d2b832..e37ac4e 100644
+--- a/src/components/analysis/CameraAnalyzer.tsx
++++ b/src/components/analysis/CameraAnalyzer.tsx
+@@ -1,148 +1,46 @@
+-import { useState, useRef, useCallback, useEffect } from 'react';
++import { useState, useRef, useEffect, useCallback } from 'react';
+ import { Camera, CameraOff, ScreenShare, AlertTriangle } from 'lucide-react';
+ import { useNadaStore } from '@/store/useNadaStore';
+-import { visionService } from '@/services/visionService';
+-import { riskScorer } from '@/utils/riskScorer';
+-import { playAlertTone } from '@/utils/audioAlert';
+-import { notificationService } from '@/services/notificationService';
++import { videoShieldService, type CameraSource } from '@/services/videoShieldService';
+ import { translations } from '@/utils/translations';
+-import type { ScamAnalysis } from '@/store/useNadaStore';
+-
+-type CameraSource = 'own' | 'call';
+-
+-// Deepfake alerts are re-evaluated every animation frame; without a cooldown
+-// a single ongoing deepfake would spam the alert log dozens of times a second.
+-const ALERT_COOLDOWN_MS = 20_000;
+ 
++// Thin view: capture + analysis lifecycle lives in videoShieldService so a
++// running deepfake-detection session survives navigating away from this
++// screen, the same way voice monitoring lives in protectionEngine.
+ export function CameraAnalyzer() {
+-  const { language, addLog, addAlert, setAnalysisResult, updateShieldStatus } = useNadaStore();
++  const { language, shieldStatus, videoDeepfakeScore, videoLipSyncMeasured } = useNadaStore();
+   const t = translations[language];
+-  const [active, setActive] = useState(false);
+-  const [source, setSource] = useState<CameraSource>('call');
+-  const [status, setStatus] = useState('');
+-  const [deepfakeScore, setDeepfakeScore] = useState(0);
+-  const [lipSyncMeasured, setLipSyncMeasured] = useState(false);
++  const active = shieldStatus.video.active;
++  const [source, setSource] = useState<CameraSource>(videoShieldService.getSource());
++  const [starting, setStarting] = useState(false);
+   const videoRef = useRef<HTMLVideoElement>(null);
+-  const streamRef = useRef<MediaStream | null>(null);
+-  const rafRef = useRef<number>(0);
+-  const lastAlertAtRef = useRef(0);
+-
+-  const stopCamera = useCallback(() => {
+-    cancelAnimationFrame(rafRef.current);
+-    streamRef.current?.getTracks().forEach((tr) => tr.stop());
+-    streamRef.current = null;
+-    setActive(false);
+-    setStatus('');
+-    setDeepfakeScore(0);
+-    setLipSyncMeasured(false);
+-    visionService.destroy();
+-    updateShieldStatus('video', { active: false, scanning: false });
+-    addLog('CAMARA: Detenida.', 'info');
+-  }, [addLog, updateShieldStatus]);
+-
+-  const triggerDeepfakeAlert = useCallback((confidence: number, explanation: string) => {
+-    const now = Date.now();
+-    if (now - lastAlertAtRef.current < ALERT_COOLDOWN_MS) return;
+-    lastAlertAtRef.current = now;
+ 
+-    riskScorer.addSignal('video-deepfake', confidence, 2.0);
+-
+-    const verdict: ScamAnalysis['verdict'] = confidence >= 70 ? 'PELIGROSO' : 'SOSPECHOSO';
+-    const result: ScamAnalysis = {
+-      verdict,
+-      riskScore: confidence,
+-      tactics: ['Deepfake / manipulacion de video'],
+-      explanation,
+-      scanSource: 'local',
+-      recommendations: [
+-        'Corta la llamada y verifica la identidad por otro canal (llamada telefonica al numero conocido).',
+-        'No compartas datos personales ni hagas transferencias mientras la sospecha este activa.',
+-      ],
+-    };
+-
+-    setAnalysisResult(result);
+-    playAlertTone(verdict === 'PELIGROSO' ? 'high' : 'medium');
+-    notificationService.sendThreatAlert(verdict, confidence, result.tactics[0]);
+-    addAlert({
+-      verdict,
+-      riskScore: confidence,
+-      description: t.deepfakeDetected,
+-      detectedTactic: result.tactics[0] ?? null,
+-      app: source === 'call' ? t.cameraSourceCall : t.cameraSourceOwn,
+-    });
+-  }, [addAlert, setAnalysisResult, source, t]);
+-
+-  const analyzeLoop = useCallback(() => {
+-    const loop = () => {
+-      if (!videoRef.current || !streamRef.current) return;
+-      const result = visionService.analyzeFrame(videoRef.current, performance.now());
+-      if (result) {
+-        setDeepfakeScore(result.confidence);
+-        setLipSyncMeasured(result.signals.lipSyncMeasured);
+-        setStatus(result.isLikelyDeepfake ? `DEEPFAKE: ${result.explanation}` : 'Normal');
+-        updateShieldStatus('video', { scanning: true, lastScan: new Date().toLocaleTimeString() });
+-
+-        if (result.isLikelyDeepfake) {
+-          triggerDeepfakeAlert(result.confidence, result.explanation);
+-        }
+-      }
+-      rafRef.current = requestAnimationFrame(loop);
+-    };
+-    rafRef.current = requestAnimationFrame(loop);
+-  }, [triggerDeepfakeAlert, updateShieldStatus]);
++  // If a session is already running (started from another tab, or before
++  // this component was mounted), attach the preview immediately instead of
++  // showing an inactive camera icon while it's actually protecting.
++  useEffect(() => {
++    if (active && videoRef.current) {
++      videoShieldService.attachPreview(videoRef.current);
++    }
++  }, [active]);
+ 
+   const startCamera = useCallback(async () => {
+-    try {
+-      addLog('CAMARA: Inicializando...', 'system');
+-      const ok = await visionService.init();
+-      if (!ok) {
+-        addLog('CAMARA: No se pudo iniciar el detector facial.', 'error');
+-        return;
+-      }
+-
+-      // "call" captures the video-call window/tab (the other person), which
+-      // is the actual fraud surface — your own webcam can't show you a
+-      // deepfake of yourself. "own" is kept for testing/self-checks.
+-      const stream = source === 'call'
+-        ? await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true })
+-        : await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: 640, height: 480 }, audio: true });
+-
+-      streamRef.current = stream;
+-
+-      if (stream.getAudioTracks().length === 0) {
+-        addLog(`CAMARA: ${t.noAudioForLipSync}`, 'warning');
+-      }
+-      visionService.attachAudio(stream);
+-
+-      // Screen-share / camera can be stopped from the browser's own UI, not
+-      // just our button — react to that so the shield status stays accurate.
+-      stream.getVideoTracks()[0]?.addEventListener('ended', stopCamera);
+-
+-      if (videoRef.current) {
+-        videoRef.current.srcObject = stream;
+-        await videoRef.current.play();
+-      }
+-
+-      setActive(true);
+-      lastAlertAtRef.current = 0;
+-      updateShieldStatus('video', { active: true, scanning: true });
+-      addLog(`CAMARA: Deteccion deepfake activa (${source === 'call' ? t.cameraSourceCall : t.cameraSourceOwn}).`, 'success');
+-      analyzeLoop();
+-    } catch (e) {
+-      addLog('CAMARA: Error al acceder a la camara o compartir pantalla.', 'error');
++    setStarting(true);
++    const ok = await videoShieldService.start(source);
++    setStarting(false);
++    if (ok && videoRef.current) {
++      videoShieldService.attachPreview(videoRef.current);
+     }
+-  }, [addLog, analyzeLoop, source, stopCamera, t, updateShieldStatus]);
++  }, [source]);
+ 
+-  useEffect(() => {
+-    return () => {
+-      cancelAnimationFrame(rafRef.current);
+-      streamRef.current?.getTracks().forEach((tr) => tr.stop());
+-      visionService.destroy();
+-      updateShieldStatus('video', { active: false, scanning: false });
+-    };
+-    // eslint-disable-next-line react-hooks/exhaustive-deps
++  const stopCamera = useCallback(() => {
++    videoShieldService.stop();
+   }, []);
+ 
++  const status = active
++    ? (videoDeepfakeScore > 50 ? `DEEPFAKE: ${videoDeepfakeScore}%` : 'Normal')
++    : '';
++
+   return (
+     <div className="space-y-4 fade-slide-in">
+       {!active && (
+@@ -192,14 +90,14 @@ export function CameraAnalyzer() {
+               <Camera className="w-12 h-12" style={{ color: 'var(--text-muted)' }} />
+             </div>
+           )}
+-          {active && deepfakeScore > 50 && (
++          {active && videoDeepfakeScore > 50 && (
+             <div className="absolute top-2 right-2 px-3 py-1 rounded-full text-xs font-bold badge-dangerous">
+-              DEEPFAKE {deepfakeScore}%
++              DEEPFAKE {videoDeepfakeScore}%
+             </div>
+           )}
+         </div>
+ 
+-        {active && !lipSyncMeasured && (
++        {active && !videoLipSyncMeasured && (
+           <div className="flex items-center gap-2 mt-3">
+             <AlertTriangle className="w-3.5 h-3.5 shrink-0" style={{ color: 'var(--warning)' }} />
+             <p className="text-[10px]" style={{ color: 'var(--warning)' }}>
+@@ -210,16 +108,17 @@ export function CameraAnalyzer() {
+ 
+         <div className="flex items-center justify-between mt-4">
+           {status && (
+-            <p className="text-xs font-mono truncate" style={{ color: deepfakeScore > 50 ? 'var(--danger)' : 'var(--success)' }}>
++            <p className="text-xs font-mono truncate" style={{ color: videoDeepfakeScore > 50 ? 'var(--danger)' : 'var(--success)' }}>
+               {status}
+             </p>
+           )}
+           <button
+             onClick={active ? stopCamera : startCamera}
+-            className="btn-primary flex items-center gap-2 text-sm ml-auto"
++            disabled={starting}
++            className="btn-primary flex items-center gap-2 text-sm ml-auto disabled:opacity-60"
+           >
+             {active ? <CameraOff className="w-4 h-4" /> : <Camera className="w-4 h-4" />}
+-            {active ? t.stopCamera : t.startCamera}
++            {active ? t.stopCamera : (starting ? t.analyzing : t.startCamera)}
+           </button>
+         </div>
+       </div>
+diff --git a/src/components/analysis/VoiceAnalyzer.tsx b/src/components/analysis/VoiceAnalyzer.tsx
+index 222e4c1..65f206c 100644
+--- a/src/components/analysis/VoiceAnalyzer.tsx
++++ b/src/components/analysis/VoiceAnalyzer.tsx
+@@ -1,154 +1,42 @@
+-import { useState, useCallback, useRef, useEffect } from 'react';
++import { useCallback } from 'react';
+ import { Mic, MicOff, AlertTriangle } from 'lucide-react';
+ import { useNadaStore } from '@/store/useNadaStore';
+-import { speechService } from '@/services/speechService';
+-import { analyzeVoiceFragment, cancelAnalysis, isAnalysisAborted } from '@/services/geminiService';
++import { protectionEngine } from '@/services/protectionEngine';
+ import { translations } from '@/utils/translations';
+ import { ResultPanel } from './ResultPanel';
+-import type { ScamAnalysis } from '@/store/useNadaStore';
+-
+-const REALTIME_INTERVAL_MS = 15000; // Analyze every 15 seconds
+ 
++// Thin view: all capture/recognition lifecycle lives in protectionEngine so
++// it survives navigating away from this screen. This component only reads
++// shared state and asks the engine to start/stop — it does not own
++// speechService directly (that used to create a second, out-of-sync copy of
++// "listening" alongside ConsumerHome's own toggle).
+ export function VoiceAnalyzer() {
+-  const { language, analysisResult, setAnalyzing, setAnalysisResult, addLog } = useNadaStore();
++  const {
++    language, analysisResult, shieldStatus,
++    voiceTranscript, voiceRealtimeVerdict, voiceSpeechActive, voiceError,
++  } = useNadaStore();
+   const t = translations[language];
+-  const [listening, setListening] = useState(false);
+-  const [transcript, setTranscript] = useState('');
+-  const [micError, setMicError] = useState<string | null>(null);
+-  const [realtimeVerdict, setRealtimeVerdict] = useState<ScamAnalysis | null>(null);
+-  const [fragmentCount, setFragmentCount] = useState(0);
+-
+-  // Refs for real-time analysis
+-  const transcriptRef = useRef('');
+-  const lastAnalyzedRef = useRef('');
+-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+-
+-  // Keep transcript ref in sync
+-  useEffect(() => {
+-    transcriptRef.current = transcript;
+-  }, [transcript]);
+-
+-  // Real-time analysis loop
+-  const startRealtimeAnalysis = useCallback(() => {
+-    intervalRef.current = setInterval(async () => {
+-      const currentText = transcriptRef.current;
+-      // Only analyze if there's new content since last check
+-      if (currentText.length > 20 && currentText !== lastAnalyzedRef.current) {
+-        lastAnalyzedRef.current = currentText;
+-        setFragmentCount((c) => c + 1);
+-
+-        try {
+-          // Analyze the latest portion (last ~200 chars for speed)
+-          const fragment = currentText.length > 200
+-            ? currentText.slice(-200)
+-            : currentText;
+-
+-          const result = await analyzeVoiceFragment(fragment, 'voice');
+-          setRealtimeVerdict(result);
+-
+-          if (result.verdict !== 'SEGURO') {
+-            addLog(`VOZ LIVE [${result.verdict}]: ${result.riskScore}/100 — ${result.tactics[0] ?? 'patron detectado'}`, result.verdict === 'PELIGROSO' ? 'error' : 'warning');
+-          }
+-        } catch (e) {
+-          // A superseded fragment is normal here; a real failure means this
+-          // stretch of the call went unchecked and the user should know.
+-          if (!isAnalysisAborted(e)) {
+-            addLog('VOZ: Un fragmento no pudo analizarse.', 'warning');
+-          }
+-        }
+-      }
+-    }, REALTIME_INTERVAL_MS);
+-  }, [addLog]);
+-
+-  const stopRealtimeAnalysis = useCallback(() => {
+-    if (intervalRef.current) {
+-      clearInterval(intervalRef.current);
+-      intervalRef.current = null;
+-    }
+-  }, []);
+-
+-  // Cleanup on unmount
+-  useEffect(() => {
+-    return () => {
+-      stopRealtimeAnalysis();
+-      speechService.stop();
+-      cancelAnalysis('voice');
+-    };
+-  }, [stopRealtimeAnalysis]);
++  const listening = shieldStatus.voice.active;
+ 
+   const handleToggle = useCallback(() => {
+     if (listening) {
+-      speechService.stop();
+-      stopRealtimeAnalysis();
+-      setListening(false);
+-      addLog('VOZ: Escucha detenida.', 'info');
+-
+-      // Final analysis of accumulated transcript
+-      const finalTranscript = transcriptRef.current;
+-      if (finalTranscript.length > 20) {
+-        setAnalyzing(true);
+-        analyzeVoiceFragment(finalTranscript, 'voice')
+-          .then((result) => {
+-            setAnalysisResult(result);
+-            addLog(`VEREDICTO VOZ FINAL: [${result.verdict}] — ${result.riskScore}/100`, result.verdict === 'PELIGROSO' ? 'error' : 'success');
+-          })
+-          .catch((e) => {
+-            if (!isAnalysisAborted(e)) {
+-              addLog('VOZ: El analisis final fallo. La conversacion NO fue verificada.', 'error');
+-            }
+-          })
+-          .finally(() => setAnalyzing(false));
+-      }
++      protectionEngine.stopVoiceMonitoring();
+     } else {
+-      setTranscript('');
+-      setMicError(null);
+-      setAnalysisResult(null);
+-      setRealtimeVerdict(null);
+-      setFragmentCount(0);
+-      lastAnalyzedRef.current = '';
+-      addLog('VOZ: Iniciando escucha con analisis en tiempo real...', 'system');
+-
+-      speechService.start(
+-        (text, isFinal) => {
+-          // Show interim results too so users see it's working
+-          if (isFinal) {
+-            setTranscript((prev) => prev + ' ' + text);
+-          } else {
+-            // Update ref with interim so real-time loop can use it
+-            transcriptRef.current = transcriptRef.current + ' ' + text;
+-          }
+-        },
+-        language === 'es' ? 'es-ES' : 'en-US',
+-        (error) => {
+-          let msg = 'Error de microfono.';
+-          if (error === 'not-allowed') msg = '❌ Permiso de microfono denegado. Habilita el microfono en el navegador.';
+-          else if (error === 'no-microphone') msg = '❌ No se encontro microfono. Conecta uno e intenta de nuevo.';
+-          else if (error === 'not-supported') msg = '❌ Este navegador no soporta reconocimiento de voz. Usa Chrome.';
+-          else if (error === 'network') msg = '⚠️ Error de red en reconocimiento de voz. Verifica tu conexion.';
+-          setMicError(msg);
+-          setListening(false);
+-          stopRealtimeAnalysis();
+-          addLog(`VOZ ERROR: ${msg}`, 'error');
+-        }
+-      );
+-
+-      setListening(true);
+-      startRealtimeAnalysis();
++      void protectionEngine.startVoiceMonitoring();
+     }
+-  }, [listening, language, addLog, setAnalyzing, setAnalysisResult, startRealtimeAnalysis, stopRealtimeAnalysis]);
++  }, [listening]);
+ 
+   return (
+     <div className="space-y-4 fade-slide-in">
+       <div className="card p-6 text-center">
+         <button
+           onClick={handleToggle}
+-          className={`w-20 h-20 rounded-full mx-auto flex items-center justify-center cursor-pointer transition-all duration-300 ${
+-            listening ? 'animate-pulse' : 'hover:scale-105'
+-          }`}
++          className="w-20 h-20 rounded-full mx-auto flex items-center justify-center cursor-pointer transition-all duration-300 hover:scale-105"
+           style={{
+-            background: listening ? 'var(--danger)' : 'var(--accent)',
+-            color: 'var(--bg-primary)',
+-            boxShadow: listening ? '0 0 30px var(--danger)' : '0 0 20px var(--accent-glow)',
++            background: listening ? 'var(--accent-light)' : 'var(--bg-elevated)',
++            border: `2px solid ${listening ? 'var(--success)' : 'var(--border)'}`,
++            color: listening ? 'var(--success)' : 'var(--text-muted)',
++            boxShadow: listening ? (voiceSpeechActive ? '0 0 30px var(--success)' : '0 0 14px var(--accent-glow)') : 'none',
+           }}
+           aria-label={listening ? t.stopListening : t.startListening}
+           aria-pressed={listening}
+@@ -159,53 +47,60 @@ export function VoiceAnalyzer() {
+           {listening ? t.stopListening : t.startListening}
+         </p>
+ 
+-        {/* Mic error message */}
+-        {micError && !listening && (
++        {/* Mic error — set by protectionEngine when the recognizer actually
++            dies (permission denied, no mic, unsupported browser), instead of
++            the UI silently claiming "listening" for a dead session. */}
++        {voiceError && !listening && (
+           <div
+             className="mt-3 p-3 rounded-lg text-sm font-medium"
+             style={{ background: 'rgba(255,70,70,0.12)', border: '1px solid var(--danger)', color: 'var(--danger)' }}
+           >
+-            {micError}
++            {voiceError}
+           </div>
+         )}
+ 
+-        {/* Real-time status indicator */}
++        {/* Real-time status indicator — the pulse only lights up on actual
++            detected speech (Web Speech API onspeechstart/onspeechend), so it
++            is real proof of listening instead of an assumption. */}
+         {listening && (
+           <div className="mt-3 flex items-center justify-center gap-2">
+-            <span className="w-2 h-2 rounded-full animate-pulse" style={{ background: 'var(--success)' }} />
++            <span
++              className="w-2 h-2 rounded-full"
++              style={{ background: voiceSpeechActive ? 'var(--success)' : 'var(--text-muted)', animation: voiceSpeechActive ? 'pulse 1s infinite' : undefined }}
++            />
+             <span className="text-[10px] font-mono" style={{ color: 'var(--text-muted)' }}>
+-              {`${t.liveAnalysis} — ${fragmentCount} ${t.fragments}`}
++              {voiceSpeechActive ? t.voiceHearingYou : t.liveAnalysis}
+             </span>
+           </div>
+         )}
+ 
+         {/* Real-time verdict badge */}
+-        {listening && realtimeVerdict && realtimeVerdict.verdict !== 'SEGURO' && (
++        {listening && voiceRealtimeVerdict && voiceRealtimeVerdict.verdict !== 'SEGURO' && (
+           <div
+             className="mt-3 p-3 rounded-lg flex items-center gap-2"
+             style={{
+-              background: realtimeVerdict.verdict === 'PELIGROSO' ? 'rgba(255,70,70,0.1)' : 'rgba(255,170,0,0.1)',
+-              border: `1px solid ${realtimeVerdict.verdict === 'PELIGROSO' ? 'var(--danger)' : 'var(--warning)'}`,
++              background: voiceRealtimeVerdict.verdict === 'PELIGROSO' ? 'rgba(255,70,70,0.1)' : 'rgba(255,170,0,0.1)',
++              border: `1px solid ${voiceRealtimeVerdict.verdict === 'PELIGROSO' ? 'var(--danger)' : 'var(--warning)'}`,
+             }}
+           >
+-            <AlertTriangle className="w-4 h-4 shrink-0" style={{ color: realtimeVerdict.verdict === 'PELIGROSO' ? 'var(--danger)' : 'var(--warning)' }} />
++            <AlertTriangle className="w-4 h-4 shrink-0" style={{ color: voiceRealtimeVerdict.verdict === 'PELIGROSO' ? 'var(--danger)' : 'var(--warning)' }} />
+             <div className="text-left">
+-              <p className="text-[10px] font-bold" style={{ color: realtimeVerdict.verdict === 'PELIGROSO' ? 'var(--danger)' : 'var(--warning)' }}>
+-                {realtimeVerdict.verdict} — {realtimeVerdict.riskScore}/100
++              <p className="text-[10px] font-bold" style={{ color: voiceRealtimeVerdict.verdict === 'PELIGROSO' ? 'var(--danger)' : 'var(--warning)' }}>
++                {voiceRealtimeVerdict.verdict} — {voiceRealtimeVerdict.riskScore}/100
+               </p>
+               <p className="text-[9px]" style={{ color: 'var(--text-muted)' }}>
+-                {realtimeVerdict.tactics[0] ?? t.suspiciousPattern}
++                {voiceRealtimeVerdict.tactics[0] ?? t.suspiciousPattern}
+               </p>
+             </div>
+           </div>
+         )}
+ 
+-        {transcript && (
++        {voiceTranscript && (
+           <div className="mt-4 p-3 rounded-lg text-left text-sm max-h-32 overflow-y-auto" style={{ background: 'var(--bg-elevated)', color: 'var(--text-primary)' }}>
+             <p className="text-xs font-mono mb-1" style={{ color: 'var(--text-muted)' }}>
+               {t.transcript}
+             </p>
+-            {transcript}
++            {voiceTranscript}
+           </div>
+         )}
+       </div>
+diff --git a/src/components/consumer/ConsumerHome.tsx b/src/components/consumer/ConsumerHome.tsx
+index 2359a8f..8e37ea2 100644
+--- a/src/components/consumer/ConsumerHome.tsx
++++ b/src/components/consumer/ConsumerHome.tsx
+@@ -1,12 +1,10 @@
+-import { useState, useCallback } from 'react';
+ import {
+   ShieldCheck, ShieldOff, Clipboard, Monitor, Mic, AlertTriangle,
+   Scan, MicOff, TrendingUp, TrendingDown, Activity, Camera,
+ } from 'lucide-react';
+ import { useNadaStore } from '@/store/useNadaStore';
+ import { hasWorkingProvider } from '@/services/aiProviders';
+-import { speechService } from '@/services/speechService';
+-import { analyzeVoiceFragment, isAnalysisAborted } from '@/services/geminiService';
++import { protectionEngine } from '@/services/protectionEngine';
+ import { translations } from '@/utils/translations';
+ import { ThreatChart } from '@/components/ui/ThreatChart';
+ import type { ShieldId } from '@/store/useNadaStore';
+@@ -22,38 +20,21 @@ export function ConsumerHome() {
+   const {
+     language, isProtectionActive, setProtectionActive,
+     shieldStatus, threatsToday, historyCount, setActiveTab, setActiveMode,
+-    addLog, setAnalysisResult,
++    voiceTranscript,
+   } = useNadaStore();
+   const t = translations[language];
++  const voiceActive = shieldStatus.voice.active;
+ 
+-  const [listening, setListening] = useState(false);
+-  const [voiceTranscript, setVoiceTranscript] = useState('');
+-
+-  const toggleVoice = useCallback(() => {
+-    if (!speechService.isSupported()) {
+-      addLog('VOZ: Tu navegador no soporta reconocimiento de voz. Usa Chrome o Edge.', 'error');
+-      return;
+-    }
+-
+-    if (listening) {
+-      speechService.stop();
+-      setListening(false);
+-      addLog('VOZ: Escucha detenida desde Inicio.', 'info');
+-      if (voiceTranscript.length > 20) {
+-        analyzeVoiceFragment(voiceTranscript, 'voice')
+-          .then((result) => setAnalysisResult(result))
+-          .catch((e) => { if (!isAnalysisAborted(e)) addLog('VOZ: Fallo al analizar.', 'error'); });
+-      }
+-      setVoiceTranscript('');
++  // Toggles the SAME engine-owned session VoiceAnalyzer uses — pressing it
++  // here and checking the debug tab now always show the same state, instead
++  // of two independent toggles each driving speechService on their own.
++  const toggleVoice = () => {
++    if (voiceActive) {
++      protectionEngine.stopVoiceMonitoring();
+     } else {
+-      setVoiceTranscript('');
+-      addLog('VOZ: Escucha iniciada desde Inicio.', 'system');
+-      speechService.start((text, isFinal) => {
+-        if (isFinal) setVoiceTranscript((prev) => prev + ' ' + text);
+-      }, language === 'es' ? 'es-ES' : 'en-US');
+-      setListening(true);
++      void protectionEngine.startVoiceMonitoring();
+     }
+-  }, [listening, voiceTranscript, language, addLog, setAnalysisResult]);
++  };
+ 
+   const anyProviderAvailable = hasWorkingProvider();
+   const activeShields = Object.values(shieldStatus).filter((s) => s.active).length;
+@@ -170,7 +151,9 @@ export function ConsumerHome() {
+         </div>
+       </button>
+ 
+-      {/* ── Shields grid ────────────────────────────────────────────────────── */}
++      {/* ── Shields grid — clipboard, screen, voice and video all share the
++          same visual language (green = active) so an active shield never
++          looks different from another and reads as "on". ─────────────────── */}
+       <div>
+         <div className="flex items-center justify-between mb-3 px-1">
+           <h3 className="text-xs font-bold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>
+@@ -185,7 +168,7 @@ export function ConsumerHome() {
+             const status = shieldStatus[id];
+             const label = t[id];
+             const isVoice = id === 'voice';
+-            const isActive = isVoice ? listening : status.active;
++            const isActive = isVoice ? voiceActive : status.active;
+             const isScanning = status.scanning;
+ 
+             // Video card navigates to the camera analyzer — it needs an
+@@ -197,10 +180,10 @@ export function ConsumerHome() {
+                   key={id}
+                   onClick={() => { setActiveMode('CAMARA'); setActiveTab('debug'); }}
+                   className="card p-3 text-center cursor-pointer"
+-                  style={{ borderColor: status.active ? 'var(--accent)' : 'var(--border)' }}
++                  style={{ borderColor: status.active ? 'var(--success)' : 'var(--border)' }}
+                   aria-label={label}
+                 >
+-                  <Icon className="w-5 h-5 mx-auto mb-2" style={{ color: status.active ? 'var(--accent)' : 'var(--text-muted)' }} />
++                  <Icon className="w-5 h-5 mx-auto mb-2" style={{ color: status.active ? 'var(--success)' : 'var(--text-muted)' }} />
+                   <p className="text-[11px] font-semibold" style={{ color: 'var(--text-primary)' }}>{label}</p>
+                   <p className="text-[10px] mt-1" style={{ color: status.active ? 'var(--success)' : 'var(--text-muted)' }}>
+                     {status.active ? (status.scanning ? t.scanning : t.active) : t.tapToListen}
+@@ -214,42 +197,36 @@ export function ConsumerHome() {
+                 <div
+                   className="w-9 h-9 rounded-xl flex items-center justify-center mx-auto mb-2.5 transition-all"
+                   style={{
+-                    background: isActive
+-                      ? 'var(--accent-light)'
+-                      : 'var(--bg-elevated)',
+-                    boxShadow: isActive ? '0 0 12px var(--accent-glow)' : 'none',
++                    background: isActive ? 'var(--accent-light)' : 'var(--bg-elevated)',
++                    boxShadow: isActive ? '0 0 12px var(--success)' : 'none',
+                   }}
+                 >
+-                  {isVoice && listening
+-                    ? <MicOff className="w-4 h-4 animate-pulse" style={{ color: 'var(--danger)' }} />
+-                    : <Icon className="w-4 h-4" style={{ color: isActive ? 'var(--accent)' : 'var(--text-muted)' }} />
++                  {isVoice && isActive
++                    ? <MicOff className="w-4 h-4" style={{ color: 'var(--success)' }} />
++                    : <Icon className="w-4 h-4" style={{ color: isActive ? 'var(--success)' : 'var(--text-muted)' }} />
+                   }
+                 </div>
+                 <p className="text-[11px] font-bold" style={{ color: 'var(--text-primary)' }}>{label}</p>
+-                <p
+-                  className="text-[10px] mt-0.5"
+-                  style={{
+-                    color: isVoice
+-                      ? (listening ? 'var(--danger)' : 'var(--text-muted)')
+-                      : (isActive ? 'var(--success)' : 'var(--text-muted)'),
+-                  }}
+-                >
++                <p className="text-[10px] mt-0.5" style={{ color: isActive ? 'var(--success)' : 'var(--text-muted)' }}>
+                   {isVoice
+-                    ? (listening ? t.stopListening : t.tapToListen)
++                    ? (isActive ? t.stopListening : t.tapToListen)
+                     : (isActive ? (isScanning ? t.scanning : t.active) : t.inactive)
+                   }
+                 </p>
+               </>
+             );
+ 
++            // Voice card toggles the SAME engine-owned session VoiceAnalyzer
++            // uses — pressing it here and checking the debug tab now always
++            // show the same state, instead of two independent toggles.
+             if (isVoice) {
+               return (
+                 <button
+                   key={id}
+                   onClick={toggleVoice}
+                   className="card p-3 text-center cursor-pointer"
+-                  style={{ borderColor: listening ? 'var(--danger)' : isActive ? 'var(--accent)' : 'var(--border)' }}
+-                  aria-label={listening ? t.stopListening : t.tapToListen}
++                  style={{ borderColor: isActive ? 'var(--success)' : 'var(--border)' }}
++                  aria-label={isActive ? t.stopListening : t.tapToListen}
+                 >
+                   {cardContent}
+                 </button>
+@@ -260,7 +237,7 @@ export function ConsumerHome() {
+               <div
+                 key={id}
+                 className="card p-3 text-center"
+-                style={{ borderColor: isActive ? 'var(--accent)' : 'var(--border)' }}
++                style={{ borderColor: isActive ? 'var(--success)' : 'var(--border)' }}
+               >
+                 {cardContent}
+               </div>
+@@ -268,8 +245,8 @@ export function ConsumerHome() {
+           })}
+         </div>
+ 
+-        {/* Voice transcript preview */}
+-        {listening && voiceTranscript && (
++        {/* Voice transcript preview — same global transcript VoiceAnalyzer shows */}
++        {voiceActive && voiceTranscript && (
+           <div
+             className="mt-3 p-3 rounded-xl text-xs leading-relaxed fade-slide-in"
+             style={{ background: 'var(--bg-elevated)', color: 'var(--text-secondary)', borderLeft: '2px solid var(--accent)' }}
+diff --git a/src/components/overlay/OverlayShield.tsx b/src/components/overlay/OverlayShield.tsx
+new file mode 100644
+index 0000000..7a8104d
+--- /dev/null
++++ b/src/components/overlay/OverlayShield.tsx
+@@ -0,0 +1,65 @@
++import { useEffect, useState } from 'react';
++import { Shield, AlertTriangle } from 'lucide-react';
++
++// Minimal renderer for the Electron always-on-top overlay window. Loaded via
++// main.tsx when the page is opened with ?overlay=1 — a separate, tiny React
++// tree with no store, no router, no shields of its own. It only mirrors
++// status pushed from the main window over IPC (see electron/main.cts and
++// App.tsx's overlay useEffects) and, on click, brings the main window to
++// front so the user can act deliberately instead of a stray tap on a 64x64
++// bubble accidentally turning protection off.
++interface OverlayStatus {
++  active: boolean;
++  scanning: boolean;
++  verdict: 'SEGURO' | 'SOSPECHOSO' | 'PELIGROSO' | null;
++}
++
++const VERDICT_COLOR: Record<string, string> = {
++  SOSPECHOSO: '#ffaa00',
++  PELIGROSO: '#ff4646',
++};
++
++const DEFAULT_STATUS: OverlayStatus = { active: true, scanning: false, verdict: null };
++
++export function OverlayShield() {
++  const [status, setStatus] = useState<OverlayStatus>(DEFAULT_STATUS);
++
++  useEffect(() => {
++    const api = (window as any).electronAPI;
++    api?.onOverlayStatus?.((s: OverlayStatus) => setStatus(s));
++  }, []);
++
++  const alertColor = status.verdict && status.verdict !== 'SEGURO' ? VERDICT_COLOR[status.verdict] : null;
++  const color = alertColor ?? '#7c5cff';
++  const pulsing = Boolean(alertColor) || status.scanning;
++
++  return (
++    <div
++      role="button"
++      tabIndex={0}
++      onClick={() => (window as any).electronAPI?.focusMainWindow?.()}
++      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') (window as any).electronAPI?.focusMainWindow?.(); }}
++      title="NADA — Proteccion activa. Clic para abrir."
++      style={{
++        width: '100%',
++        height: '100%',
++        display: 'flex',
++        alignItems: 'center',
++        justifyContent: 'center',
++        background: 'rgba(10,14,23,0.88)',
++        borderRadius: '50%',
++        border: `2px solid ${color}`,
++        boxShadow: `0 0 ${pulsing ? '18px' : '8px'} ${color}`,
++        cursor: 'pointer',
++        animation: pulsing ? 'nada-overlay-pulse 1.4s infinite' : undefined,
++      }}
++    >
++      <style>{`
++        @keyframes nada-overlay-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
++      `}</style>
++      {alertColor
++        ? <AlertTriangle size={22} color={color} aria-hidden="true" />
++        : <Shield size={22} color={color} aria-hidden="true" />}
++    </div>
++  );
++}
+diff --git a/src/main.tsx b/src/main.tsx
+index 6ab8a0d..46f8c34 100644
+--- a/src/main.tsx
++++ b/src/main.tsx
+@@ -1,16 +1,38 @@
+ import { StrictMode } from 'react';
+ import { createRoot } from 'react-dom/client';
+ import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
++import { OverlayShield } from '@/components/overlay/OverlayShield';
+ import App from './App';
+ import './index.css';
+ 
+ const root = document.getElementById('root');
+ if (!root) throw new Error('Root element not found');
+ 
++// The Electron always-on-top overlay window loads this same bundle with
++// ?overlay=1 instead of a separate entry point (see electron/main.cts). It
++// renders a tiny standalone widget, not the full app.
++const isOverlay = new URLSearchParams(window.location.search).get('overlay') === '1';
++
++if (isOverlay) {
++  // The BrowserWindow is created with transparent:true, which only shows
++  // through if the page's own background is transparent too — the normal
++  // app background-color (set in index.css) would otherwise paint a solid
++  // square over the whole overlay window. #root also has no explicit size in
++  // the normal app (App.tsx's own layout provides it), so it must be sized
++  // here or OverlayShield's 100%/100% collapses to zero.
++  document.documentElement.style.background = 'transparent';
++  document.documentElement.style.height = '100%';
++  document.body.style.background = 'transparent';
++  document.body.style.height = '100%';
++  document.body.style.overflow = 'hidden';
++  root.style.width = '100%';
++  root.style.height = '100%';
++}
++
+ createRoot(root).render(
+   <StrictMode>
+     <ErrorBoundary>
+-      <App />
++      {isOverlay ? <OverlayShield /> : <App />}
+     </ErrorBoundary>
+   </StrictMode>,
+ );
+diff --git a/src/services/protectionEngine.ts b/src/services/protectionEngine.ts
+index c2c885f..f31214c 100644
+--- a/src/services/protectionEngine.ts
++++ b/src/services/protectionEngine.ts
+@@ -1,12 +1,13 @@
+-import { analyzeText, cancelAnalysis, isAnalysisAborted } from './geminiService';
++import { analyzeText, analyzeVoiceFragment, cancelAnalysis, isAnalysisAborted } from './geminiService';
+ import { extractTextFromCanvas, extractTextFromImage } from './ocrService';
++import { speechService } from './speechService';
+ import { playAlertTone } from '@/utils/audioAlert';
+ import { notificationService } from './notificationService';
+ import type { ScamAnalysis, ShieldId, Verdict } from '@/store/useNadaStore';
+ 
+ // =============================================================================
+ // Protection Engine — Singleton Orchestrator
+-// Manages clipboard, screen, and voice shields in background
++// Manages clipboard, screen, voice and video shields in background
+ // With rate limiting, OCR screen scanning, audio alerts, and push notifications
+ // =============================================================================
+ 
+@@ -19,6 +20,13 @@ interface EngineCallbacks {
+   onShieldStatusChange: (shield: ShieldId, status: Record<string, unknown>) => void;
+   onNotification: (title: string, body: string) => void;
+   onLog: (message: string, type: 'info' | 'success' | 'warning' | 'error' | 'system') => void;
++  onVoiceTranscript: (text: string) => void;
++  onVoiceRealtimeVerdict: (result: ScamAnalysis | null) => void;
++  onVoiceSpeechActive: (active: boolean) => void;
++  /** null clears the error banner — called on every successful (re)start. */
++  onVoiceError: (message: string | null) => void;
++  /** Read fresh at every voice start — the UI language can change between sessions. */
++  getLanguage: () => 'es' | 'en';
+ }
+ 
+ class ProtectionEngine {
+@@ -61,6 +69,16 @@ class ProtectionEngine {
+   // Electron screen-capture listener must be registered only once
+   private screenCaptureListenerBound = false;
+ 
++  // Voice shield state — owned here (not by any React component) so it
++  // survives navigating between tabs/views inside the app. A component
++  // unmounting must never silently kill an active listening session.
++  private voiceActive = false;
++  private voiceTranscript = '';
++  private lastVoiceAnalyzed = '';
++  private lastVoiceAnalysisAt = 0;
++  private readonly VOICE_ANALYSIS_COOLDOWN_MS = 6_000;
++  private readonly VOICE_MIN_FRAGMENT_LEN = 12;
++
+   init(callbacks: EngineCallbacks) {
+     this.callbacks = callbacks;
+     this.bindScreenCaptureListener();
+@@ -93,6 +111,10 @@ class ProtectionEngine {
+ 
+     this.startClipboardMonitor();
+     this.startScreenMonitor();
++    // Mic permission persists once granted, so this only shows a native
++    // prompt on the very first activation; every activation after that
++    // starts silently. If the user denies it, handleVoiceError reports why.
++    void this.startVoiceMonitoring();
+   }
+ 
+   stop() {
+@@ -117,10 +139,10 @@ class ProtectionEngine {
+     // user has switched protection off.
+     cancelAnalysis('clipboard');
+     cancelAnalysis('screen');
++    this.stopVoiceMonitoring();
+ 
+     this.callbacks?.onShieldStatusChange('clipboard', { active: false, scanning: false });
+     this.callbacks?.onShieldStatusChange('screen', { active: false, scanning: false });
+-    this.callbacks?.onShieldStatusChange('voice', { active: false, scanning: false });
+     this.log('Proteccion DESACTIVADA.', 'warning');
+   }
+ 
+@@ -260,15 +282,136 @@ class ProtectionEngine {
+   }
+ 
+   // ── Voice Shield ──────────────────────────────────────────────
++  //
++  // Lives entirely in this singleton, not in a React component. Previously
++  // ConsumerHome and VoiceAnalyzer each drove speechService with their own
++  // local `listening` state — navigating away from one left the recognizer
++  // running invisibly while the other screen's UI reset to "not listening",
++  // and pressing the mic again was a silent no-op (speechService.start()
++  // returns immediately when already running). That split-brain state is
++  // exactly what looked like "parece que escucha pero no responde".
+   async startVoiceMonitoring() {
+-    if (!this.running) return;
++    if (this.voiceActive) return;
++
++    if (!speechService.isSupported()) {
++      const msg = '❌ Este navegador no soporta reconocimiento de voz. Usa Chrome o Edge.';
++      this.log(`ESCUDO VOZ: ${msg}`, 'error');
++      this.callbacks?.onShieldStatusChange('voice', { active: false, scanning: false });
++      this.callbacks?.onVoiceError(msg);
++      return;
++    }
++
++    this.voiceActive = true;
++    this.voiceTranscript = '';
++    this.lastVoiceAnalyzed = '';
++    this.callbacks?.onVoiceTranscript('');
++    this.callbacks?.onVoiceRealtimeVerdict(null);
++    this.callbacks?.onVoiceError(null);
++
++    const lang = this.callbacks?.getLanguage() === 'en' ? 'en-US' : 'es-ES';
++
++    speechService.start(
++      (text, isFinal) => {
++        if (!isFinal) return;
++        this.voiceTranscript = `${this.voiceTranscript} ${text}`.trim();
++        this.callbacks?.onVoiceTranscript(this.voiceTranscript);
++        this.maybeAnalyzeVoiceFragment();
++      },
++      lang,
++      (error) => this.handleVoiceError(error),
++      (active) => this.callbacks?.onVoiceSpeechActive(active),
++    );
++
+     this.callbacks?.onShieldStatusChange('voice', { active: true, scanning: true });
+-    this.log('ESCUDO VOZ: Monitoreo de llamada activado.', 'success');
++    this.log('ESCUDO VOZ: Escucha en tiempo real activa.', 'success');
+   }
+ 
+   stopVoiceMonitoring() {
++    if (!this.voiceActive) return;
++    this.voiceActive = false;
++
++    speechService.stop();
++    cancelAnalysis('voice');
++
++    const finalTranscript = this.voiceTranscript;
+     this.callbacks?.onShieldStatusChange('voice', { active: false, scanning: false });
++    this.callbacks?.onVoiceSpeechActive(false);
+     this.log('ESCUDO VOZ: Monitoreo detenido.', 'info');
++
++    // Final pass over whatever was captured, same as the old per-component
++    // "stop" behavior, now happening regardless of which screen triggered stop.
++    if (finalTranscript.length > this.VOICE_MIN_FRAGMENT_LEN) {
++      analyzeText(finalTranscript, 'voice')
++        .then((result) => {
++          this.callbacks?.onAnalysisResult(result);
++          this.log(`VEREDICTO VOZ FINAL: [${result.verdict}] — ${result.riskScore}/100`, result.verdict === 'PELIGROSO' ? 'error' : 'success');
++        })
++        .catch((e) => {
++          if (!isAnalysisAborted(e)) {
++            this.log('VOZ: El analisis final fallo. Ese tramo de la conversacion no fue verificado.', 'warning');
++          }
++        });
++    }
++  }
++
++  isVoiceActive() {
++    return this.voiceActive;
++  }
++
++  private handleVoiceError(error: string) {
++    const FATAL = new Set(['not-allowed', 'audio-capture', 'service-not-allowed', 'start-failed', 'not-supported']);
++    if (FATAL.has(error)) {
++      // The recognizer is genuinely dead — speechService already called its
++      // own stop(). Reflect that here instead of leaving shieldStatus.voice
++      // showing "active" for a session that silently died.
++      this.voiceActive = false;
++      this.callbacks?.onShieldStatusChange('voice', { active: false, scanning: false });
++      this.callbacks?.onVoiceSpeechActive(false);
++
++      const messages: Record<string, string> = {
++        'not-allowed': '❌ Permiso de microfono denegado. Habilitalo en los ajustes del navegador/sistema.',
++        'audio-capture': '❌ No se detecto ningun microfono conectado.',
++        'service-not-allowed': '❌ El navegador bloqueo el reconocimiento de voz.',
++        'start-failed': '❌ No se pudo iniciar el reconocimiento de voz. Intenta de nuevo.',
++        'not-supported': '❌ Este navegador no soporta reconocimiento de voz. Usa Chrome o Edge.',
++      };
++      const msg = messages[error] ?? '❌ El escudo de voz se detuvo por un error.';
++      this.callbacks?.onVoiceError(msg);
++      this.log(`ESCUDO VOZ: Detenido — ${msg}`, 'error');
++      return;
++    }
++    // 'no-speech' / 'network' / 'aborted' are transient — speechService's own
++    // onend handler restarts the recognizer automatically while running stays
++    // true, so there is nothing to do here besides not treating it as fatal.
++  }
++
++  private maybeAnalyzeVoiceFragment() {
++    const text = this.voiceTranscript;
++    if (text.length < this.VOICE_MIN_FRAGMENT_LEN || text === this.lastVoiceAnalyzed) return;
++
++    const now = Date.now();
++    if (now - this.lastVoiceAnalysisAt < this.VOICE_ANALYSIS_COOLDOWN_MS) return;
++
++    this.lastVoiceAnalysisAt = now;
++    this.lastVoiceAnalyzed = text;
++    const fragment = text.length > 200 ? text.slice(-200) : text;
++
++    analyzeVoiceFragment(fragment, 'voice')
++      .then((result) => {
++        this.callbacks?.onVoiceRealtimeVerdict(result);
++        const nowStr = new Date().toLocaleTimeString();
++        this.callbacks?.onShieldStatusChange('voice', { scanning: true, lastScan: nowStr, lastThreatLevel: result.verdict });
++
++        if (result.verdict !== 'SEGURO') {
++          this.log(`VOZ LIVE [${result.verdict}]: ${result.riskScore}/100 — ${result.tactics[0] ?? 'patron detectado'}`, result.verdict === 'PELIGROSO' ? 'error' : 'warning');
++          this.triggerThreatAlert(result, 'Patron sospechoso detectado en conversacion de voz', 'Voz');
++        }
++      })
++      .catch((e) => {
++        if (!isAnalysisAborted(e)) {
++          this.log('VOZ: Un fragmento no pudo analizarse.', 'warning');
++        }
++      });
+   }
+ 
+   // ── Screen capture analysis (shared by Electron and web) ──────
+diff --git a/src/services/speechService.ts b/src/services/speechService.ts
+index 0a0b7a2..502fd22 100644
+--- a/src/services/speechService.ts
++++ b/src/services/speechService.ts
+@@ -4,6 +4,10 @@
+ // =============================================================================
+ 
+ type TranscriptCallback = (text: string, isFinal: boolean) => void;
++/** Fired on every recognition error, even ones that don't stop the session. */
++type ErrorCallback = (error: string) => void;
++/** Fired when the browser detects speech starting/ending — real proof the mic is live. */
++type SpeechActivityCallback = (active: boolean) => void;
+ 
+ // Web Speech API types (not in all TS libs)
+ interface SpeechRecognitionResultItem {
+@@ -32,14 +36,22 @@ interface SpeechRecognitionLike {
+   onresult: ((event: SpeechRecognitionEventLike) => void) | null;
+   onend: (() => void) | null;
+   onerror: ((event: SpeechRecognitionErrorLike) => void) | null;
++  onspeechstart: (() => void) | null;
++  onspeechend: (() => void) | null;
+   start: () => void;
+   abort: () => void;
+ }
+ 
++// Errors that mean the recognition session is actually dead and won't recover
++// on its own — the caller must be told so it can stop pretending to listen.
++const FATAL_ERRORS = new Set(['not-allowed', 'audio-capture', 'service-not-allowed']);
++
+ class SpeechService {
+   private recognition: SpeechRecognitionLike | null = null;
+   private running = false;
+   private callback: TranscriptCallback | null = null;
++  private errorCallback: ErrorCallback | null = null;
++  private activityCallback: SpeechActivityCallback | null = null;
+   private restartCount = 0;
+   private maxRestarts = 50;
+ 
+@@ -47,7 +59,7 @@ class SpeechService {
+     return 'webkitSpeechRecognition' in window || 'SpeechRecognition' in window;
+   }
+ 
+-  start(callback: TranscriptCallback, lang = 'es-ES', onError?: (error: string) => void) {
++  start(callback: TranscriptCallback, lang = 'es-ES', onError?: ErrorCallback, onActivity?: SpeechActivityCallback) {
+     if (this.running) return;
+     if (!this.isSupported()) {
+       onError?.('not-supported');
+@@ -55,6 +67,8 @@ class SpeechService {
+     }
+ 
+     this.callback = callback;
++    this.errorCallback = onError ?? null;
++    this.activityCallback = onActivity ?? null;
+     this.restartCount = 0;
+ 
+     // eslint-disable-next-line @typescript-eslint/no-explicit-any
+@@ -74,6 +88,9 @@ class SpeechService {
+       }
+     };
+ 
++    this.recognition.onspeechstart = () => this.activityCallback?.(true);
++    this.recognition.onspeechend = () => this.activityCallback?.(false);
++
+     this.recognition.onend = () => {
+       if (this.running && this.restartCount < this.maxRestarts) {
+         this.restartCount++;
+@@ -84,31 +101,34 @@ class SpeechService {
+     };
+ 
+     this.recognition.onerror = (event) => {
+-      if (event.error === 'not-allowed') {
+-        onError?.('not-allowed');
+-        this.stop();
+-      } else if (event.error === 'audio-capture') {
+-        onError?.('no-microphone');
++      // Every error is surfaced — previously 'not-allowed' silently called
++      // stop() with no callback, so the UI kept showing "listening" while the
++      // mic session was actually dead underneath it.
++      this.errorCallback?.(event.error);
++      if (FATAL_ERRORS.has(event.error)) {
+         this.stop();
+-      } else if (event.error === 'network') {
+-        onError?.('network');
+-        // Speech API needs network for recognition — keep trying
+       }
+-      // 'no-speech' is normal — user is just not talking, keep listening
++      // 'no-speech' / 'network' / 'aborted' are transient — onend's restart
++      // loop already recovers from those while `running` stays true.
+     };
+ 
+     this.running = true;
+     try {
+       this.recognition.start();
+     } catch {
++      // Synchronous throw from the browser (e.g. called in a bad state) —
++      // go through stop() so `running` and the recognition handle are
++      // cleared consistently, not just the flag.
+       onError?.('start-failed');
+-      this.running = false;
++      this.stop();
+     }
+   }
+ 
+   stop() {
+     this.running = false;
+     this.callback = null;
++    this.errorCallback = null;
++    this.activityCallback = null;
+     if (this.recognition) {
+       this.recognition.onend = null;
+       this.recognition.abort();
+diff --git a/src/services/videoShieldService.ts b/src/services/videoShieldService.ts
+new file mode 100644
+index 0000000..f0a4006
+--- /dev/null
++++ b/src/services/videoShieldService.ts
+@@ -0,0 +1,168 @@
++import { visionService } from './visionService';
++import { riskScorer } from '@/utils/riskScorer';
++import { playAlertTone } from '@/utils/audioAlert';
++import { notificationService } from './notificationService';
++import type { ScamAnalysis } from '@/store/useNadaStore';
++
++// =============================================================================
++// Video Shield — Singleton Orchestrator
++// Owns the MediaStream + analysis loop so a deepfake-detection session
++// survives navigating away from the camera view, the same way voice
++// monitoring lives in protectionEngine instead of inside VoiceAnalyzer.
++// =============================================================================
++
++export type CameraSource = 'own' | 'call';
++
++interface VideoShieldCallbacks {
++  onAlert: (alert: { verdict: ScamAnalysis['verdict']; riskScore: number; description: string; detectedTactic: string | null; app: string }) => void;
++  onAnalysisResult: (result: ScamAnalysis) => void;
++  onShieldStatusChange: (status: Record<string, unknown>) => void;
++  onFrame: (deepfakeScore: number, lipSyncMeasured: boolean) => void;
++  onLog: (message: string, type: 'info' | 'success' | 'warning' | 'error' | 'system') => void;
++  labelForSource: (source: CameraSource) => string;
++  getDeepfakeDetectedLabel: () => string;
++}
++
++// Deepfake alerts are re-evaluated every animation frame; without a cooldown
++// a single ongoing deepfake would spam the alert log dozens of times a second.
++const ALERT_COOLDOWN_MS = 20_000;
++
++class VideoShieldService {
++  private callbacks: VideoShieldCallbacks | null = null;
++  private stream: MediaStream | null = null;
++  // Detached from the DOM on purpose: the capture loop must keep running
++  // even while CameraAnalyzer (and its own <video> preview) isn't mounted.
++  private videoEl: HTMLVideoElement | null = null;
++  private rafId = 0;
++  private source: CameraSource = 'call';
++  private lastAlertAt = 0;
++
++  init(callbacks: VideoShieldCallbacks) {
++    this.callbacks = callbacks;
++  }
++
++  isActive(): boolean {
++    return !!this.stream;
++  }
++
++  getSource(): CameraSource {
++    return this.source;
++  }
++
++  /** Mirrors the live stream into a visible <video> element for preview only — capture keeps running regardless. */
++  attachPreview(el: HTMLVideoElement) {
++    if (this.stream) {
++      el.srcObject = this.stream;
++      void el.play().catch(() => {});
++    }
++  }
++
++  async start(source: CameraSource): Promise<boolean> {
++    if (this.stream) return true;
++
++    this.callbacks?.onLog('CAMARA: Inicializando...', 'system');
++    const ok = await visionService.init();
++    if (!ok) {
++      this.callbacks?.onLog('CAMARA: No se pudo iniciar el detector facial.', 'error');
++      return false;
++    }
++
++    try {
++      // "call" captures the video-call window/tab (the other person), which
++      // is the actual fraud surface — your own webcam can't show you a
++      // deepfake of yourself. "own" is kept for testing/self-checks.
++      const stream = source === 'call'
++        ? await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true })
++        : await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: 640, height: 480 }, audio: true });
++
++      this.stream = stream;
++      this.source = source;
++      this.lastAlertAt = 0;
++
++      if (stream.getAudioTracks().length === 0) {
++        this.callbacks?.onLog('CAMARA: Sin audio — no se puede verificar la sincronia labial.', 'warning');
++      }
++      visionService.attachAudio(stream);
++
++      // Detached decode source: doesn't need to be in the DOM to feed frames
++      // to MediaPipe, so the analysis loop is independent of any component.
++      this.videoEl = document.createElement('video');
++      this.videoEl.muted = true;
++      this.videoEl.playsInline = true;
++      this.videoEl.srcObject = stream;
++      await this.videoEl.play();
++
++      // Screen-share / camera can be stopped from the browser's own UI, not
++      // just our button — react to that so shield status stays accurate.
++      stream.getVideoTracks()[0]?.addEventListener('ended', () => this.stop());
++
++      this.callbacks?.onShieldStatusChange({ active: true, scanning: true });
++      this.callbacks?.onLog(`CAMARA: Deteccion deepfake activa (${this.callbacks?.labelForSource(source)}).`, 'success');
++      this.loop();
++      return true;
++    } catch {
++      this.callbacks?.onLog('CAMARA: Error al acceder a la camara o compartir pantalla.', 'error');
++      return false;
++    }
++  }
++
++  stop() {
++    cancelAnimationFrame(this.rafId);
++    this.stream?.getTracks().forEach((tr) => tr.stop());
++    this.stream = null;
++    this.videoEl?.pause();
++    this.videoEl = null;
++    visionService.destroy();
++    this.callbacks?.onShieldStatusChange({ active: false, scanning: false });
++    this.callbacks?.onFrame(0, false);
++    this.callbacks?.onLog('CAMARA: Detenida.', 'info');
++  }
++
++  private loop = () => {
++    if (!this.videoEl || !this.stream) return;
++    const result = visionService.analyzeFrame(this.videoEl, performance.now());
++    if (result) {
++      this.callbacks?.onFrame(result.confidence, result.signals.lipSyncMeasured);
++      this.callbacks?.onShieldStatusChange({ scanning: true, lastScan: new Date().toLocaleTimeString() });
++
++      if (result.isLikelyDeepfake) {
++        this.triggerDeepfakeAlert(result.confidence, result.explanation);
++      }
++    }
++    this.rafId = requestAnimationFrame(this.loop);
++  };
++
++  private triggerDeepfakeAlert(confidence: number, explanation: string) {
++    const now = Date.now();
++    if (now - this.lastAlertAt < ALERT_COOLDOWN_MS) return;
++    this.lastAlertAt = now;
++
++    riskScorer.addSignal('video-deepfake', confidence, 2.0);
++
++    const verdict: ScamAnalysis['verdict'] = confidence >= 70 ? 'PELIGROSO' : 'SOSPECHOSO';
++    const result: ScamAnalysis = {
++      verdict,
++      riskScore: confidence,
++      tactics: ['Deepfake / manipulacion de video'],
++      explanation,
++      scanSource: 'local',
++      recommendations: [
++        'Corta la llamada y verifica la identidad por otro canal (llamada telefonica al numero conocido).',
++        'No compartas datos personales ni hagas transferencias mientras la sospecha este activa.',
++      ],
++    };
++
++    this.callbacks?.onAnalysisResult(result);
++    playAlertTone(verdict === 'PELIGROSO' ? 'high' : 'medium');
++    notificationService.sendThreatAlert(verdict, confidence, result.tactics[0]);
++    this.callbacks?.onAlert({
++      verdict,
++      riskScore: confidence,
++      description: this.callbacks?.getDeepfakeDetectedLabel() ?? 'Posible deepfake detectado',
++      detectedTactic: result.tactics[0] ?? null,
++      app: this.callbacks?.labelForSource(this.source) ?? 'Video',
++    });
++  }
++}
++
++export const videoShieldService = new VideoShieldService();
+diff --git a/src/store/useNadaStore.ts b/src/store/useNadaStore.ts
+index ff9d835..3a3dcf5 100644
+--- a/src/store/useNadaStore.ts
++++ b/src/store/useNadaStore.ts
+@@ -77,6 +77,20 @@ interface NadaState {
+   isProtectionActive: boolean;
+   shieldStatus: Record<ShieldId, ShieldStatus>;
+ 
++  // Escudo de voz — estado global para que ConsumerHome y VoiceAnalyzer lean
++  // exactamente lo mismo en vez de mantener cada uno su propia copia local
++  // (eso era lo que producia el desincronizado "parece que escucha pero no").
++  voiceTranscript: string;
++  voiceRealtimeVerdict: ScamAnalysis | null;
++  voiceSpeechActive: boolean;
++  /** Set when the recognizer actually dies (permission denied, no mic, unsupported browser). */
++  voiceError: string | null;
++
++  // Escudo de video — estado global derivado del ultimo frame analizado,
++  // visible aunque CameraAnalyzer no este montado.
++  videoDeepfakeScore: number;
++  videoLipSyncMeasured: boolean;
++
+   // Alertas y Logs
+   alerts: AlertEntry[];
+   logs: LogEntry[];
+@@ -97,6 +111,12 @@ interface NadaActions {
+   updateShieldStatus: (shield: ShieldId, status: Partial<ShieldStatus>) => void;
+   resetSession: () => void;
+   recordDailyScan: (isThreat: boolean) => void;
++  setVoiceTranscript: (text: string) => void;
++  setVoiceRealtimeVerdict: (v: ScamAnalysis | null) => void;
++  setVoiceSpeechActive: (active: boolean) => void;
++  setVoiceError: (message: string | null) => void;
++  resetVoiceSession: () => void;
++  setVideoStatus: (score: number, lipSyncMeasured: boolean) => void;
+ }
+ 
+ // =============================================================================
+@@ -148,6 +168,12 @@ export const useNadaStore = create<NadaState & NadaActions>()(
+         voice: { ...DEFAULT_SHIELD },
+         video: { ...DEFAULT_SHIELD },
+       },
++      voiceTranscript: '',
++      voiceRealtimeVerdict: null,
++      voiceSpeechActive: false,
++      voiceError: null,
++      videoDeepfakeScore: 0,
++      videoLipSyncMeasured: false,
+       alerts: [],
+       logs: [
+         { timestamp: timestamp(), message: 'SISTEMA: Motor NADA v2 iniciado.', type: 'system' },
+@@ -242,6 +268,13 @@ export const useNadaStore = create<NadaState & NadaActions>()(
+         get().addLog('SESION: Reset de analisis.', 'system');
+       },
+ 
++      setVoiceTranscript: (text) => set({ voiceTranscript: text }),
++      setVoiceRealtimeVerdict: (v) => set({ voiceRealtimeVerdict: v }),
++      setVoiceSpeechActive: (active) => set({ voiceSpeechActive: active }),
++      setVoiceError: (message) => set({ voiceError: message }),
++      resetVoiceSession: () => set({ voiceTranscript: '', voiceRealtimeVerdict: null, voiceSpeechActive: false, voiceError: null }),
++      setVideoStatus: (score, lipSyncMeasured) => set({ videoDeepfakeScore: score, videoLipSyncMeasured: lipSyncMeasured }),
++
+       recordDailyScan: (isThreat) => {
+         set((s) => {
+           const today = todayKey();
+diff --git a/src/utils/translations.ts b/src/utils/translations.ts
+index 04ad6fe..89847cc 100644
+--- a/src/utils/translations.ts
++++ b/src/utils/translations.ts
+@@ -70,6 +70,7 @@ export interface TranslationSet {
+   // Voice
+   liveAnalysis: string;
+   fragments: string;
++  voiceHearingYou: string;
+   suspiciousPattern: string;
+   transcript: string;
+   voiceShieldDesc: string;
+@@ -144,6 +145,7 @@ const es: TranslationSet = {
+   extractedText: 'Texto extraido:',
+   liveAnalysis: 'Analisis en vivo',
+   fragments: 'fragmentos',
++  voiceHearingYou: 'Te estamos escuchando ahora',
+   suspiciousPattern: 'Patron sospechoso detectado',
+   transcript: 'Transcripcion:',
+   voiceShieldDesc: 'Toca para escuchar tu llamada y detectar estafas en vivo',
+@@ -217,6 +219,7 @@ const en: TranslationSet = {
+   extractedText: 'Extracted text:',
+   liveAnalysis: 'Live analysis',
+   fragments: 'fragments',
++  voiceHearingYou: 'We are hearing you right now',
+   suspiciousPattern: 'Suspicious pattern detected',
+   transcript: 'Transcript:',
+   voiceShieldDesc: 'Tap to listen to your call and detect scams in real time',
+-- 
+2.43.0
+
