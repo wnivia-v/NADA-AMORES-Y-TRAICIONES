@@ -81,6 +81,11 @@ interface NadaState {
   // exactamente lo mismo en vez de mantener cada uno su propia copia local
   // (eso era lo que producia el desincronizado "parece que escucha pero no").
   voiceTranscript: string;
+  /** Not-yet-final words from the recognizer — shown live so the transcript
+   *  panel proves it is listening instead of sitting blank until a full
+   *  sentence finalizes (which can take many seconds, or never, depending on
+   *  the recognizer's own end-of-speech detection). Never analyzed on its own. */
+  voiceInterim: string;
   voiceRealtimeVerdict: ScamAnalysis | null;
   voiceSpeechActive: boolean;
   /** Set when the recognizer actually dies (permission denied, no mic, unsupported browser). */
@@ -112,6 +117,7 @@ interface NadaActions {
   resetSession: () => void;
   recordDailyScan: (isThreat: boolean) => void;
   setVoiceTranscript: (text: string) => void;
+  setVoiceInterim: (text: string) => void;
   setVoiceRealtimeVerdict: (v: ScamAnalysis | null) => void;
   setVoiceSpeechActive: (active: boolean) => void;
   setVoiceError: (message: string | null) => void;
@@ -169,6 +175,7 @@ export const useNadaStore = create<NadaState & NadaActions>()(
         video: { ...DEFAULT_SHIELD },
       },
       voiceTranscript: '',
+      voiceInterim: '',
       voiceRealtimeVerdict: null,
       voiceSpeechActive: false,
       voiceError: null,
@@ -269,10 +276,11 @@ export const useNadaStore = create<NadaState & NadaActions>()(
       },
 
       setVoiceTranscript: (text) => set({ voiceTranscript: text }),
+      setVoiceInterim: (text) => set({ voiceInterim: text }),
       setVoiceRealtimeVerdict: (v) => set({ voiceRealtimeVerdict: v }),
       setVoiceSpeechActive: (active) => set({ voiceSpeechActive: active }),
       setVoiceError: (message) => set({ voiceError: message }),
-      resetVoiceSession: () => set({ voiceTranscript: '', voiceRealtimeVerdict: null, voiceSpeechActive: false, voiceError: null }),
+      resetVoiceSession: () => set({ voiceTranscript: '', voiceInterim: '', voiceRealtimeVerdict: null, voiceSpeechActive: false, voiceError: null }),
       setVideoStatus: (score, lipSyncMeasured) => set({ videoDeepfakeScore: score, videoLipSyncMeasured: lipSyncMeasured }),
 
       recordDailyScan: (isThreat) => {

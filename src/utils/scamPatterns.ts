@@ -49,6 +49,18 @@ const PATTERNS: { regex: RegExp; category: string; weight: number }[] = [
   // Coercion & threats
   { regex: /(publicar[eé]|difundir[eé]|enviar[eé]).*(fotos|v[ií]deo|[ií]ntim)/i, category: 'Sextorsion', weight: 30 },
   { regex: /(demanda|denuncia|c[aá]rcel|preso).*(no\s*pag|si\s*no)/i, category: 'Amenaza legal falsa', weight: 22 },
+  // Conditional threat generalized beyond legal/sextortion phrasing — the
+  // pay-or-else structure itself is the tactic, regardless of what follows.
+  { regex: /si\s*no\s*(pagas?|colaboras?|env[ií]as?|deposit[aá]s?|obedeces?)/i, category: 'Amenaza condicional (paga o si no)', weight: 25 },
+  { regex: /(te\s*vas?\s*a\s*arrepentir|te\s*va\s*a\s*pesar|vas\s*a\s*pagar\s*por\s*esto|esto\s*no\s*se\s*va\s*a\s*quedar\s*as[ií]|[uú]ltima\s*advertencia|atente\s*a\s*las\s*consecuencias)/i, category: 'Amenaza / coaccion', weight: 22 },
+  { regex: /(sabemos\s*d[oó]nde\s*vives|conocemos\s*tu\s*direcci[oó]n|algo\s*(le|te)\s*va\s*a\s*pasar|tu\s*familia\s*corre\s*peligro)/i, category: 'Amenaza a la seguridad personal', weight: 30 },
+
+  // Aggressive / offensive language — a contributing signal, not a verdict on
+  // its own. Real fraud/extortion calls escalate to insults and intimidation
+  // once the victim hesitates; on its own an insult is not fraud, so the
+  // weight is deliberately too low to reach SOSPECHOSO (>=40) by itself, but
+  // it tips the score when it shows up alongside a money/coercion pattern.
+  { regex: /\b(idiota|imb[eé]cil|est[uú]pid[oa]|maldit[oa]|desgraciad[oa]|infeliz|in[uú]til|basura)\b/i, category: 'Lenguaje agresivo u ofensivo', weight: 10 },
 
   // Data harvesting
   { regex: /verificar?\s*(tu\s*)?(identidad|cuenta|datos)/i, category: 'Phishing de verificacion', weight: 15 },

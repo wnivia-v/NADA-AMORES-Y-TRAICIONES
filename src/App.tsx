@@ -26,7 +26,7 @@ export default function App() {
     activeMode, theme, language, activeTab, setActiveTab,
     alerts, isProtectionActive, shieldStatus,
     addAlert, setAnalysisResult, addLog, updateShieldStatus,
-    setVoiceTranscript, setVoiceRealtimeVerdict, setVoiceSpeechActive, setVoiceError, setVideoStatus,
+    setVoiceTranscript, setVoiceInterim, setVoiceRealtimeVerdict, setVoiceSpeechActive, setVoiceError, setVideoStatus,
   } = useNadaStore();
 
   const t = translations[language];
@@ -48,6 +48,7 @@ export default function App() {
       },
       onLog: (message, type) => addLog(message, type),
       onVoiceTranscript: (text) => setVoiceTranscript(text),
+      onVoiceInterim: (text) => setVoiceInterim(text),
       onVoiceRealtimeVerdict: (result) => setVoiceRealtimeVerdict(result),
       onVoiceSpeechActive: (active) => setVoiceSpeechActive(active),
       onVoiceError: (message) => setVoiceError(message),

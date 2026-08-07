@@ -134,9 +134,11 @@ El corpus vive en `src/data/` porque no es solo material de test: el proveedor l
 
 ## Coste y proveedores
 
-NADA tiene que funcionar sin que nadie pague nada. Prioridad por defecto: `local` (en el dispositivo, sin clave), luego `gemini` (tier gratuito, exige que el proyecto de Firebase siga en plan Spark sin facturación vinculada), luego `groq` (tier gratuito sin tarjeta). `claude` y `bedrock` están desactivados por defecto porque cuestan dinero.
+NADA tiene que funcionar sin que nadie pague nada. Prioridad por defecto: `local` (en el dispositivo, sin clave), luego `groq` (tier gratuito sin tarjeta), luego `gemini` (tier gratuito, exige que el proyecto de Firebase siga en plan Spark sin facturación vinculada). `claude` y `bedrock` están desactivados por defecto porque cuestan dinero. Estrategia por defecto: `race` (dispara todos los proveedores activos y usa el que responda primero); configurable por el usuario en Settings (`STRATEGY_INFO` en `SettingsView.tsx`).
 
 Nunca proponer una solución que exija una cuenta de pago sin decir antes que existe el camino gratuito. Los límites de cuota de cada proveedor están en su definición y los aplica `rateLimiter.ts`: superarlos devuelve 429, que se convierte en un resultado nulo y degrada el veredicto en silencio.
+
+**Sin ninguna clave de nube configurada, la única IA activa es `local`** — un clasificador de embeddings que decide por vecinos-mas-cercanos contra `src/data/scam-corpus.json` y **declina a propósito** (devuelve `null`) cuando la similitud o el consenso del vecindario es bajo (`MIN_SIMILARITY`/`MIN_CONFIDENCE` en `localProvider.ts`, ajustados con un barrido documentado en el propio archivo — no tocar esos numeros sin volver a correr el barrido). Cuando `local` declina, el pipeline cae al escaneo de patrones regex (`scamPatterns.ts`), que es deliberadamente estrecho: solo dispara con frases que calzan casi literalmente. El resultado practico es que frases de extorsion o amenaza dichas con fraseo distinto al de los ejemplos no producen ninguna alerta — no es un bug de "bloqueo", es el diseño sin IA de nube configurada. La palanca real para mejorar el recall en frases arbitrarias es activar `groq` (gratis, sin tarjeta) en `.env.local`, no bajar los umbrales del clasificador local.
 
 ## Límites
 

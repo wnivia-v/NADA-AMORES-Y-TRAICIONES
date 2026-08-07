@@ -59,7 +59,15 @@ export interface ProviderOrchestrationConfig {
  * the user has to deploy themselves.
  */
 export const DEFAULT_PROVIDER_CONFIG: ProviderOrchestrationConfig = {
-  strategy: 'fallback',
+  // 'race' fires every enabled+available provider at once and uses whichever
+  // answers first. With only the free/local provider enabled by default this
+  // behaves exactly like 'fallback' (nothing to race against yet), but the
+  // moment a user adds a free Groq/Gemini key it starts paying off: alerts
+  // land as fast as the quickest provider instead of waiting through a
+  // priority chain. Changeable per-user in Settings — see STRATEGY_INFO in
+  // SettingsView.tsx for 'best-result'/'consensus' when accuracy should
+  // outweigh latency (e.g. a final post-call review, not a live shield).
+  strategy: 'race',
   providers: {
     local: { enabled: true, priority: 1 },  // Primero: siempre disponible, sin red, sin clave
     groq: { enabled: true, priority: 2 },   // Segundo: gratis, rápido, si hay API key

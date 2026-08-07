@@ -20,7 +20,7 @@ export function ConsumerHome() {
   const {
     language, isProtectionActive, setProtectionActive,
     shieldStatus, threatsToday, historyCount, setActiveTab, setActiveMode,
-    voiceTranscript,
+    voiceTranscript, voiceInterim,
   } = useNadaStore();
   const t = translations[language];
   const voiceActive = shieldStatus.voice.active;
@@ -245,13 +245,18 @@ export function ConsumerHome() {
           })}
         </div>
 
-        {/* Voice transcript preview — same global transcript VoiceAnalyzer shows */}
-        {voiceActive && voiceTranscript && (
+        {/* Voice transcript preview — same global transcript VoiceAnalyzer shows,
+            including the live not-yet-final tail so this proves it's listening
+            in real time instead of waiting for a full sentence to commit. */}
+        {voiceActive && (voiceTranscript || voiceInterim) && (
           <div
             className="mt-3 p-3 rounded-xl text-xs leading-relaxed fade-slide-in"
             style={{ background: 'var(--bg-elevated)', color: 'var(--text-secondary)', borderLeft: '2px solid var(--accent)' }}
           >
             {voiceTranscript.slice(-150)}
+            {voiceInterim && (
+              <span style={{ fontStyle: 'italic', opacity: 0.75 }}> {voiceInterim}</span>
+            )}
           </div>
         )}
       </div>

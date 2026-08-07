@@ -13,7 +13,7 @@ import { ResultPanel } from './ResultPanel';
 export function VoiceAnalyzer() {
   const {
     language, analysisResult, shieldStatus,
-    voiceTranscript, voiceRealtimeVerdict, voiceSpeechActive, voiceError,
+    voiceTranscript, voiceInterim, voiceRealtimeVerdict, voiceSpeechActive, voiceError,
   } = useNadaStore();
   const t = translations[language];
   const listening = shieldStatus.voice.active;
@@ -95,12 +95,15 @@ export function VoiceAnalyzer() {
           </div>
         )}
 
-        {voiceTranscript && (
+        {(voiceTranscript || voiceInterim) && (
           <div className="mt-4 p-3 rounded-lg text-left text-sm max-h-32 overflow-y-auto" style={{ background: 'var(--bg-elevated)', color: 'var(--text-primary)' }}>
             <p className="text-xs font-mono mb-1" style={{ color: 'var(--text-muted)' }}>
               {t.transcript}
             </p>
             {voiceTranscript}
+            {voiceInterim && (
+              <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}> {voiceInterim}</span>
+            )}
           </div>
         )}
       </div>
