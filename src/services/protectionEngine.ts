@@ -85,6 +85,11 @@ class ProtectionEngine {
   // enough to look — and be — "oportuno".
   private readonly VOICE_ANALYSIS_COOLDOWN_MS = 3_000;
   private readonly VOICE_MIN_FRAGMENT_LEN = 12;
+  // Throttled log of transient recognizer errors ('no-speech'/'network'/
+  // 'aborted') — see logTransientVoiceError below.
+  private lastTransientErrorCode: string | null = null;
+  private lastTransientErrorLoggedAt = 0;
+  private readonly TRANSIENT_ERROR_LOG_THROTTLE_MS = 3_000;
 
   init(callbacks: EngineCallbacks) {
     this.callbacks = callbacks;
@@ -339,6 +344,8 @@ class ProtectionEngine {
     this.voiceActive = true;
     this.voiceTranscript = '';
     this.lastVoiceAnalyzed = '';
+    this.lastTransientErrorCode = null;
+    this.lastTransientErrorLoggedAt = 0;
     this.callbacks?.onVoiceTranscript('');
     this.callbacks?.onVoiceInterim('');
     this.callbacks?.onVoiceRealtimeVerdict(null);
@@ -430,7 +437,25 @@ class ProtectionEngine {
     }
     // 'no-speech' / 'network' / 'aborted' are transient — speechService's own
     // onend handler restarts the recognizer automatically while running stays
-    // true, so there is nothing to do here besides not treating it as fatal.
+    // true. They used to be swallowed completely here, which meant a session
+    // stuck repeating the same transient error (e.g. 'network' — the browser
+    // failing to reach the speech-recognition backend, not a local mic
+    // problem) looked identical, from the log, to one working fine: nothing
+    // showed up either way. Log it (throttled) so the pattern is visible in
+    // the debug panel instead of invisible until — or unless — it escalates
+    // to the fatal mic-unresponsive threshold.
+    this.logTransientVoiceError(error);
+  }
+
+  private logTransientVoiceError(error: string) {
+    const now = Date.now();
+    const isNewCode = error !== this.lastTransientErrorCode;
+    const throttleElapsed = now - this.lastTransientErrorLoggedAt >= this.TRANSIENT_ERROR_LOG_THROTTLE_MS;
+    if (!isNewCode && !throttleElapsed) return;
+
+    this.lastTransientErrorCode = error;
+    this.lastTransientErrorLoggedAt = now;
+    this.log(`ESCUDO VOZ: error transitorio (${error}) — reintentando...`, 'warning');
   }
 
   private maybeAnalyzeVoiceFragment(text: string) {
