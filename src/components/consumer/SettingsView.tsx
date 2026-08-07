@@ -240,9 +240,6 @@ export function SettingsView() {
         <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>
           NADA Amores y Traiciones v2.0.0
         </p>
-        <p className="text-[10px] mt-1" style={{ color: 'var(--text-muted)' }}>
-          Hackaton Kiro — 23 Julio 2026
-        </p>
         <p className="text-[9px] mt-1" style={{ color: 'var(--text-muted)' }}>
           Multi-AI: Gemini + Claude + AWS Bedrock
         </p>

@@ -12,3 +12,18 @@ release-pkg/
 # Compiled Electron output (generated from electron/*.cts)
 electron/*.cjs
 *.tsbuildinfo
+
+# Android (Capacitor) — machine-specific / generated, never commit
+android/local.properties
+android/.gradle/
+android/app/build/
+android/build/
+android/capacitor-cordova-android-plugins/build/
+android/**/*.keystore
+android/**/*.jks
+*.apk
+*.aab
+# Synced copy of dist/ — same reasoning as gitignoring dist/ itself.
+# Regenerate with `npm run android:sync` before opening in Android Studio.
+android/app/src/main/assets/public/
+android/app/src/main/assets/capacitor.config.json

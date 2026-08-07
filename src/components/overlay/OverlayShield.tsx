@@ -15,8 +15,8 @@ interface OverlayStatus {
 }
 
 const VERDICT_COLOR: Record<string, string> = {
-  SOSPECHOSO: '#ffaa00',
-  PELIGROSO: '#ff4646',
+  SOSPECHOSO: '#FFC53D',
+  PELIGROSO: '#FF4D6D',
 };
 
 const DEFAULT_STATUS: OverlayStatus = { active: true, scanning: false, verdict: null };
@@ -30,7 +30,7 @@ export function OverlayShield() {
   }, []);
 
   const alertColor = status.verdict && status.verdict !== 'SEGURO' ? VERDICT_COLOR[status.verdict] : null;
-  const color = alertColor ?? '#7c5cff';
+  const color = alertColor ?? '#22D3EE';
   const pulsing = Boolean(alertColor) || status.scanning;
 
   return (
@@ -46,7 +46,7 @@ export function OverlayShield() {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        background: 'rgba(10,14,23,0.88)',
+        background: 'rgba(6,8,16,0.90)',
         borderRadius: '50%',
         border: `2px solid ${color}`,
         boxShadow: `0 0 ${pulsing ? '18px' : '8px'} ${color}`,

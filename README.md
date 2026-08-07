@@ -1,7 +1,7 @@
 # NADA — Amores y Traiciones v2
 
 > Deteccion de fraude en tiempo real con IA multi-proveedor.  
-> Hackaton Kiro — 23 Julio 2026 | Equipo Antigravity
+> Equipo Antigravity
 
 ## Que es NADA?
 
@@ -76,7 +76,7 @@ NADA es una aplicacion de proteccion contra estafas, fraudes romanticos y manipu
 ```bash
 # 1. Clonar e instalar
 git clone <repo-url>
-cd nada-amores-y-traiciones-kiro
+cd nada-amores-y-traiciones
 npm install
 
 # 2. Configurar variables de entorno
@@ -214,7 +214,8 @@ electron/
 scripts/
 └── generate-icon.mjs   # Rasteriza el icono a PNG sin dependencias
 build/                  # Recursos de electron-builder (icon.png)
-.kiro/
+android/                # Proyecto nativo Android (Capacitor)
+docs/dev/
 ├── agents/             # Agentes especializados (verify, cso, detector, ...)
 ├── hooks/              # Guard de infra viva, guard de cambios en deteccion
 └── steering/           # Contexto y estandares del proyecto
@@ -247,4 +248,4 @@ Regla del proyecto: ningun cambio en patrones, pesos o corpus sin un antes/despu
 
 ## Licencia
 
-Proyecto para Hackaton Kiro 2026. Equipo Antigravity.
+Equipo Antigravity.

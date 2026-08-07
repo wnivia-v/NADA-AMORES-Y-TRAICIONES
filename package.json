@@ -1,11 +1,11 @@
 {
-  "name": "nada-amores-y-traiciones-kiro",
+  "name": "nada-amores-y-traiciones",
   "private": true,
   "version": "2.0.0",
   "type": "module",
   "main": "electron/main.cjs",
-  "author": "Antigravity — Hackaton Kiro 2026",
-  "description": "NADA Amores y Traiciones v2 — Deteccion de Fraude en Tiempo Real con IA (Hackaton Kiro, 23 Julio 2026)",
+  "author": "Antigravity",
+  "description": "NADA Amores y Traiciones v2 — Deteccion de Fraude en Tiempo Real con IA",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
@@ -16,7 +16,9 @@
     "icon": "node scripts/generate-icon.mjs",
     "electron:dev": "npm run icon && tsc -p tsconfig.electron.json && concurrently -k \"vite\" \"wait-on http://127.0.0.1:5173 && electron .\"",
     "electron:build": "npm run icon && tsc -p tsconfig.electron.json && tsc -b && vite build && electron-builder --win --x64",
-    "electron:preview": "npm run icon && tsc -p tsconfig.electron.json && tsc -b && vite build && electron ."
+    "electron:preview": "npm run icon && tsc -p tsconfig.electron.json && tsc -b && vite build && electron .",
+    "android:sync": "npm run build && npx cap sync android",
+    "android:open": "npx cap open android"
   },
   "build": {
     "appId": "com.antigravity.nada",
@@ -56,6 +58,9 @@
     }
   },
   "dependencies": {
+    "@capacitor/android": "^8.5.0",
+    "@capacitor/cli": "^8.5.0",
+    "@capacitor/core": "^8.5.0",
     "@huggingface/transformers": "^3.7.6",
     "@mediapipe/tasks-vision": "^0.10.14",
     "@tensorflow/tfjs": "^4.22.0",

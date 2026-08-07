@@ -15,7 +15,23 @@ interface LocalScanResult {
   matches: PatternMatch[];
 }
 
-const PATTERNS: { regex: RegExp; category: string; weight: number }[] = [
+interface PatternDef {
+  regex: RegExp;
+  category: string;
+  weight: number;
+  /**
+   * When true, weight scales with how many distinct times the pattern
+   * matches in the text (capped by repeatCap), instead of a flat one-time
+   * hit. A single insult in an otherwise normal message is not harassment;
+   * five of them in a row is a real pattern of abuse and should score like
+   * one — this is what makes that distinction instead of collapsing both
+   * cases to the same fixed weight.
+   */
+  repeatable?: boolean;
+  repeatCap?: number;
+}
+
+const PATTERNS: PatternDef[] = [
   // Financial fraud
   { regex: /transfiere?\s*(a|al|ahora|ya|urgente)/i, category: 'Transferencia urgente', weight: 20 },
   { regex: /env[ií]\w*\s*(dinero|plata|pago|transferencia|lana)/i, category: 'Solicitud de dinero', weight: 25 },
@@ -49,6 +65,37 @@ const PATTERNS: { regex: RegExp; category: string; weight: number }[] = [
   // Coercion & threats
   { regex: /(publicar[eé]|difundir[eé]|enviar[eé]).*(fotos|v[ií]deo|[ií]ntim)/i, category: 'Sextorsion', weight: 30 },
   { regex: /(demanda|denuncia|c[aá]rcel|preso).*(no\s*pag|si\s*no)/i, category: 'Amenaza legal falsa', weight: 22 },
+  // Conditional threat generalized beyond legal/sextortion phrasing — the
+  // pay-or-else structure itself is the tactic, regardless of what follows.
+  { regex: /si\s*no\s*(pagas?|colaboras?|env[ií]as?|deposit[aá]s?|obedeces?)/i, category: 'Amenaza condicional (paga o si no)', weight: 25 },
+  { regex: /(te\s*vas?\s*a\s*arrepentir|te\s*va\s*a\s*pesar|vas\s*a\s*pagar\s*por\s*esto|esto\s*no\s*se\s*va\s*a\s*quedar\s*as[ií]|[uú]ltima\s*advertencia|atente\s*a\s*las\s*consecuencias)/i, category: 'Amenaza / coaccion', weight: 22 },
+  { regex: /(sabemos\s*d[oó]nde\s*vives|conocemos\s*tu\s*direcci[oó]n|algo\s*(le|te)\s*va\s*a\s*pasar|tu\s*familia\s*corre\s*peligro)/i, category: 'Amenaza a la seguridad personal', weight: 30 },
+
+  // Bullying / harassment — this app's own vision doc calls out acoso, not
+  // just financial fraud, and a message can be purely abusive with zero
+  // scam/money signals (a real example: a string of insults and "vete a la
+  // mierda" scored 0/100 before this, because nothing else in it looked like
+  // fraud). `repeatable` is what makes this work: one insult in an otherwise
+  // normal message is not harassment and must stay low, but five insults in
+  // a row is unambiguous, so the weight scales with how many distinct hits
+  // land instead of being flat either way.
+  {
+    regex: /\b(idiota|imb[eé]cil|est[uú]pid[oa]|maldit[oa]|desgraciad[oa]|infeliz|in[uú]til|basura|perra|cerda|zorra|puta|fea|asquerosa|mal\s*educad[oa])\b/i,
+    category: 'Lenguaje agresivo u ofensivo',
+    weight: 12,
+    repeatable: true,
+    repeatCap: 4,
+  },
+  // Severe: explicit rejection/incitement phrasing, not just name-calling —
+  // weighted and capped separately so it does not get diluted by averaging
+  // against the milder bucket above.
+  {
+    regex: /(p[uú]drete|vete\s*a\s*la\s*mierda|nadie\s*te\s*quiere|ojal[aá]\s*te\s*mueras|das\s*asco|das\s*pena|no\s*vales\s*nada)/i,
+    category: 'Acoso / hostigamiento severo',
+    weight: 20,
+    repeatable: true,
+    repeatCap: 3,
+  },
 
   // Data harvesting
   { regex: /verificar?\s*(tu\s*)?(identidad|cuenta|datos)/i, category: 'Phishing de verificacion', weight: 15 },
@@ -60,12 +107,26 @@ const PATTERNS: { regex: RegExp; category: string; weight: number }[] = [
   { regex: /comisi[oó]n\s*(por\s*)?(adelantado|antes)/i, category: 'Pago anticipado fraude', weight: 20 },
 ];
 
+/** Count of distinct, non-overlapping matches for a pattern in the text. */
+function countMatches(regex: RegExp, text: string): number {
+  const flags = regex.flags.includes('g') ? regex.flags : `${regex.flags}g`;
+  const global = new RegExp(regex.source, flags);
+  return (text.match(global) ?? []).length;
+}
+
 export function scanLocalPatterns(text: string): LocalScanResult {
   const matches: PatternMatch[] = [];
   let totalWeight = 0;
 
-  for (const { regex, category, weight } of PATTERNS) {
-    if (regex.test(text)) {
+  for (const { regex, category, weight, repeatable, repeatCap } of PATTERNS) {
+    if (repeatable) {
+      const count = countMatches(regex, text);
+      if (count === 0) continue;
+      const effectiveCount = Math.min(count, repeatCap ?? count);
+      const matchWeight = weight * effectiveCount;
+      matches.push({ category, pattern: regex.source, weight: matchWeight });
+      totalWeight += matchWeight;
+    } else if (regex.test(text)) {
       matches.push({ category, pattern: regex.source, weight });
       totalWeight += weight;
     }

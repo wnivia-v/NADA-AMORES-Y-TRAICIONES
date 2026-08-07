@@ -34,11 +34,21 @@ const MOUTH_RIGHT = 291;
 // matching the 3s window used elsewhere for the deepfake heuristics.
 const SYNC_SAMPLE_LIMIT = 90;
 
+// A real person blinks roughly 15-20 times/minute (~1 every 3-4s). blinkRate
+// is a 60s rolling window measured from the moment analysis starts, so for
+// the first stretch of ANY session — including a genuine, live human face —
+// there simply hasn't been enough time to accumulate a normal number of
+// blinks yet. Scoring that as "suspiciously low blink rate" was a systematic
+// false-positive on real people at the start of every single session, which
+// is exactly when a demo or a first-time user is watching closely.
+const BLINK_WARMUP_MS = 20_000;
+
 class VisionService {
   private landmarker: any = null;
   private blinkHistory: number[] = [];
   private frameCount = 0;
   private lastLandmarks: any = null;
+  private sessionStartedAt: number | null = null;
 
   // Lip-sync: audio graph attached separately from the video stream, since
   // the caller may be capturing a call window (getDisplayMedia) or its own
@@ -125,6 +135,7 @@ class VisionService {
 
       const landmarks = results.faceLandmarks[0];
       this.frameCount++;
+      if (this.sessionStartedAt === null) this.sessionStartedAt = Date.now();
 
       // Calculate EAR (Eye Aspect Ratio)
       const earLeft = this.calculateEAR(landmarks, 'left');
@@ -170,13 +181,18 @@ class VisionService {
       const lipSyncNote = lipSyncMeasured
         ? `, sincronia labial ${lipSyncScore < 0.55 ? 'desincronizada' : 'normal'}`
         : ', sincronia labial sin verificar (sin audio)';
+      // Only mention blink rate when it actually counted toward the verdict —
+      // during warm-up it is measured but ignored, and naming it in the
+      // explanation would misattribute a jitter/lip-sync-only detection to a
+      // signal that had zero weight in it.
+      const blinkNote = this.blinkRateReady() ? `parpadeo ${blinkRate < 5 ? 'muy bajo' : 'irregular'}, ` : '';
 
       return {
         isLikelyDeepfake,
         confidence,
         signals,
         explanation: isLikelyDeepfake
-          ? `Anomalias biometricas: parpadeo ${blinkRate < 5 ? 'muy bajo' : 'irregular'}, jitter ${jitterScore > 0.5 ? 'alto' : 'medio'}${lipSyncNote}`
+          ? `Anomalias biometricas: ${blinkNote}jitter ${jitterScore > 0.5 ? 'alto' : 'medio'}${lipSyncNote}`
           : `Patrones biometricos normales${lipSyncNote}.`,
       };
     } catch {
@@ -253,9 +269,14 @@ class VisionService {
     return Math.min(1, totalDiff / samplePoints.length * 50);
   }
 
+  /** True once enough time has passed for a real blink RATE (not just a raw count) to be meaningful. */
+  private blinkRateReady(): boolean {
+    return this.sessionStartedAt !== null && Date.now() - this.sessionStartedAt >= BLINK_WARMUP_MS;
+  }
+
   private evaluateDeepfake(signals: BiometricSignals): boolean {
     let score = 0;
-    if (signals.blinkRate < 5 || signals.blinkRate > 40) score += 2;
+    if (this.blinkRateReady() && (signals.blinkRate < 5 || signals.blinkRate > 40)) score += 2;
     if (signals.jitterScore > 0.5) score += 2;
     // Only counts as evidence when we actually had audio to compare against —
     // an unmeasured lip-sync must never push the verdict toward "deepfake".
@@ -266,8 +287,10 @@ class VisionService {
 
   private calculateConfidence(signals: BiometricSignals): number {
     let confidence = 0;
-    if (signals.blinkRate < 5) confidence += 25;
-    if (signals.blinkRate > 40) confidence += 20;
+    if (this.blinkRateReady()) {
+      if (signals.blinkRate < 5) confidence += 25;
+      if (signals.blinkRate > 40) confidence += 20;
+    }
     if (signals.jitterScore > 0.5) confidence += 30;
     if (signals.lipSyncMeasured && signals.lipSyncScore < 0.55) confidence += 25;
     return Math.min(100, confidence);
@@ -278,6 +301,7 @@ class VisionService {
     this.landmarker = null;
     this.blinkHistory = [];
     this.lastLandmarks = null;
+    this.sessionStartedAt = null;
     this.detachAudio();
   }
 }

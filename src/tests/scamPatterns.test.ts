@@ -78,6 +78,53 @@ describe('scanLocalPatterns', () => {
     });
   });
 
+  describe('coercion and threats — generalized (not tied to sextortion/legal wording)', () => {
+    it('detects a generic pay-or-else conditional threat', () => {
+      const result = scanLocalPatterns('Escuchame bien, si no colaboras vas a tener problemas graves');
+      expect(result.riskScore).toBeGreaterThan(0);
+      expect(result.tactics).toContain('Amenaza condicional (paga o si no)');
+    });
+
+    it('detects intimidation phrasing without a specific threat type', () => {
+      const result = scanLocalPatterns('Ultima advertencia, te vas a arrepentir de esto');
+      expect(result.tactics).toContain('Amenaza / coaccion');
+    });
+
+    it('detects threats to personal safety', () => {
+      const result = scanLocalPatterns('Sabemos donde vives, algo te va a pasar si no haces lo que decimos');
+      expect(result.riskScore).toBeGreaterThanOrEqual(30);
+      expect(result.tactics).toContain('Amenaza a la seguridad personal');
+    });
+
+    it('flags offensive language as a low-weight contributing signal, not a verdict on its own', () => {
+      const insultOnly = scanLocalPatterns('Eres un idiota, ya no quiero hablar contigo');
+      expect(insultOnly.riskScore).toBeLessThan(40);
+      expect(insultOnly.tactics).toContain('Lenguaje agresivo u ofensivo');
+
+      // The same insult alongside a coercion pattern should push the combined
+      // score into SOSPECHOSO territory instead of being diluted.
+      const insultPlusThreat = scanLocalPatterns('Idiota, si no pagas vas a tener problemas');
+      expect(insultPlusThreat.riskScore).toBeGreaterThanOrEqual(40);
+    });
+
+    it('flags a real bullying message with no financial signal as dangerous, not safe', () => {
+      // A real screenshot that used to score 0/100: pure insults and rejection,
+      // zero money/urgency/impersonation content — this app is supposed to
+      // catch acoso/bullying, not just financial scams.
+      const text = 'Cerda Te gusta el mal trato eso las matan Bye Pudrete Cerda Perra Mal educada';
+      const result = scanLocalPatterns(text);
+      expect(result.riskScore).toBeGreaterThanOrEqual(40);
+      expect(result.tactics).toContain('Lenguaje agresivo u ofensivo');
+      expect(result.tactics).toContain('Acoso / hostigamiento severo');
+    });
+
+    it('scales harassment weight with repetition, up to a cap', () => {
+      const one = scanLocalPatterns('idiota');
+      const many = scanLocalPatterns('idiota perra cerda zorra puta fea asquerosa');
+      expect(many.riskScore).toBeGreaterThan(one.riskScore);
+    });
+  });
+
   describe('impersonation', () => {
     it('detects entity impersonation', () => {
       const result = scanLocalPatterns('El banco te contacta para verificar tu identidad inmediatamente');

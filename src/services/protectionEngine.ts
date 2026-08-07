@@ -1,6 +1,6 @@
 import { analyzeText, analyzeVoiceFragment, cancelAnalysis, isAnalysisAborted } from './geminiService';
 import { extractTextFromCanvas, extractTextFromImage } from './ocrService';
-import { speechService } from './speechService';
+import { speechRecognitionService as speechService } from './speechRecognitionService';
 import { playAlertTone } from '@/utils/audioAlert';
 import { notificationService } from './notificationService';
 import type { ScamAnalysis, ShieldId, Verdict } from '@/store/useNadaStore';
@@ -21,6 +21,8 @@ interface EngineCallbacks {
   onNotification: (title: string, body: string) => void;
   onLog: (message: string, type: 'info' | 'success' | 'warning' | 'error' | 'system') => void;
   onVoiceTranscript: (text: string) => void;
+  /** Live, not-yet-final words — see the field doc on voiceInterim in the store. */
+  onVoiceInterim: (text: string) => void;
   onVoiceRealtimeVerdict: (result: ScamAnalysis | null) => void;
   onVoiceSpeechActive: (active: boolean) => void;
   /** null clears the error banner — called on every successful (re)start. */
@@ -76,7 +78,12 @@ class ProtectionEngine {
   private voiceTranscript = '';
   private lastVoiceAnalyzed = '';
   private lastVoiceAnalysisAt = 0;
-  private readonly VOICE_ANALYSIS_COOLDOWN_MS = 6_000;
+  // 6s was tuned purely for API-quota safety, not for how a live demo reads —
+  // a real extortion phrase sitting on screen for 6s with no reaction looks
+  // like the shield is doing nothing. 3s keeps quota usage sane (still well
+  // under the ~15 req/min free tier this app budgets for) while reacting fast
+  // enough to look — and be — "oportuno".
+  private readonly VOICE_ANALYSIS_COOLDOWN_MS = 3_000;
   private readonly VOICE_MIN_FRAGMENT_LEN = 12;
 
   init(callbacks: EngineCallbacks) {
@@ -322,7 +329,7 @@ class ProtectionEngine {
     if (this.voiceActive) return;
 
     if (!speechService.isSupported()) {
-      const msg = '❌ Este navegador no soporta reconocimiento de voz. Usa Chrome o Edge.';
+      const msg = '❌ Reconocimiento de voz no disponible en este dispositivo. En el navegador usa Chrome o Edge.';
       this.log(`ESCUDO VOZ: ${msg}`, 'error');
       this.callbacks?.onShieldStatusChange('voice', { active: false, scanning: false });
       this.callbacks?.onVoiceError(msg);
@@ -333,6 +340,7 @@ class ProtectionEngine {
     this.voiceTranscript = '';
     this.lastVoiceAnalyzed = '';
     this.callbacks?.onVoiceTranscript('');
+    this.callbacks?.onVoiceInterim('');
     this.callbacks?.onVoiceRealtimeVerdict(null);
     this.callbacks?.onVoiceError(null);
 
@@ -340,10 +348,21 @@ class ProtectionEngine {
 
     speechService.start(
       (text, isFinal) => {
-        if (!isFinal) return;
-        this.voiceTranscript = `${this.voiceTranscript} ${text}`.trim();
-        this.callbacks?.onVoiceTranscript(this.voiceTranscript);
-        this.maybeAnalyzeVoiceFragment();
+        if (isFinal) {
+          this.voiceTranscript = `${this.voiceTranscript} ${text}`.trim();
+          this.callbacks?.onVoiceTranscript(this.voiceTranscript);
+          this.callbacks?.onVoiceInterim('');
+          this.maybeAnalyzeVoiceFragment(this.voiceTranscript);
+          return;
+        }
+        // Not-final yet — show it immediately instead of leaving the panel
+        // blank. Some recognizers take many seconds (or, mid-playback of a
+        // recording with no clean silence gap, never) to mark a result final,
+        // which is what made the shield look like it wasn't listening at all.
+        // Also feed it into analysis: waiting for "final" to react is not
+        // "oportuno" when a threat phrase is mid-sentence.
+        this.callbacks?.onVoiceInterim(text);
+        this.maybeAnalyzeVoiceFragment(`${this.voiceTranscript} ${text}`.trim());
       },
       lang,
       (error) => this.handleVoiceError(error),
@@ -401,7 +420,7 @@ class ProtectionEngine {
         'audio-capture': '❌ No se detecto ningun microfono conectado.',
         'service-not-allowed': '❌ El navegador bloqueo el reconocimiento de voz.',
         'start-failed': '❌ No se pudo iniciar el reconocimiento de voz. Intenta de nuevo.',
-        'not-supported': '❌ Este navegador no soporta reconocimiento de voz. Usa Chrome o Edge.',
+        'not-supported': '❌ Reconocimiento de voz no disponible en este dispositivo. En el navegador usa Chrome o Edge.',
       };
       const msg = messages[error] ?? '❌ El escudo de voz se detuvo por un error.';
       this.callbacks?.onVoiceError(msg);
@@ -413,8 +432,7 @@ class ProtectionEngine {
     // true, so there is nothing to do here besides not treating it as fatal.
   }
 
-  private maybeAnalyzeVoiceFragment() {
-    const text = this.voiceTranscript;
+  private maybeAnalyzeVoiceFragment(text: string) {
     if (text.length < this.VOICE_MIN_FRAGMENT_LEN || text === this.lastVoiceAnalyzed) return;
 
     const now = Date.now();
