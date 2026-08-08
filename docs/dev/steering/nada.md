@@ -84,20 +84,31 @@ Un `BrowserWindow` sin marco, transparente y `alwaysOnTop`, creado en `electron/
 
 **Lo que funciona igual que en web/PWA sin tocar nada**: TextAnalyzer, ImageAnalyzer (OCR), clipboard shield, notificaciones locales del sistema (con matices, ver abajo), y el modo "Mi camara" de CameraAnalyzer (usa `getUserMedia`, que el WebView de Android sí soporta con el permiso `CAMERA`/`RECORD_AUDIO` ya declarado en el manifest).
 
-**Escudo de voz — tres motores detrás de una fachada.** `protectionEngine.ts` no elige motor: llama a `speechRecognitionService.ts`, que decide en runtime. Todos exponen la misma forma (`start`/`stop`/`isSupported`/`isRunning`) y emiten transcript, actividad de habla y errores igual, así que el motor no se filtra al resto de la app.
+**Escudo de voz — `src/services/voice/`, reescrito de cero.** Todo lo de voz vive ahí y nada más lo toca: `protectionEngine.ts` sólo llama a `voiceRecognition.start()/stop()` y recibe transcript, actividad de habla y errores. Qué motor corre y cuándo se cambia es decisión exclusiva del orquestador (`voice/index.ts`).
 
-- **Android → `nativeSpeechService.ts`** (bridge al plugin Capacitor propio `android/app/src/main/java/com/antigravity/nada/SpeechRecognitionPlugin.java`, sobre `android.speech.SpeechRecognizer`). La Web Speech API no existe en el WebView de Android. El plugin simula escucha continua reiniciando el reconocedor tras cada resultado/error transitorio. Sin probar en dispositivo real todavía (este entorno no tiene SDK de Android).
-- **Web/Electron → `localSpeechService.ts`** (Whisper en el dispositivo vía Transformers.js). **Este es el default y no es un capricho:** la Web Speech API *no reconoce nada localmente*, hace streaming del micrófono a los servidores de Google. En una red con VPN, firewall corporativo, red de invitados o un bloqueador de privacidad, falla con error `network` y el escudo queda muerto — observado en producción (Amplify, red del usuario), no hipotético. Una herramienta de protección que deja de proteger en una red restringida no protege a nadie, así que el default es el motor que nadie puede bloquear.
-- **`speechService.ts` (Web Speech API) queda como fallback**, sólo si el modelo local no carga (`model-load-failed`). Es genuinamente más rápido cuando la red lo permite, así que vale la pena conservarlo — pero ya no es la primera opción.
+Archivos: `types.ts` (contrato + tabla de idiomas), `webSpeechEngine.ts`, `whisperEngine.ts`, `nativeEngine.ts`, `index.ts` (orquestador).
 
-Detalles de `localSpeechService.ts` que no hay que re-deducir:
+**Orden de motores** — medido, no elegido por gusto:
 
-- Whisper exige **float32 mono a 16kHz**. Se pide `AudioContext({ sampleRate: 16000 })` pero el navegador puede ignorarlo y devolver el rate del hardware (Safari lo hace), por eso hay `resampleTo16k()`. Alimentar a Whisper con el rate equivocado **no da error**: transcribe gibberish con total confianza. Por eso está exportada y testeada.
-- Transcribe en **bloques de 4s**, no palabra por palabra. Es un trade-off aceptado: menos bloques = más latencia pero mejor precisión (Whisper necesita contexto).
-- Los bloques por debajo de `SILENCE_RMS` se **descartan sin transcribir**. No es sólo ahorro de CPU: Whisper alucina texto de relleno ("Gracias por ver el video") sobre silencio.
-- Se filtran las salidas entre corchetes/paréntesis (`[Música]`) — son marcadores de no-habla, nunca cosas que el usuario dijo.
-- Usa `ScriptProcessorNode`, deprecado a favor de `AudioWorklet`. Es deliberado: sólo copia samples (cero DSP en el hilo de audio) y evita cargar un módulo aparte que tendría que satisfacer el CSP de esta app. Migrar no compraría nada hoy.
-- Modelo `Xenova/whisper-tiny` (no `base`) a propósito: esto alimenta un escudo **en vivo**, y una alerta que llega tarde vale menos que una mejor redactada.
+- **Navegador/Electron: Web Speech → Whisper local.** La Web Speech API es rápida, precisa y multilenguaje, y es lo que funcionaba bien al principio del proyecto. Su única falla real es no poder alcanzar el backend de Google (VPN/firewall/bloqueador), que ahora detecta en ~3 errores seguidos (3-5s) en vez de ~27s, y ahí entra Whisper.
+- **Android APK: nativo → Whisper local.** No hay Web Speech API en un WebView. El reconocedor nativo es rápido y no descarga nada, así que Whisper es la red de seguridad, no el default.
+
+**Whisper es fallback, no default, y eso es a propósito.** Un modelo tiny cuantizado en el CPU de un teléfono es más lento y menos preciso que ambas alternativas — probado en móvil: transcribía tarde y con texto sin sentido. Es el piso que siempre funciona, no una mejora.
+
+**Sólo se cae al siguiente motor con `engine-unavailable`.** `not-allowed` y `no-microphone` fallarían igual en todos, así que reintentar sólo dispararía otro pedido de permiso al usuario para nada (`isEngineIndependentFailure`).
+
+Detalles de `whisperEngine.ts` que no hay que re-deducir:
+
+- **Corta en los silencios, no cada N segundos.** La versión anterior cortaba en bloques fijos de 4s y ésa era la causa principal del texto sin sentido: un timer fijo parte las palabras al medio y Whisper —entrenado con frases completas, y que siempre emite *algo*— inventa texto plausible para tapar el corte. Ahora acumula mientras hay voz y cierra la frase tras ~700ms de silencio (`SILENCE_HANG_MS`). Misma calidad de modelo, salida mucho mejor, y menos latencia percibida: una frase corta se transcribe apenas el hablante pausa.
+- **Hay pre-roll de 300ms** (`PRE_ROLL_MS`). La detección por nivel necesariamente dispara *después* de que empezó el sonido; sin esto se recorta el ataque de la primera palabra, justo donde arrancan las frases de estafa ("mandame...", "si no pagas...").
+- Whisper exige **float32 mono a 16kHz**. Se pide `AudioContext({ sampleRate: 16000 })` pero el navegador puede devolver el rate del hardware (Safari lo hace), por eso existe `resampleTo16k()`. Alimentarlo con el rate equivocado **no da error**: transcribe gibberish con total confianza. Por eso está exportada y testeada.
+- `isLikelyHallucination()` filtra marcadores de no-habla (`[Música]`) y el relleno que Whisper inventa sobre casi-silencio ("Gracias por ver el video", "Subtítulos realizados por..."). El regex está anclado a toda la cadena a propósito: una frase real que *contenga* corchetes no debe descartarse.
+- **Modelo según hardware**: `whisper-base` con WebGPU (más preciso y ahí sí alcanza), `whisper-tiny` en WASM. Una alerta que llega tarde no protege a nadie.
+- Usa `ScriptProcessorNode`, deprecado a favor de `AudioWorklet`. Deliberado: sólo copia samples (cero DSP en el hilo de audio) y evita cargar un módulo aparte que tendría que satisfacer el CSP de esta app.
+
+**Multilenguaje**: la tabla `LANGUAGES` en `voice/types.ts` es la única fuente — cada idioma define su tag BCP-47 (Web Speech y Android) y su nombre en inglés (Whisper). Agregar uno es una línea ahí. `toVoiceLanguage()` acepta cualquier cosa y nunca lanza: no puede ser lo que tire abajo el escudo.
+
+**Los patrones se evalúan sobre texto normalizado** (`normalizeForMatching` en `scamPatterns.ts`): sin acentos, en minúsculas, espacios colapsados. La transcripción automática omite acentos de forma inconsistente y un usuario apurado también — un acento faltante sería la peor razón posible para no detectar una amenaza.
 
 **Lo que NO funciona sin un plugin nativo nuevo** — no asumir que "ya está" solo porque compila:
 

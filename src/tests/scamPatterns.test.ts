@@ -1,5 +1,35 @@
 import { describe, it, expect } from 'vitest';
-import { scanLocalPatterns } from '@/utils/scamPatterns';
+import { scanLocalPatterns, normalizeForMatching } from '@/utils/scamPatterns';
+
+/**
+ * Speech-to-text output is never clean, and neither is text typed in a hurry.
+ * A threat must not slip through because an accent was dropped or the casing
+ * differed — that would be the worst possible reason to miss a fraud attempt.
+ */
+describe('resilience to messy transcription', () => {
+  it('normalizes accents, casing and stray whitespace', () => {
+    expect(normalizeForMatching('MÁNDAME   la Plata')).toBe('mandame la plata');
+  });
+
+  it('detects the same threat with and without accents', () => {
+    const withAccents = scanLocalPatterns('Necesito que me envíes dinero urgente');
+    const without = scanLocalPatterns('Necesito que me envies dinero urgente');
+
+    expect(without.riskScore).toBe(withAccents.riskScore);
+    expect(without.riskScore).toBeGreaterThan(0);
+  });
+
+  it('detects a threat shouted in caps the same as in lowercase', () => {
+    const shouted = scanLocalPatterns('SI NO PAGAS VOY A PUBLICAR TUS FOTOS INTIMAS');
+    expect(shouted.riskScore).toBeGreaterThan(0);
+    expect(shouted.tactics).toContain('Amenaza condicional (paga o si no)');
+  });
+
+  it('survives the run-on spacing a recognizer produces', () => {
+    const spaced = scanLocalPatterns('publicare   tus    fotos  intimas   si no pagas');
+    expect(spaced.tactics).toContain('Sextorsion');
+  });
+});
 
 describe('scanLocalPatterns', () => {
   describe('safe messages', () => {

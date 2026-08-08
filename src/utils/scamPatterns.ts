@@ -107,6 +107,30 @@ const PATTERNS: PatternDef[] = [
   { regex: /comisi[oó]n\s*(por\s*)?(adelantado|antes)/i, category: 'Pago anticipado fraude', weight: 20 },
 ];
 
+/**
+ * Flattens the text so patterns match how something was SAID, not how it was
+ * spelled.
+ *
+ * Speech-to-text output is never clean: engines drop accents inconsistently
+ * ("mandame" vs "mándame"), vary capitalisation, and pad with extra spaces —
+ * and a real user typing in a hurry does the same. Matching raw text meant a
+ * threat could go unflagged purely because of a missing accent, which is the
+ * worst possible reason to miss a fraud attempt.
+ *
+ * Accent stripping is safe for the existing patterns: they already spell
+ * accented vowels as classes like [ií], and the bare vowel is in every class.
+ */
+export function normalizeForMatching(text: string): string {
+  return text
+    .normalize('NFD')
+    // Combining diacritics left behind by NFD (also turns ñ into n, which the
+    // [nñ] classes already accept).
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/\s+/g, ' ')
+    .toLowerCase()
+    .trim();
+}
+
 /** Count of distinct, non-overlapping matches for a pattern in the text. */
 function countMatches(regex: RegExp, text: string): number {
   const flags = regex.flags.includes('g') ? regex.flags : `${regex.flags}g`;
@@ -117,16 +141,19 @@ function countMatches(regex: RegExp, text: string): number {
 export function scanLocalPatterns(text: string): LocalScanResult {
   const matches: PatternMatch[] = [];
   let totalWeight = 0;
+  // Every pattern is matched against the normalized form — see the note on
+  // normalizeForMatching for why a missing accent must never hide a threat.
+  const haystack = normalizeForMatching(text);
 
   for (const { regex, category, weight, repeatable, repeatCap } of PATTERNS) {
     if (repeatable) {
-      const count = countMatches(regex, text);
+      const count = countMatches(regex, haystack);
       if (count === 0) continue;
       const effectiveCount = Math.min(count, repeatCap ?? count);
       const matchWeight = weight * effectiveCount;
       matches.push({ category, pattern: regex.source, weight: matchWeight });
       totalWeight += matchWeight;
-    } else if (regex.test(text)) {
+    } else if (regex.test(haystack)) {
       matches.push({ category, pattern: regex.source, weight });
       totalWeight += weight;
     }

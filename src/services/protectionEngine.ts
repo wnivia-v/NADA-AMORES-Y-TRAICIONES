@@ -1,6 +1,6 @@
 import { analyzeText, analyzeVoiceFragment, cancelAnalysis, isAnalysisAborted } from './geminiService';
 import { extractTextFromCanvas, extractTextFromImage } from './ocrService';
-import { speechRecognitionService as speechService } from './speechRecognitionService';
+import { voiceRecognition, type VoiceErrorCode } from './voice';
 import { playAlertTone } from '@/utils/audioAlert';
 import { notificationService } from './notificationService';
 import type { ScamAnalysis, ShieldId, Verdict } from '@/store/useNadaStore';
@@ -85,11 +85,6 @@ class ProtectionEngine {
   // enough to look — and be — "oportuno".
   private readonly VOICE_ANALYSIS_COOLDOWN_MS = 3_000;
   private readonly VOICE_MIN_FRAGMENT_LEN = 12;
-  // Throttled log of transient recognizer errors ('no-speech'/'network'/
-  // 'aborted') — see logTransientVoiceError below.
-  private lastTransientErrorCode: string | null = null;
-  private lastTransientErrorLoggedAt = 0;
-  private readonly TRANSIENT_ERROR_LOG_THROTTLE_MS = 3_000;
 
   init(callbacks: EngineCallbacks) {
     this.callbacks = callbacks;
@@ -324,16 +319,18 @@ class ProtectionEngine {
   // ── Voice Shield ──────────────────────────────────────────────
   //
   // Lives entirely in this singleton, not in a React component. Previously
-  // ConsumerHome and VoiceAnalyzer each drove speechService with their own
-  // local `listening` state — navigating away from one left the recognizer
-  // running invisibly while the other screen's UI reset to "not listening",
-  // and pressing the mic again was a silent no-op (speechService.start()
-  // returns immediately when already running). That split-brain state is
+  // ConsumerHome and VoiceAnalyzer each drove the recognizer with their own
+  // local `listening` state — navigating away from one left it running
+  // invisibly while the other screen's UI reset to "not listening", and
+  // pressing the mic again was a silent no-op. That split-brain state is
   // exactly what looked like "parece que escucha pero no responde".
+  //
+  // Engine selection and fallback live in services/voice — this method only
+  // cares about transcript in, analysis out.
   async startVoiceMonitoring() {
     if (this.voiceActive) return;
 
-    if (!speechService.isSupported()) {
+    if (!voiceRecognition.isSupported()) {
       const msg = '❌ Reconocimiento de voz no disponible en este dispositivo. En el navegador usa Chrome o Edge.';
       this.log(`ESCUDO VOZ: ${msg}`, 'error');
       this.callbacks?.onShieldStatusChange('voice', { active: false, scanning: false });
@@ -344,17 +341,15 @@ class ProtectionEngine {
     this.voiceActive = true;
     this.voiceTranscript = '';
     this.lastVoiceAnalyzed = '';
-    this.lastTransientErrorCode = null;
-    this.lastTransientErrorLoggedAt = 0;
     this.callbacks?.onVoiceTranscript('');
     this.callbacks?.onVoiceInterim('');
     this.callbacks?.onVoiceRealtimeVerdict(null);
     this.callbacks?.onVoiceError(null);
 
-    const lang = this.callbacks?.getLanguage() === 'en' ? 'en-US' : 'es-ES';
+    await voiceRecognition.start({
+      lang: this.callbacks?.getLanguage() ?? 'es',
 
-    speechService.start(
-      (text, isFinal) => {
+      onTranscript: (text, isFinal) => {
         if (isFinal) {
           this.voiceTranscript = `${this.voiceTranscript} ${text}`.trim();
           this.callbacks?.onVoiceTranscript(this.voiceTranscript);
@@ -362,23 +357,26 @@ class ProtectionEngine {
           this.maybeAnalyzeVoiceFragment(this.voiceTranscript);
           return;
         }
-        // Not-final yet — show it immediately instead of leaving the panel
-        // blank. Some recognizers take many seconds (or, mid-playback of a
-        // recording with no clean silence gap, never) to mark a result final,
-        // which is what made the shield look like it wasn't listening at all.
-        // Also feed it into analysis: waiting for "final" to react is not
-        // "oportuno" when a threat phrase is mid-sentence.
+        // Not final yet — shown immediately so the panel proves it is
+        // listening, and fed into analysis too: waiting for a phrase to be
+        // "settled" is not oportuno when a threat is mid-sentence. It is not
+        // appended to voiceTranscript, because the engine may still revise it.
         this.callbacks?.onVoiceInterim(text);
         this.maybeAnalyzeVoiceFragment(`${this.voiceTranscript} ${text}`.trim());
       },
-      lang,
-      (error) => this.handleVoiceError(error),
-      (active) => this.callbacks?.onVoiceSpeechActive(active),
-      // Model download / warm-up progress. Visible in the console panel so a
-      // first run that takes a while reads as "working on it" instead of
-      // "frozen and doing nothing".
-      (message) => this.log(`ESCUDO VOZ: ${message}`, 'info'),
-    );
+
+      onActivity: (speaking) => this.callbacks?.onVoiceSpeechActive(speaking),
+
+      // Engine switches and model download progress. Visible in the console
+      // panel so a slow first run reads as "working on it", not "frozen".
+      onStatus: (message) => this.log(`ESCUDO VOZ: ${message}`, 'info'),
+
+      onError: (code, detail) => this.handleVoiceError(code, detail),
+
+      onEngineChange: ({ label }) => {
+        this.log(`ESCUDO VOZ: motor activo — ${label}.`, 'system');
+      },
+    });
 
     this.callbacks?.onShieldStatusChange('voice', { active: true, scanning: true });
     this.log('ESCUDO VOZ: Escucha en tiempo real activa.', 'success');
@@ -388,7 +386,7 @@ class ProtectionEngine {
     if (!this.voiceActive) return;
     this.voiceActive = false;
 
-    speechService.stop();
+    voiceRecognition.stop();
     cancelAnalysis('voice');
 
     const finalTranscript = this.voiceTranscript;
@@ -416,52 +414,29 @@ class ProtectionEngine {
     return this.voiceActive;
   }
 
-  private handleVoiceError(error: string) {
-    const FATAL = new Set(['not-allowed', 'audio-capture', 'service-not-allowed', 'start-failed', 'not-supported', 'mic-unresponsive', 'speech-service-unavailable', 'model-load-failed']);
-    if (FATAL.has(error)) {
-      // The recognizer is genuinely dead — speechService already called its
-      // own stop(). Reflect that here instead of leaving shieldStatus.voice
-      // showing "active" for a session that silently died.
-      this.voiceActive = false;
-      this.callbacks?.onShieldStatusChange('voice', { active: false, scanning: false });
-      this.callbacks?.onVoiceSpeechActive(false);
+  /**
+   * Only reached when EVERY engine has been ruled out — the orchestrator
+   * handles recoverable errors and engine switching on its own, so anything
+   * arriving here means the shield genuinely cannot listen.
+   */
+  private handleVoiceError(code: VoiceErrorCode, detail?: string) {
+    this.voiceActive = false;
+    this.callbacks?.onShieldStatusChange('voice', { active: false, scanning: false });
+    this.callbacks?.onVoiceSpeechActive(false);
 
-      const messages: Record<string, string> = {
-        'not-allowed': '❌ Permiso de microfono denegado. Habilitalo en los ajustes del navegador/sistema.',
-        'audio-capture': '❌ No se detecto ningun microfono conectado.',
-        'service-not-allowed': '❌ El navegador bloqueo el reconocimiento de voz.',
-        'start-failed': '❌ No se pudo iniciar el reconocimiento de voz. Intenta de nuevo.',
-        'not-supported': '❌ Reconocimiento de voz no disponible en este dispositivo. En el navegador usa Chrome o Edge.',
-        'mic-unresponsive': '❌ El microfono no esta captando audio. Revisa que el dispositivo de entrada correcto este seleccionado en el sistema y volve a activar el escudo.',
-        'speech-service-unavailable': '❌ El microfono si capta audio, pero el servicio de reconocimiento de voz del navegador no responde. Suele ser una VPN, firewall o bloqueador cortando la conexion a los servidores de Google. Proba desactivarlos o usar otra red.',
-        'model-load-failed': '❌ No se pudo descargar el modelo de voz local. Revisa tu conexion e intenta de nuevo (la primera vez necesita descargar ~40MB).',
-      };
-      const msg = messages[error] ?? '❌ El escudo de voz se detuvo por un error.';
-      this.callbacks?.onVoiceError(msg);
-      this.log(`ESCUDO VOZ: Detenido — ${msg}`, 'error');
-      return;
-    }
-    // 'no-speech' / 'network' / 'aborted' are transient — speechService's own
-    // onend handler restarts the recognizer automatically while running stays
-    // true. They used to be swallowed completely here, which meant a session
-    // stuck repeating the same transient error (e.g. 'network' — the browser
-    // failing to reach the speech-recognition backend, not a local mic
-    // problem) looked identical, from the log, to one working fine: nothing
-    // showed up either way. Log it (throttled) so the pattern is visible in
-    // the debug panel instead of invisible until — or unless — it escalates
-    // to the fatal mic-unresponsive threshold.
-    this.logTransientVoiceError(error);
-  }
+    const messages: Record<VoiceErrorCode, string> = {
+      'not-allowed': '❌ Permiso de microfono denegado. Habilitalo en los ajustes del navegador o del sistema y volve a activar el escudo.',
+      'no-microphone': '❌ No se detecto ningun microfono. Revisa que el dispositivo de entrada correcto este conectado y seleccionado.',
+      'engine-unavailable': '❌ No se pudo iniciar el reconocimiento de voz en este dispositivo.',
+      unknown: '❌ El escudo de voz se detuvo por un error inesperado.',
+    };
 
-  private logTransientVoiceError(error: string) {
-    const now = Date.now();
-    const isNewCode = error !== this.lastTransientErrorCode;
-    const throttleElapsed = now - this.lastTransientErrorLoggedAt >= this.TRANSIENT_ERROR_LOG_THROTTLE_MS;
-    if (!isNewCode && !throttleElapsed) return;
-
-    this.lastTransientErrorCode = error;
-    this.lastTransientErrorLoggedAt = now;
-    this.log(`ESCUDO VOZ: error transitorio (${error}) — reintentando...`, 'warning');
+    // `detail` carries the last engine's own explanation (blocked network,
+    // model download failure). It is the actionable half of the message, so
+    // it must not be dropped in favour of the generic text.
+    const msg = detail ? `${messages[code]} ${detail}` : messages[code];
+    this.callbacks?.onVoiceError(msg);
+    this.log(`ESCUDO VOZ: Detenido — ${msg}`, 'error');
   }
 
   private maybeAnalyzeVoiceFragment(text: string) {
