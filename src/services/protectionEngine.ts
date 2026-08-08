@@ -1,6 +1,7 @@
 import { analyzeText, analyzeVoiceFragment, cancelAnalysis, isAnalysisAborted } from './geminiService';
 import { extractTextFromCanvas, extractTextFromImage } from './ocrService';
 import { voiceRecognition, type VoiceErrorCode } from './voice';
+import { scanLocalPatterns } from '@/utils/scamPatterns';
 import { playAlertTone } from '@/utils/audioAlert';
 import { notificationService } from './notificationService';
 import type { ScamAnalysis, ShieldId, Verdict } from '@/store/useNadaStore';
@@ -85,6 +86,31 @@ class ProtectionEngine {
   // enough to look — and be — "oportuno".
   private readonly VOICE_ANALYSIS_COOLDOWN_MS = 3_000;
   private readonly VOICE_MIN_FRAGMENT_LEN = 12;
+  /** Sliding window of recent speech sent for analysis. */
+  private readonly VOICE_WINDOW_CHARS = 200;
+
+  /**
+   * True while an AI voice analysis is in flight.
+   *
+   * Analyses in the same lane cancel each other, and the AI timeout (8s) is
+   * longer than the analysis cooldown (3s) — so while someone kept talking,
+   * every request was aborted by the next one before it could return, and the
+   * abort was swallowed as "expected". The shield produced a verdict only in
+   * the gaps when the user happened to stop speaking, which is exactly the
+   * reported "it alerted once and then never again".
+   */
+  private voiceAiInFlight = false;
+
+  // Alert de-duplication. A sustained threat must not fire on every interim
+  // transcript, but it must also never latch: a NEW threat has to alert
+  // immediately, and an unchanged one re-alerts after this window rather than
+  // going silent for the rest of the session.
+  private lastVoiceAlertSignature = '';
+  private lastVoiceAlertAt = 0;
+  private readonly VOICE_REALERT_MS = 25_000;
+
+  /** Local score at which the offline layer alerts on its own, without the AI. */
+  private readonly LOCAL_VOICE_ALERT_MIN = 40;
 
   init(callbacks: EngineCallbacks) {
     this.callbacks = callbacks;
@@ -341,6 +367,9 @@ class ProtectionEngine {
     this.voiceActive = true;
     this.voiceTranscript = '';
     this.lastVoiceAnalyzed = '';
+    this.voiceAiInFlight = false;
+    this.lastVoiceAlertSignature = '';
+    this.lastVoiceAlertAt = 0;
     this.callbacks?.onVoiceTranscript('');
     this.callbacks?.onVoiceInterim('');
     this.callbacks?.onVoiceRealtimeVerdict(null);
@@ -440,14 +469,80 @@ class ProtectionEngine {
   }
 
   private maybeAnalyzeVoiceFragment(text: string) {
-    if (text.length < this.VOICE_MIN_FRAGMENT_LEN || text === this.lastVoiceAnalyzed) return;
+    if (text.length < this.VOICE_MIN_FRAGMENT_LEN) return;
+
+    const fragment = text.length > this.VOICE_WINDOW_CHARS
+      ? text.slice(-this.VOICE_WINDOW_CHARS)
+      : text;
+
+    // Two independent passes, and the order matters. The local one is
+    // synchronous, offline and cannot be cancelled, so an explicit threat is
+    // flagged the instant it is spoken — it does not wait on a network round
+    // trip that may be throttled, aborted, or unavailable entirely.
+    this.runInstantLocalVoiceScan(fragment);
+
+    // The AI pass then refines that with context the pattern layer cannot see.
+    this.maybeRunAiVoiceAnalysis(fragment);
+  }
+
+  /**
+   * Offline pattern scan on every transcript update.
+   *
+   * This is what makes the voice shield work with no API key, no network and
+   * no model — the state most users are actually in.
+   */
+  private runInstantLocalVoiceScan(fragment: string) {
+    const local = scanLocalPatterns(fragment);
+    if (local.riskScore < this.LOCAL_VOICE_ALERT_MIN) return;
+
+    // Identity of the threat, not of the sentence: as speech streams in, the
+    // wording shifts constantly while the danger is the same. Keying on the
+    // matched tactics means a genuinely new threat alerts at once, and a
+    // continuing one does not re-fire on every word.
+    const signature = [...local.tactics].sort().join('|');
+    const now = Date.now();
+    const sameThreat = signature === this.lastVoiceAlertSignature;
+    if (sameThreat && now - this.lastVoiceAlertAt < this.VOICE_REALERT_MS) return;
+
+    this.lastVoiceAlertSignature = signature;
+    this.lastVoiceAlertAt = now;
+
+    const verdict: Verdict = local.riskScore >= 70 ? 'PELIGROSO' : 'SOSPECHOSO';
+    const result: ScamAnalysis = {
+      verdict,
+      riskScore: local.riskScore,
+      tactics: local.tactics,
+      explanation: `Se detectaron patrones explicitos de riesgo en la conversacion: ${local.tactics.join(', ')}.`,
+      scanSource: 'local',
+      recommendations: [
+        'No sigas las instrucciones de quien te habla.',
+        'No envies dinero ni compartas datos personales o codigos.',
+        'Corta la comunicacion y verifica por un canal que vos conozcas.',
+      ],
+    };
+
+    this.callbacks?.onVoiceRealtimeVerdict(result);
+    this.callbacks?.onShieldStatusChange('voice', {
+      scanning: true,
+      lastScan: new Date().toLocaleTimeString(),
+      lastThreatLevel: verdict,
+    });
+    this.log(`VOZ LOCAL [${verdict}]: ${local.riskScore}/100 — ${local.tactics[0] ?? 'patron detectado'}`, verdict === 'PELIGROSO' ? 'error' : 'warning');
+    this.triggerThreatAlert(result, 'Patron de riesgo detectado en la conversacion', 'Voz');
+  }
+
+  private maybeRunAiVoiceAnalysis(fragment: string) {
+    // One at a time. Without this, each request cancelled the previous one in
+    // the same lane before it could finish — see voiceAiInFlight.
+    if (this.voiceAiInFlight) return;
+    if (fragment === this.lastVoiceAnalyzed) return;
 
     const now = Date.now();
     if (now - this.lastVoiceAnalysisAt < this.VOICE_ANALYSIS_COOLDOWN_MS) return;
 
     this.lastVoiceAnalysisAt = now;
-    this.lastVoiceAnalyzed = text;
-    const fragment = text.length > 200 ? text.slice(-200) : text;
+    this.lastVoiceAnalyzed = fragment;
+    this.voiceAiInFlight = true;
 
     analyzeVoiceFragment(fragment, 'voice')
       .then((result) => {
@@ -456,6 +551,14 @@ class ProtectionEngine {
         this.callbacks?.onShieldStatusChange('voice', { scanning: true, lastScan: nowStr, lastThreatLevel: result.verdict });
 
         if (result.verdict !== 'SEGURO') {
+          // Same de-duplication as the local pass, and sharing its state on
+          // purpose: the two passes must not double-alert for one threat.
+          const signature = [...result.tactics].sort().join('|');
+          const sameThreat = signature === this.lastVoiceAlertSignature;
+          if (sameThreat && Date.now() - this.lastVoiceAlertAt < this.VOICE_REALERT_MS) return;
+
+          this.lastVoiceAlertSignature = signature;
+          this.lastVoiceAlertAt = Date.now();
           this.log(`VOZ LIVE [${result.verdict}]: ${result.riskScore}/100 — ${result.tactics[0] ?? 'patron detectado'}`, result.verdict === 'PELIGROSO' ? 'error' : 'warning');
           this.triggerThreatAlert(result, 'Patron sospechoso detectado en conversacion de voz', 'Voz');
         }
@@ -464,6 +567,9 @@ class ProtectionEngine {
         if (!isAnalysisAborted(e)) {
           this.log('VOZ: Un fragmento no pudo analizarse.', 'warning');
         }
+      })
+      .finally(() => {
+        this.voiceAiInFlight = false;
       });
   }
 

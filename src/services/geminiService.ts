@@ -1,4 +1,5 @@
-import { scanLocalPatterns } from '@/utils/scamPatterns';
+import { scanLocalPatterns, normalizeForMatching } from '@/utils/scamPatterns';
+import { learnFromThreat } from './threatMemory';
 import { checkUrlSafety } from './safeBrowsingService';
 import { scamDatabase } from './scamDatabase';
 import { riskScorer } from '@/utils/riskScorer';
@@ -185,6 +186,9 @@ async function runTextAnalysis(text: string, scope: AnalysisScope, signal: Abort
     if (verdict !== 'SEGURO') {
       scamDatabase.store(text, verdict, finalScore, mergedTactics, sourceLabel).catch(() => {});
     }
+    // Remember the phrasing so the next message built from this script is
+    // caught offline and instantly, even if the AI is unreachable then.
+    learnFromThreat(normalizeForMatching(text), verdict);
 
     return {
       verdict,
