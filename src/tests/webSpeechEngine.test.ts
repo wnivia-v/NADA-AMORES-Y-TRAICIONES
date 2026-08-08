@@ -85,6 +85,38 @@ describe('WebSpeechEngine restart policy', () => {
     engine.stop();
   });
 
+  it('hands over when the user speaks but no transcript ever comes back', async () => {
+    const engine = new WebSpeechEngine();
+    const h = handlers();
+    await engine.start('es', h);
+
+    // A blocked speech backend looks healthy from the browser: the mic opens
+    // and speech is detected locally, but recognition happens remotely so no
+    // words arrive. Watching audio alone would call this fine forever, which
+    // is exactly the "shows it is listening but never writes" report.
+    for (let i = 0; i < 3; i++) {
+      live?.onaudiostart?.();
+      live?.onspeechstart?.();
+      live?.onspeechend?.();
+      live?.onend?.();
+      vi.advanceTimersByTime(500);
+    }
+
+    expect(h.onFatal).toHaveBeenCalledWith('engine-unavailable', expect.any(String));
+  });
+
+  it('does not count silent sessions as unproductive', async () => {
+    const engine = new WebSpeechEngine();
+    const h = handlers();
+    await engine.start('es', h);
+
+    // Audio flowing, nobody speaking. Never a failure, however long it lasts.
+    for (let i = 0; i < 30; i++) cycle(true);
+
+    expect(h.onFatal).not.toHaveBeenCalled();
+    engine.stop();
+  });
+
   it('surfaces a denied microphone immediately, without retrying', async () => {
     const engine = new WebSpeechEngine();
     const h = handlers();

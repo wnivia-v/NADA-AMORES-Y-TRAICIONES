@@ -49,6 +49,31 @@ const PATTERNS: PatternDef[] = [
 
   // Impersonation
   { regex: /(banco|polic[ií]a|gobierno|fiscal[ií]a|hacienda)\s*(te\s*|le\s*)?(contacta|llama|informa)/i, category: 'Suplantacion de entidad', weight: 22 },
+  // Naming a rank or an office is itself the tactic — the older pattern only
+  // fired when an institution sat next to "contacta/llama/informa", so
+  // "le habla el comisario X de la comisaria tercera" scored zero. Spelling is
+  // loose on purpose: these arrive full of typos, and OCR adds more.
+  {
+    regex: /\b(comisari[oa]|comi?ser[ií]a|comisar[ií]a|subcomisario|sargento|oficial\s+de\s+polic[ií]a|agente\s+(judicial|fiscal)|juzgado|ministerio\s+publico|inspector\s+de\s+(hacienda|impuestos))\b/i,
+    category: 'Suplantacion de autoridad',
+    weight: 26,
+  },
+  // False criminal accusation — the core of the "police extortion" script.
+  {
+    regex: /(se\s+le\s+)?(abri[oó]|abrio|inici[oó]|iniciado|existe|tiene)\s+(una\s+)?(causa|denuncia|investigaci[oó]n|expediente|proceso)/i,
+    category: 'Acusacion judicial falsa',
+    weight: 28,
+  },
+  {
+    regex: /\b(pedofilia|pornografia\s+infantil|abuso\s+de\s+menores|lavado\s+de\s+(activos|dinero)|narcotrafico|trata\s+de\s+personas)\b/i,
+    category: 'Acusacion de delito grave',
+    weight: 28,
+  },
+  {
+    regex: /orden\s+de\s+(captura|detenci[oó]n|detencion|allanamiento|arresto)/i,
+    category: 'Amenaza de detencion',
+    weight: 28,
+  },
   { regex: /soporte\s*t[eé]cnico|microsoft|apple\s*support/i, category: 'Soporte tecnico falso', weight: 20 },
   { regex: /herencia|loteria|premio|sorteo|ganador/i, category: 'Premio falso', weight: 18 },
 
@@ -70,6 +95,26 @@ const PATTERNS: PatternDef[] = [
   { regex: /si\s*no\s*(pagas?|colaboras?|env[ií]as?|deposit[aá]s?|obedeces?)/i, category: 'Amenaza condicional (paga o si no)', weight: 25 },
   { regex: /(te\s*vas?\s*a\s*arrepentir|te\s*va\s*a\s*pesar|vas\s*a\s*pagar\s*por\s*esto|esto\s*no\s*se\s*va\s*a\s*quedar\s*as[ií]|[uú]ltima\s*advertencia|atente\s*a\s*las\s*consecuencias)/i, category: 'Amenaza / coaccion', weight: 22 },
   { regex: /(sabemos\s*d[oó]nde\s*vives|conocemos\s*tu\s*direcci[oó]n|algo\s*(le|te)\s*va\s*a\s*pasar|tu\s*familia\s*corre\s*peligro)/i, category: 'Amenaza a la seguridad personal', weight: 30 },
+  // Announcing they will show up in person. Weighted high: this is the point
+  // where an online scam becomes a physical-safety matter.
+  {
+    regex: /(estamos|estaremos|vamos|iremos|llegamos|pasamos|nos\s+presentamos)\s+(a|en|por)\s*(su|tu)\s*(domicilio|casa|direcci[oó]n|direccion|trabajo)/i,
+    category: 'Amenaza de presencia fisica',
+    weight: 32,
+  },
+  // Explicit violence, including the impersonal phrasing used to threaten
+  // women ("por eso las matan") that reads as commentary rather than a threat.
+  {
+    regex: /((por|x)\s*eso\s*(las?|los?)\s*matan|te\s*(voy|vamos)\s*a\s*matar|te\s*mato|te\s*van\s*a\s*matar|vas\s*a\s*morir|te\s*hago\s*desaparecer)/i,
+    category: 'Amenaza de muerte o violencia',
+    weight: 35,
+  },
+  // Punishing the victim for cutting contact — coercion to stay reachable.
+  {
+    regex: /si\s*(nos\s*|me\s*)?(blo(k|qu)e[ae]|blo(k|qu)eas|denuncias|cortas|cuelgas)/i,
+    category: 'Amenaza condicional (paga o si no)',
+    weight: 25,
+  },
 
   // Bullying / harassment — this app's own vision doc calls out acoso, not
   // just financial fraud, and a message can be purely abusive with zero

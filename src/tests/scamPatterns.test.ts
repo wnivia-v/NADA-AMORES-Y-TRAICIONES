@@ -31,6 +31,60 @@ describe('resilience to messy transcription', () => {
   });
 });
 
+/**
+ * Verbatim text from screenshots users reported as scoring 0/100 "SEGURO".
+ * These are the regression cases that matter most: every one of them is a
+ * real message someone actually received.
+ */
+describe('reported false negatives', () => {
+  it('flags police impersonation with a fabricated criminal case and a home threat', () => {
+    // Typos are the original's, not a transcription slip — these arrive
+    // misspelled, and OCR adds more on top.
+    const text =
+      'Si nos blokea en 30 estamos en su domicilio. Le habla el comisario ramires de la ' +
+      'comiseria tercera de merlo se le hase saber qe se le abrio una causa de pedofilia hacia usted';
+    const result = scanLocalPatterns(text);
+
+    expect(result.riskScore).toBeGreaterThanOrEqual(70);
+    expect(result.tactics).toContain('Suplantacion de autoridad');
+    expect(result.tactics).toContain('Acusacion de delito grave');
+    expect(result.tactics).toContain('Amenaza de presencia fisica');
+  });
+
+  it('flags a harassment thread with an implicit femicide reference', () => {
+    const text = 'Cerda Te gusta el mal trato X eso las matan Bye Pudrete Cerda Perra Mal educada';
+    const result = scanLocalPatterns(text);
+
+    expect(result.riskScore).toBeGreaterThanOrEqual(70);
+    expect(result.tactics).toContain('Amenaza de muerte o violencia');
+    expect(result.tactics).toContain('Acoso / hostigamiento severo');
+  });
+
+  it('flags being threatened for blocking the sender', () => {
+    expect(scanLocalPatterns('si nos bloquea vamos a su trabajo').tactics)
+      .toContain('Amenaza condicional (paga o si no)');
+  });
+
+  it('flags an arrest threat', () => {
+    expect(scanLocalPatterns('tiene una orden de captura a su nombre').tactics)
+      .toContain('Amenaza de detencion');
+  });
+
+  it('still does not flag an ordinary conversation', () => {
+    // The new patterns are broad; this is the guard against them firing on
+    // everyday messages and burying real alerts in noise.
+    const safe = [
+      'Hola, como estas? Nos vemos manana para el cafe.',
+      'Te mando el informe cuando llegue a la casa.',
+      'El juzgado queda cerca de mi trabajo, paso por ahi todos los dias.',
+      'Vamos a su casa el domingo para el asado?',
+    ];
+    for (const text of safe) {
+      expect(scanLocalPatterns(text).riskScore).toBeLessThan(40);
+    }
+  });
+});
+
 describe('scanLocalPatterns', () => {
   describe('safe messages', () => {
     it('returns low risk for normal conversation', () => {

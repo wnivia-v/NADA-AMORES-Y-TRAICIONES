@@ -67,6 +67,27 @@ const NETWORK_FAILURES_BEFORE_GIVING_UP = 3;
  */
 const WEDGED_RESTARTS_BEFORE_GIVING_UP = 12;
 
+/**
+ * How many sessions where the user demonstrably SPOKE but no transcript ever
+ * came back, before handing over to another engine.
+ *
+ * This is the signal that actually catches an unreachable speech backend, and
+ * it exists because the two obvious signals both fail here:
+ *
+ *   - Waiting for a 'network' error does not work: the browser does not always
+ *     emit one when the backend is unreachable.
+ *   - Watching `onaudiostart` does not work either. Recognition happens on
+ *     Google's servers, but the microphone and the speech detector are local,
+ *     so audio flows and `onspeechstart` fires perfectly while nothing is
+ *     being transcribed. Treating that as health is what let a blocked session
+ *     sit there looking alive — "shows it is listening but never writes
+ *     anything" — instead of falling back to the offline engine.
+ *
+ * Speech in, nothing out, repeatedly, is unambiguous: this engine cannot do
+ * its job here, whatever the reason.
+ */
+const UNPRODUCTIVE_SESSIONS_BEFORE_GIVING_UP = 3;
+
 const RESTART_DELAY_MS = 250;
 
 function getSpeechRecognitionCtor(): (new () => Recognition) | null {
@@ -87,8 +108,13 @@ export class WebSpeechEngine implements VoiceEngine {
 
   private wedgedRestarts = 0;
   private networkFailures = 0;
+  private unproductiveSessions = 0;
   /** Did the current session ever reach the microphone? See WEDGED_RESTARTS_*. */
   private audioStartedThisSession = false;
+  /** Did the user actually speak during this session? */
+  private speechDetectedThisSession = false;
+  /** Did this session produce any transcript at all? */
+  private producedResultThisSession = false;
 
   isAvailable(): boolean {
     return getSpeechRecognitionCtor() !== null;
@@ -107,6 +133,7 @@ export class WebSpeechEngine implements VoiceEngine {
     this.running = true;
     this.wedgedRestarts = 0;
     this.networkFailures = 0;
+    this.unproductiveSessions = 0;
 
     this.launch();
   }
@@ -129,11 +156,15 @@ export class WebSpeechEngine implements VoiceEngine {
     recognition.lang = languageTag(this.lang);
     recognition.maxAlternatives = 1;
     this.audioStartedThisSession = false;
+    this.speechDetectedThisSession = false;
+    this.producedResultThisSession = false;
 
     recognition.onresult = (event) => {
       // Proof the whole path works right now: mic, network, backend.
+      this.producedResultThisSession = true;
       this.wedgedRestarts = 0;
       this.networkFailures = 0;
+      this.unproductiveSessions = 0;
 
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const result = event.results[i];
@@ -151,7 +182,10 @@ export class WebSpeechEngine implements VoiceEngine {
       this.wedgedRestarts = 0;
     };
 
-    recognition.onspeechstart = () => this.handlers?.onActivity(true);
+    recognition.onspeechstart = () => {
+      this.speechDetectedThisSession = true;
+      this.handlers?.onActivity(true);
+    };
     recognition.onspeechend = () => this.handlers?.onActivity(false);
 
     recognition.onerror = (event) => {
@@ -192,6 +226,21 @@ export class WebSpeechEngine implements VoiceEngine {
         this.wedgedRestarts++;
         if (this.wedgedRestarts >= WEDGED_RESTARTS_BEFORE_GIVING_UP) {
           this.fail('engine-unavailable', 'El reconocedor del navegador no llega al microfono.');
+          return;
+        }
+      }
+
+      // The user spoke and got nothing back. Recognition is remote while the
+      // microphone and speech detector are local, so this is what a blocked
+      // backend looks like from here — everything appears alive, no words
+      // ever arrive. Repeated, it means this engine cannot deliver.
+      if (this.speechDetectedThisSession && !this.producedResultThisSession) {
+        this.unproductiveSessions++;
+        if (this.unproductiveSessions >= UNPRODUCTIVE_SESSIONS_BEFORE_GIVING_UP) {
+          this.fail(
+            'engine-unavailable',
+            'Se detecto voz pero el navegador no devolvio transcripcion (VPN, firewall o bloqueador).',
+          );
           return;
         }
       }

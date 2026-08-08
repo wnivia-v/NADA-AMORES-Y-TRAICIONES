@@ -160,7 +160,20 @@ async function runTextAnalysis(text: string, scope: AnalysisScope, signal: Abort
 
     // Blend with riskScorer composite (includes historical signals)
     const historicalComposite = riskScorer.getCompositeScore();
-    const finalScore = Math.min(100, Math.round(aiComposite * 0.8 + historicalComposite * 0.2));
+    const blended = Math.round(aiComposite * 0.8 + historicalComposite * 0.2);
+
+    // The AI may RAISE the score but never bury a local finding.
+    //
+    // The regex layer only fires on explicit, hand-authored patterns, so a
+    // high local score means the text literally contains a death threat,
+    // a fake police accusation, a demand for card numbers. A model prompted
+    // with "is this a scam?" will happily return SEGURO for a stream of
+    // insults or a threat to show up at someone's house — it is not
+    // financial fraud, so it does not fit the question. Averaging then sank a
+    // 80-point local hit to a "0/100 — no se detectaron patrones" verdict on
+    // messages naming a crime and the victim's address. Real reports, twice.
+    const finalScore = Math.min(100, Math.max(blended, localResult.riskScore));
+    const localOverrode = localResult.riskScore > blended;
 
     const mergedTactics = [...new Set([...aiResult.tactics, ...localResult.tactics])];
 
@@ -177,9 +190,21 @@ async function runTextAnalysis(text: string, scope: AnalysisScope, signal: Abort
       verdict,
       riskScore: finalScore,
       tactics: mergedTactics,
-      explanation: aiResult.explanation,
+      // When the local layer set the score, the AI's own words contradict the
+      // verdict ("parece un mensaje normal" next to PELIGROSO). Say what
+      // actually drove it instead of showing the user a reassuring sentence
+      // above a red badge.
+      explanation: localOverrode
+        ? `Se detectaron patrones explicitos de riesgo: ${localResult.tactics.join(', ')}.`
+        : aiResult.explanation,
       scanSource: 'hybrid',
-      recommendations: aiResult.recommendations,
+      recommendations: localOverrode
+        ? [
+            'No respondas ni sigas las instrucciones del mensaje.',
+            'No compartas datos personales, fotos ni dinero.',
+            'Guarda capturas y consultalo con alguien de confianza o denuncialo.',
+          ]
+        : aiResult.recommendations,
     };
   }
 
@@ -259,9 +284,11 @@ async function runVoiceFragmentAnalysis(
 
     if (aiResult) {
       riskScorer.addSignal('voice-ai', aiResult.riskScore, 1.5);
-      const compositeScore = Math.min(100, Math.round(
-        aiResult.riskScore * 0.7 + localResult.riskScore * 0.3
-      ));
+      const blended = Math.round(aiResult.riskScore * 0.7 + localResult.riskScore * 0.3);
+      // Same floor as the text pipeline: an explicit threat heard mid-call
+      // must not be averaged away by a model that only sees "not fraud".
+      const compositeScore = Math.min(100, Math.max(blended, localResult.riskScore));
+      const localOverrode = localResult.riskScore > blended;
 
       let verdict: ScamAnalysis['verdict'] = 'SEGURO';
       if (compositeScore >= 70) verdict = 'PELIGROSO';
@@ -271,7 +298,9 @@ async function runVoiceFragmentAnalysis(
         verdict,
         riskScore: compositeScore,
         tactics: [...new Set([...aiResult.tactics, ...localResult.tactics])],
-        explanation: aiResult.explanation || 'Analisis de fragmento de voz.',
+        explanation: localOverrode
+          ? `Se detectaron patrones explicitos de riesgo: ${localResult.tactics.join(', ')}.`
+          : (aiResult.explanation || 'Analisis de fragmento de voz.'),
         scanSource: 'hybrid',
         recommendations: aiResult.recommendations ?? ['Mantente alerta durante la conversacion.'],
       };
