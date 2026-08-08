@@ -49,13 +49,23 @@ interface Recognition {
 const NETWORK_FAILURES_BEFORE_GIVING_UP = 3;
 
 /**
- * How many restarts with ZERO results in between before giving up.
+ * How many restarts in a row where the recognizer never even opened the
+ * microphone, before declaring it wedged.
  *
- * Any real result resets this, so an hour-long conversation full of natural
- * pauses never approaches it. Hitting it means the recognizer is looping
- * without ever producing a word — a wedged session, not a quiet room.
+ * The counter is reset by `onaudiostart`, NOT only by a transcript, and that
+ * distinction is the whole point. On mobile the browser ends a session after
+ * a few seconds of quiet no matter what `continuous` says, so a user who
+ * simply stops talking generates a steady stream of result-less restarts. An
+ * earlier version counted those, which meant roughly a minute of silence was
+ * enough to condemn a perfectly healthy engine and hand over to the slower
+ * offline one — the recognizer "stopped working" for the crime of listening
+ * to a quiet room.
+ *
+ * `onaudiostart` fires whenever audio is genuinely flowing, silent or not, so
+ * what survives here is only the real failure: sessions that end within
+ * milliseconds without ever reaching the microphone.
  */
-const EMPTY_RESTARTS_BEFORE_GIVING_UP = 12;
+const WEDGED_RESTARTS_BEFORE_GIVING_UP = 12;
 
 const RESTART_DELAY_MS = 250;
 
@@ -75,8 +85,10 @@ export class WebSpeechEngine implements VoiceEngine {
   private running = false;
   private restartTimer: ReturnType<typeof setTimeout> | null = null;
 
-  private emptyRestarts = 0;
+  private wedgedRestarts = 0;
   private networkFailures = 0;
+  /** Did the current session ever reach the microphone? See WEDGED_RESTARTS_*. */
+  private audioStartedThisSession = false;
 
   isAvailable(): boolean {
     return getSpeechRecognitionCtor() !== null;
@@ -93,7 +105,7 @@ export class WebSpeechEngine implements VoiceEngine {
     this.handlers = handlers;
     this.lang = lang;
     this.running = true;
-    this.emptyRestarts = 0;
+    this.wedgedRestarts = 0;
     this.networkFailures = 0;
 
     this.launch();
@@ -116,11 +128,11 @@ export class WebSpeechEngine implements VoiceEngine {
     recognition.interimResults = true;
     recognition.lang = languageTag(this.lang);
     recognition.maxAlternatives = 1;
+    this.audioStartedThisSession = false;
 
     recognition.onresult = (event) => {
-      // Proof the whole path works right now: mic, network, backend. Both
-      // give-up counters reset, so healthy long sessions never age out.
-      this.emptyRestarts = 0;
+      // Proof the whole path works right now: mic, network, backend.
+      this.wedgedRestarts = 0;
       this.networkFailures = 0;
 
       for (let i = event.resultIndex; i < event.results.length; i++) {
@@ -129,6 +141,14 @@ export class WebSpeechEngine implements VoiceEngine {
         const text = (result[0]?.transcript ?? '').trim();
         if (text) this.handlers?.onTranscript(text, result.isFinal);
       }
+    };
+
+    // Audio reaching the recognizer is enough to call the engine healthy —
+    // a silent room is not a malfunction, and treating it as one is what
+    // used to kill the shield after a minute of quiet.
+    recognition.onaudiostart = () => {
+      this.audioStartedThisSession = true;
+      this.wedgedRestarts = 0;
     };
 
     recognition.onspeechstart = () => this.handlers?.onActivity(true);
@@ -164,10 +184,16 @@ export class WebSpeechEngine implements VoiceEngine {
     recognition.onend = () => {
       if (!this.running) return;
 
-      this.emptyRestarts++;
-      if (this.emptyRestarts >= EMPTY_RESTARTS_BEFORE_GIVING_UP) {
-        this.fail('engine-unavailable', 'El reconocedor del navegador no produce resultados.');
-        return;
+      // Sessions that reached the microphone are healthy no matter how quiet
+      // they were; only ones that died before opening it count against the
+      // engine. Mobile ends a session every few seconds of silence, so
+      // counting those would condemn a working recognizer for a quiet room.
+      if (!this.audioStartedThisSession) {
+        this.wedgedRestarts++;
+        if (this.wedgedRestarts >= WEDGED_RESTARTS_BEFORE_GIVING_UP) {
+          this.fail('engine-unavailable', 'El reconocedor del navegador no llega al microfono.');
+          return;
+        }
       }
 
       this.restartTimer = setTimeout(() => {
