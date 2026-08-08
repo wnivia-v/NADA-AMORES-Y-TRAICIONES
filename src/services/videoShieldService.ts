@@ -27,6 +27,19 @@ interface VideoShieldCallbacks {
 // a single ongoing deepfake would spam the alert log dozens of times a second.
 const ALERT_COOLDOWN_MS = 20_000;
 
+/**
+ * Cuánto silencio hace falta antes de volver a SONAR por la misma amenaza.
+ *
+ * Un deepfake que sigue en pantalla es un solo evento, no uno nuevo cada 20
+ * segundos. El registro visual sí se refresca a ese ritmo (sirve como
+ * evidencia de cuánto duró), pero repetir el tono durante toda una
+ * videollamada solo tapa la conversación que el usuario está tratando de
+ * evaluar — y una alerta que suena todo el tiempo deja de informar.
+ *
+ * Suena la primera vez, suena si la amenaza escala, y después se calla.
+ */
+const SOUND_REPEAT_MS = 150_000;
+
 class VideoShieldService {
   private callbacks: VideoShieldCallbacks | null = null;
   private stream: MediaStream | null = null;
@@ -36,6 +49,9 @@ class VideoShieldService {
   private rafId = 0;
   private source: CameraSource = 'call';
   private lastAlertAt = 0;
+  private lastSoundAt = 0;
+  /** Veredicto de la última alerta sonora, para detectar escalada. */
+  private lastSoundVerdict: ScamAnalysis['verdict'] | null = null;
 
   init(callbacks: VideoShieldCallbacks) {
     this.callbacks = callbacks;
@@ -78,6 +94,8 @@ class VideoShieldService {
       this.stream = stream;
       this.source = source;
       this.lastAlertAt = 0;
+      this.lastSoundAt = 0;
+      this.lastSoundVerdict = null;
 
       if (stream.getAudioTracks().length === 0) {
         this.callbacks?.onLog('CAMARA: Sin audio — no se puede verificar la sincronia labial.', 'warning');
@@ -153,7 +171,18 @@ class VideoShieldService {
     };
 
     this.callbacks?.onAnalysisResult(result);
-    playAlertTone(verdict === 'PELIGROSO' ? 'high' : 'medium');
+
+    // El aviso sonoro se guarda para lo que el usuario todavía no sabe: la
+    // primera detección, o una que empeoró. Mientras la misma amenaza sigue
+    // igual, la evidencia se acumula en pantalla en silencio.
+    const escalated = verdict === 'PELIGROSO' && this.lastSoundVerdict !== 'PELIGROSO';
+    const silentLongEnough = now - this.lastSoundAt >= SOUND_REPEAT_MS;
+    if (this.lastSoundVerdict === null || escalated || silentLongEnough) {
+      this.lastSoundAt = now;
+      this.lastSoundVerdict = verdict;
+      playAlertTone(verdict === 'PELIGROSO' ? 'high' : 'low');
+    }
+
     notificationService.sendThreatAlert(verdict, confidence, result.tactics[0]);
     this.callbacks?.onAlert({
       verdict,

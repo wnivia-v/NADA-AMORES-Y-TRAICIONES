@@ -603,11 +603,13 @@ class ProtectionEngine {
 
   // ── Threat Alert with Audio + Push Notification ───────────────
   triggerThreatAlert(result: ScamAnalysis, description: string, app: string) {
-    // Play audio alert based on severity
+    // El tono acompaña a la alerta visual, no la reemplaza. Una sospecha (que
+    // puede repetirse mientras la conversación sigue) suena suave a propósito;
+    // el volumen se reserva para lo confirmado.
     if (result.verdict === 'PELIGROSO') {
       playAlertTone('high');
     } else if (result.verdict === 'SOSPECHOSO') {
-      playAlertTone('medium');
+      playAlertTone('low');
     }
 
     // Send push notification
