@@ -27,10 +27,28 @@
 // grows. It is a strong floor, not a replacement for a frontier model.
 // =============================================================================
 
-import type { AIProvider, AIAnalysisResult } from './types';
+import type { AIProvider } from './types';
+import type { AnalysisRequest, ProviderSignal } from '@/shared/llm/types';
 import corpus from '@/data/scam-corpus.json';
 
-type Verdict = AIAnalysisResult['verdict'];
+/**
+ * Este proveedor SI produce una etiqueta, y no contradice la regla de que un LLM
+ * nunca decide: no es un LLM. Es un kNN sobre un corpus etiquetado a mano, o
+ * sea la generalizacion semantica de la capa de patrones. Su etiqueta es un dato
+ * medido contra el corpus, no la opinion de un modelo generativo.
+ */
+export type Verdict = 'SEGURO' | 'SOSPECHOSO' | 'PELIGROSO';
+
+/** Salida nativa del clasificador, antes de convertirse en señal. */
+export interface LocalClassification {
+  verdict: Verdict;
+  riskScore: number;
+  /** Cuota de voto que se llevo la clase ganadora (0-1). */
+  confidence: number;
+  tactics: string[];
+  explanation: string;
+  recommendations: string[];
+}
 
 interface CorpusCase {
   id: string;
@@ -154,7 +172,7 @@ interface Neighbour {
 }
 
 /** Exported for testing: turns nearest neighbours into a verdict. */
-export function classifyFromNeighbours(neighbours: Neighbour[]): AIAnalysisResult | null {
+export function classifyFromNeighbours(neighbours: Neighbour[]): LocalClassification | null {
   if (neighbours.length === 0) return null;
 
   const considered = neighbours.slice(0, K);
@@ -213,7 +231,7 @@ export function classifyFromNeighbours(neighbours: Neighbour[]): AIAnalysisResul
           ]
         : ['El mensaje no coincide con estafas conocidas, pero mantente alerta.'];
 
-  return { verdict, riskScore, tactics, explanation, recommendations };
+  return { verdict, riskScore, confidence, tactics, explanation, recommendations };
 }
 
 export const localProvider: AIProvider = {
@@ -229,10 +247,11 @@ export const localProvider: AIProvider = {
   },
 
   /**
-   * The `prompt` argument is intentionally ignored — this provider classifies by
-   * similarity, not by instruction following.
+   * Aqui no hay prompt que valga: este proveedor clasifica por similitud, no
+   * siguiendo instrucciones. Que sea inmune a la inyeccion de prompt por
+   * construccion es justamente lo que lo hace el suelo del sistema.
    */
-  async analyze(text: string, _prompt: string, signal?: AbortSignal): Promise<AIAnalysisResult | null> {
+  async analyze(request: AnalysisRequest, signal?: AbortSignal): Promise<ProviderSignal | null> {
     if (signal?.aborted) return null;
 
     const embed = await getEmbedder();
@@ -243,7 +262,7 @@ export const localProvider: AIProvider = {
       const vectors = await getCorpusVectors(embed);
       if (signal?.aborted) return null;
 
-      const queryVector = await embed(text);
+      const queryVector = await embed(request.text);
       if (signal?.aborted) return null;
 
       const scored: Neighbour[] = CASES.map((c, i) => ({
@@ -252,7 +271,18 @@ export const localProvider: AIProvider = {
       }));
 
       scored.sort((a, b) => b.similarity - a.similarity);
-      return classifyFromNeighbours(scored);
+      const classification = classifyFromNeighbours(scored);
+      if (!classification) return null;
+
+      return {
+        type: 'llm-risk',
+        value: classification.riskScore,
+        confidence: classification.confidence,
+        timestamp: Date.now(),
+        tactics: classification.tactics,
+        explanation: classification.explanation,
+        recommendations: classification.recommendations,
+      };
     } catch (e) {
       if (signal?.aborted) return null;
       console.warn('[NADA][local] Analysis error:', e);

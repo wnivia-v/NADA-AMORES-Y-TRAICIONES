@@ -4,7 +4,10 @@ import { checkUrlSafety } from './safeBrowsingService';
 import { scamDatabase } from './scamDatabase';
 import { riskScorer } from '@/utils/riskScorer';
 import { orchestrateAnalysis } from './aiProviders';
-import { TEXT_ANALYSIS_PROMPT, VOICE_FRAGMENT_PROMPT } from '@/utils/geminiPrompts';
+import { buildAnalysisRequest } from '@/shared/llm/envelope';
+import { INJECTION_SIGNAL_WEIGHT } from '@/shared/llm/injectionScan';
+import { riskBand } from '@/shared/llm/signalSchema';
+import type { AnalysisRequest } from '@/shared/llm/types';
 import type { ScamAnalysis } from '@/store/useNadaStore';
 
 // =============================================================================
@@ -61,26 +64,37 @@ export function cancelAnalysis(scope: AnalysisScope) {
   controllers.delete(scope);
 }
 
-// Sanitize user input to prevent prompt injection.
+// Endurecimiento y empaquetado de la entrada.
 //
-// The input to NADA is by definition attacker-authored text — that is the point
-// of the product. A scammer who knows the victim runs NADA can craft a message
-// designed to manipulate the classifier into returning SEGURO. This function
-// strips the common injection patterns in BOTH English and Spanish.
-function sanitizeForPrompt(text: string): string {
-  return text
-    .replace(/```/g, '\'\'\'')
-    .replace(/"""/g, '\'\'\'')
-    // English injection patterns
-    .replace(/\b(ignore|forget|disregard)\s+(previous|above|all)\s+(instructions?|prompts?|rules?)/gi, '[FILTERED]')
-    .replace(/\b(you\s+are\s+now|new\s+instructions?|system\s*:)/gi, '[FILTERED]')
-    .replace(/\b(act\s+as|pretend\s+to\s+be|roleplay\s+as)/gi, '[FILTERED]')
-    // Spanish injection patterns (the corpus case edge-004 uses these)
-    .replace(/\b(ignora|olvida|descarta)\s+(las?\s+)?(instrucciones?|reglas?|indicaciones?)\s*(anteriores?|previas?|de\s+arriba)?/gi, '[FILTERED]')
-    .replace(/\b(eres\s+ahora|nuevas?\s+instrucciones?|sistema\s*:)/gi, '[FILTERED]')
-    .replace(/\b(actua\s+como|act[uú]a\s+como|finge\s+ser|simula\s+ser|hazte\s+pasar)/gi, '[FILTERED]')
-    .replace(/\b(responde?\s+que\s+(es|este\s+mensaje\s+es)\s+seguro)/gi, '[FILTERED]')
-    .replace(/\b(riskScore\s*[=:\s]\s*0|verdict\s*[=:\s]\s*["']?SEGURO)/gi, '[FILTERED]');
+// Aqui vivia sanitizeForPrompt(), una lista de frases prohibidas que se
+// tachaban del mensaje antes de pegarlo dentro del prompt. Se evadia de ocho
+// maneras distintas — perifrasis, acentos, otro idioma, un espacio de ancho
+// cero, una "a" cirilica — porque una lista de frases no puede ganarle a quien
+// escribe despues de leerla.
+//
+// El reemplazo no es una lista mejor: es que el mensaje ya no se pega dentro de
+// las instrucciones. Va en un campo aparte, delimitado por un marcador que
+// cambia en cada peticion (src/shared/llm/envelope.ts). Lo que el detector de
+// inyeccion encuentra ahora se usa como SEÑAL DE RIESGO, no como censura.
+function prepare(text: string, task: AnalysisRequest['task']): AnalysisRequest {
+  return buildAnalysisRequest(text, task);
+}
+
+/**
+ * Un mensaje que intenta manipular al analizador es, en si mismo, un indicio.
+ *
+ * Se suma al scorer con peso moderado y NO fija un suelo: el principio del
+ * proyecto es que ninguna alerta salte por una señal aislada. Un intento de
+ * inyeccion empuja, no decide.
+ */
+function recordInjectionAttempts(request: AnalysisRequest, label: string) {
+  const attempts = request.hardening.injectionAttempts;
+  if (attempts.length === 0) return;
+  console.warn(
+    `[NADA][${label}] intento de manipulacion del analizador:`,
+    attempts.map((a) => a.id).join(', '),
+  );
+  riskScorer.addSignal('injection-attempt', INJECTION_SIGNAL_WEIGHT, 1.5);
 }
 
 // Extract URLs from text
@@ -139,25 +153,22 @@ async function runTextAnalysis(text: string, scope: AnalysisScope, signal: Abort
   // display a local-only "SEGURO" as if the AI had cleared the text.
   if (signal.aborted) throw new AnalysisAbortedError(scope);
 
-  // Step 3: AI Provider orchestration (Gemini, Claude, Bedrock — based on config)
-  const sanitizedText = sanitizeForPrompt(text);
-  const { result: aiResult, providerId } = await orchestrateAnalysis(
-    sanitizedText,
-    TEXT_ANALYSIS_PROMPT,
-    signal,
-  );
+  // Step 3: AI Provider orchestration (local, Gemini, y los remotos via proxy)
+  const request = prepare(text, 'text');
+  recordInjectionAttempts(request, scope);
+  const { result: aiResult, providerId } = await orchestrateAnalysis(request, signal);
 
   if (signal.aborted) throw new AnalysisAbortedError(scope);
 
   // Step 4: Merge results (hybrid scoring) + riskScorer composite
   if (aiResult) {
     const sourceLabel = providerId ?? 'ai';
-    riskScorer.addSignal(`${sourceLabel}-ai`, aiResult.riskScore, 2.0);
+    riskScorer.addSignal(`${sourceLabel}-ai`, aiResult.value, 2.0);
 
     // Boost AI score with local signals
     const localBoost = localResult.riskScore * 0.3;
     const urlBoost = unsafeUrls * 15;
-    const aiComposite = Math.min(100, Math.round(aiResult.riskScore + localBoost + urlBoost));
+    const aiComposite = Math.min(100, Math.round(aiResult.value + localBoost + urlBoost));
 
     // Blend with riskScorer composite (includes historical signals)
     const historicalComposite = riskScorer.getCompositeScore();
@@ -178,9 +189,9 @@ async function runTextAnalysis(text: string, scope: AnalysisScope, signal: Abort
 
     const mergedTactics = [...new Set([...aiResult.tactics, ...localResult.tactics])];
 
-    let verdict: ScamAnalysis['verdict'] = 'SEGURO';
-    if (finalScore >= 70) verdict = 'PELIGROSO';
-    else if (finalScore >= 40) verdict = 'SOSPECHOSO';
+    // La banda sale de la puntuacion fusionada, con umbrales compartidos entre
+    // cliente y servidor. El modelo ya no devuelve etiqueta que copiar.
+    const verdict: ScamAnalysis['verdict'] = riskBand(finalScore);
 
     // Store in scam database for future instant lookups
     if (verdict !== 'SEGURO') {
@@ -225,9 +236,7 @@ async function runTextAnalysis(text: string, scope: AnalysisScope, signal: Abort
 
 function buildFallbackResult(localResult: ReturnType<typeof scanLocalPatterns>, unsafeUrls: number): ScamAnalysis {
   const urlAdjusted = Math.min(100, localResult.riskScore + unsafeUrls * 20);
-  let verdict: ScamAnalysis['verdict'] = 'SEGURO';
-  if (urlAdjusted >= 70) verdict = 'PELIGROSO';
-  else if (urlAdjusted >= 40) verdict = 'SOSPECHOSO';
+  const verdict: ScamAnalysis['verdict'] = riskBand(urlAdjusted);
 
   return {
     verdict,
@@ -277,26 +286,21 @@ async function runVoiceFragmentAnalysis(
 
     if (signal.aborted) throw new AnalysisAbortedError(scope);
 
-    const sanitizedText = sanitizeForPrompt(transcript);
-    const { result: aiResult } = await orchestrateAnalysis(
-      sanitizedText,
-      VOICE_FRAGMENT_PROMPT,
-      signal,
-    );
+    const request = prepare(transcript, 'voice');
+    recordInjectionAttempts(request, scope);
+    const { result: aiResult } = await orchestrateAnalysis(request, signal);
 
     if (signal.aborted) throw new AnalysisAbortedError(scope);
 
     if (aiResult) {
-      riskScorer.addSignal('voice-ai', aiResult.riskScore, 1.5);
-      const blended = Math.round(aiResult.riskScore * 0.7 + localResult.riskScore * 0.3);
+      riskScorer.addSignal('voice-ai', aiResult.value, 1.5);
+      const blended = Math.round(aiResult.value * 0.7 + localResult.riskScore * 0.3);
       // Same floor as the text pipeline: an explicit threat heard mid-call
       // must not be averaged away by a model that only sees "not fraud".
       const compositeScore = Math.min(100, Math.max(blended, localResult.riskScore));
       const localOverrode = localResult.riskScore > blended;
 
-      let verdict: ScamAnalysis['verdict'] = 'SEGURO';
-      if (compositeScore >= 70) verdict = 'PELIGROSO';
-      else if (compositeScore >= 40) verdict = 'SOSPECHOSO';
+      const verdict: ScamAnalysis['verdict'] = riskBand(compositeScore);
 
       return {
         verdict,

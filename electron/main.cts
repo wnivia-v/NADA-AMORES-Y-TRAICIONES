@@ -31,6 +31,50 @@ function iconPath(): string {
     : path.join(__dirname, '../dist/icon.png');
 }
 
+/**
+ * Construye la CSP del renderer.
+ *
+ * api.anthropic.com y api.groq.com salieron de connect-src: esas llamadas las
+ * hace ahora el servidor de NADA, no el navegador. Si alguien reintroduce una
+ * llamada directa desde el cliente, la CSP la bloquea y se ve — en vez de
+ * volver a enviar una clave de API desde el equipo del usuario.
+ *
+ * El origen del backend se declara en NADA_API_ORIGIN. Vacio por defecto: sin
+ * backend configurado la app funciona igual, con el clasificador local.
+ */
+function buildCsp(): string {
+  const apiOrigin = (process.env.NADA_API_ORIGIN ?? '').trim();
+  const connect = [
+    "'self'",
+    apiOrigin,
+    'https://safebrowsing.googleapis.com',
+    'https://*.googleapis.com',
+    'https://*.firebaseio.com',
+    'https://*.cloudfunctions.net',
+    'https://cdn.jsdelivr.net',
+    'https://storage.googleapis.com',
+    'https://huggingface.co',
+    'https://*.hf.co',
+    'wss://*.firebaseio.com',
+  ]
+    .filter(Boolean)
+    .join(' ');
+
+  return [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: https://cdn.jsdelivr.net",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src 'self' https://fonts.gstatic.com",
+    "img-src 'self' data: blob: https:",
+    `connect-src ${connect}`,
+    "worker-src 'self' blob:",
+    "media-src 'self' blob: mediastream:",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+  ].join('; ') + ';';
+}
+
 function createMainWindow() {
   mainWindow = new BrowserWindow({
     width: 420,
@@ -52,9 +96,7 @@ function createMainWindow() {
     callback({
       responseHeaders: {
         ...details.responseHeaders,
-        'Content-Security-Policy': [
-          "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https://api.anthropic.com https://api.groq.com https://safebrowsing.googleapis.com https://*.googleapis.com https://*.firebaseio.com https://*.cloudfunctions.net https://cdn.jsdelivr.net https://storage.googleapis.com https://huggingface.co https://*.hf.co wss://*.firebaseio.com; worker-src 'self' blob:; media-src 'self' blob: mediastream:; object-src 'none'; base-uri 'self'; form-action 'self';"
-        ],
+        'Content-Security-Policy': [buildCsp()],
       },
     });
   });

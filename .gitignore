@@ -27,3 +27,9 @@ android/**/*.jks
 # Regenerate with `npm run android:sync` before opening in Android Studio.
 android/app/src/main/assets/public/
 android/app/src/main/assets/capacitor.config.json
+
+# Backend: build y secretos. server/.env guarda las claves de API — que no se
+# suba nunca es justamente el motivo de que exista el servidor.
+server/dist/
+server/.env
+server/.env.local

@@ -32,17 +32,34 @@ export default defineConfig(({ mode }) => {
       'import.meta.env.VITE_FIREBASE_APP_ID': JSON.stringify(env.VITE_FIREBASE_APP_ID || ''),
       'import.meta.env.VITE_SAFE_BROWSING_API_KEY': JSON.stringify(env.VITE_SAFE_BROWSING_API_KEY || ''),
       // Multi-AI providers
-      'import.meta.env.VITE_GROQ_API_KEY': JSON.stringify(env.VITE_GROQ_API_KEY || ''),
-      'import.meta.env.VITE_GROQ_MODEL': JSON.stringify(env.VITE_GROQ_MODEL || 'llama-3.3-70b-versatile'),
-      'import.meta.env.VITE_CLAUDE_API_KEY': JSON.stringify(env.VITE_CLAUDE_API_KEY || ''),
-      'import.meta.env.VITE_CLAUDE_MODEL': JSON.stringify(env.VITE_CLAUDE_MODEL || 'claude-sonnet-4-20250514'),
-      'import.meta.env.VITE_BEDROCK_ENDPOINT': JSON.stringify(env.VITE_BEDROCK_ENDPOINT || ''),
-      'import.meta.env.VITE_BEDROCK_API_KEY': JSON.stringify(env.VITE_BEDROCK_API_KEY || ''),
-      'import.meta.env.VITE_BEDROCK_MODEL': JSON.stringify(env.VITE_BEDROCK_MODEL || 'anthropic.claude-3-haiku-20240307-v1:0'),
+      // Las claves de Groq, Claude y Bedrock YA NO SE INYECTAN AQUI.
+      //
+      // `define` sustituye estas expresiones por el valor literal dentro del
+      // bundle, asi que cualquier clave que aparezca en esta lista acaba en
+      // texto plano en dist/assets/*.js. Viven ahora en el entorno del servidor
+      // (server/src/config.ts), sin prefijo VITE_ y sin cruzar al navegador.
+      //
+      // No añadas aqui ninguna credencial: si algo necesita una clave secreta,
+      // es que va en el backend.
+      'import.meta.env.VITE_NADA_API_URL': JSON.stringify(env.VITE_NADA_API_URL || ''),
       // Firebase App Check — needed for Gemini to work
       'import.meta.env.VITE_RECAPTCHA_ENTERPRISE_KEY': JSON.stringify(env.VITE_RECAPTCHA_ENTERPRISE_KEY || ''),
     },
     plugins: [
+      // La CSP de index.html se arma aqui para que connect-src refleje a donde
+      // habla de verdad esta build. api.anthropic.com y api.groq.com salieron
+      // de la lista: esas llamadas las hace ahora el servidor. Si alguien
+      // reintroduce una llamada directa desde el navegador, la CSP la bloquea y
+      // se nota, en vez de volver a filtrar una clave en silencio.
+      {
+        name: 'nada-csp',
+        transformIndexHtml(html: string) {
+          const apiOrigin = env.VITE_NADA_API_URL
+            ? new URL(env.VITE_NADA_API_URL).origin
+            : '';
+          return html.replace('%NADA_API_ORIGIN%', apiOrigin);
+        },
+      },
       react(),
       VitePWA({
         registerType: 'autoUpdate',

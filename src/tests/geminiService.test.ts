@@ -60,8 +60,10 @@ describe('geminiService — analyzeText pipeline', () => {
     it('merges AI result with local patterns', async () => {
       (orchestrateAnalysis as any).mockResolvedValue({
         result: {
-          verdict: 'PELIGROSO',
-          riskScore: 85,
+          type: 'llm-risk',
+          value: 85,
+          confidence: 0.9,
+          timestamp: Date.now(),
           tactics: ['Fraude financiero'],
           explanation: 'Solicitud de dinero con urgencia',
           recommendations: ['No envíes dinero.'],
@@ -79,8 +81,10 @@ describe('geminiService — analyzeText pipeline', () => {
     it('combines local tactics with AI tactics', async () => {
       (orchestrateAnalysis as any).mockResolvedValue({
         result: {
-          verdict: 'SOSPECHOSO',
-          riskScore: 50,
+          type: 'llm-risk',
+          value: 50,
+          confidence: 0.9,
+          timestamp: Date.now(),
           tactics: ['Manipulacion emocional'],
           explanation: 'Test',
           recommendations: ['Cuidado'],
@@ -99,6 +103,8 @@ describe('geminiService — analyzeText pipeline', () => {
     it('returns cached result when found in ScamDB', async () => {
       (scamDatabase.lookup as any).mockResolvedValue({
         found: true,
+        // Un registro de ScamDB no es una señal de proveedor: guarda el
+        // veredicto ya decidido de un analisis anterior.
         record: {
           hash: 'abc123',
           verdict: 'PELIGROSO',
