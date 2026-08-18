@@ -22,12 +22,12 @@ import { analyzeText } from '@/services/geminiService';
 import { orchestrateAnalysis } from '@/services/aiProviders';
 import { checkUrlSafety } from '@/services/safeBrowsingService';
 import { scamDatabase } from '@/services/scamDatabase';
-import { riskScorer } from '@/utils/riskScorer';
+import { clearAllLanes } from '@/shared/risk';
 
 describe('geminiService — analyzeText pipeline', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    riskScorer.clear();
+    clearAllLanes();
   });
 
   describe('local-only mode (no AI available)', () => {

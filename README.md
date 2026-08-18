@@ -74,7 +74,7 @@ NADA es una aplicacion de proteccion contra estafas, fraudes romanticos y manipu
 | Backend | Node (node:http), sin dependencias |
 | Desktop | Electron 33, electron-builder |
 | Build | Vite 6, vite-plugin-pwa |
-| Tests | Vitest 4 (jsdom, fake-indexeddb) — 209 tests |
+| Tests | Vitest 4 (jsdom, fake-indexeddb) — 223 tests |
 | URLs | Google Safe Browsing API v4 |
 
 ## Inicio Rapido
@@ -100,7 +100,7 @@ cp .env.example server/.env    # rellena solo el bloque de SERVIDOR
 npm run server:dev             # escucha en 127.0.0.1:8787
 
 # 6. Tests
-npm test                   # 209 tests, una pasada
+npm test                   # 223 tests, una pasada
 npm run test:watch         # modo watch
 
 # 7. Build produccion
@@ -218,6 +218,9 @@ Configurable desde Ajustes > Proveedores de IA:
 
 ```
 src/
+├── shared/risk/        # Motor de fusion — contrato de señal y ventana deslizante
+│   ├── fusionEngine    # acumulacion noisy-OR, corroboracion, motor por carril
+│   └── config          # ventana, pesos, umbrales y la lista cerrada de amenazas
 ├── shared/llm/         # Limite con el LLM — lo importan cliente Y servidor
 │   ├── envelope        # system/user separados; el texto nunca se concatena
 │   ├── normalize       # NFKC, invisibles, homoglifos, tope de longitud
@@ -239,8 +242,9 @@ src/
 │   ├── visionService   # MediaPipe deepfake detection
 │   └── safeBrowsingService # Google Safe Browsing
 ├── store/              # Zustand store con persist
-├── tests/              # Vitest: patrones, riskScorer, scamDB, scoping, store, OCR
+├── tests/              # Vitest: patrones, fusion, scamDB, scoping, store, OCR
 │   └── fixtures/       # scam-corpus.json — corpus etiquetado de referencia
+└── data/               # scam-corpus.json + signal-sequences.json (fusion)
 └── utils/              # Prompts, patterns, riskScorer, translations, audioAlert
 server/                 # Backend minimo — node:http, sin dependencias
 ├── src/config          # Claves de API (process.env, sin prefijo VITE_)
@@ -259,6 +263,88 @@ docs/dev/
 ├── hooks/              # Guard de infra viva, guard de cambios en deteccion
 └── steering/           # Contexto y estandares del proyecto
 ```
+
+## Fusion de señales: por que dejo de promediar
+
+Todo lo que detecta algo en NADA emite ahora la misma forma —`{ type, value,
+confidence, timestamp }`— y un motor de fusion decide. Sustituye a
+`utils/riskScorer.ts`, que tenia cuatro problemas de fondo:
+
+| Antes | Ahora |
+|-------|-------|
+| Singleton global: los cuatro escudos compartian bolsa de señales, asi que una llamada sospechosa subia el riesgo de lo que copiabas al portapapeles | Un motor por carril (`voice`, `clipboard`, `screen`, `ui`, `video`) |
+| Promediaba: una señal alta rodeada de bajas se hundia hacia la media | Acumula evidencia (noisy-OR): una señal baja nunca resta |
+| Ventana de 5 minutos | Ventana deslizante de 30 s (§4.3) |
+| Ignoraba la confianza | La confianza pondera cada señal, y la del resultado sube al corroborar |
+
+El cambio de promedio a acumulacion **arregla de raiz** un fallo que hasta ahora
+estaba parcheado. El pipeline tenia esta linea:
+
+```ts
+const finalScore = Math.min(100, Math.max(blended, localResult.riskScore));
+```
+
+Un `max()` puesto ahi porque promediar hundia un hallazgo local de 80 puntos
+hasta "0/100 — no se detectaron patrones" cuando el modelo respondia que aquello
+no era fraude. Paso dos veces, con mensajes que nombraban un delito y la
+direccion de la victima. Con acumulacion el parche sobra: la evidencia solo
+suma, asi que un modelo que diga "esto no es fraude" ya no puede restar. El test
+que fija esa propiedad esta en `fusionEngine.test.ts`.
+
+### La regla de corroboracion, y su excepcion
+
+El principio del proyecto dice que ninguna **alerta** salta por una señal
+aislada. Se aplica en `triggerThreatAlert()`, que es el punto unico por el que
+salen tono, notificacion y entrada en la lista.
+
+Lo que se retiene es la alarma, no la informacion: el riesgo calculado sigue
+llegando a la interfaz. El usuario puede verlo; lo que no pasa es que suene un
+tono porque un solo detector vio algo que nada mas respalda.
+
+La excepcion es una lista **cerrada** de categorias —amenaza de violencia,
+sextorsion, extorsion, secuestro virtual, induccion a la autolesion, acusacion
+falsa y acoso severo— donde una sola aparicion ya es inequivoca y esperar a una
+segunda señal significa esperar a que pase algo. Fuera quedan a proposito las
+categorias de fraude comun: son graves, pero aparecen tambien cuando alguien
+reenvia una estafa para preguntar si lo es, y ahi la corroboracion es justo lo
+que hace falta. Ampliar la lista reabre el Problema A, asi que cada entrada nueva
+necesita su medicion.
+
+### Como se mide
+
+```bash
+npm run bench:fusion         # 17 secuencias etiquetadas: ¿alerta cuando debe?
+npm run bench:fusion-sweep   # sensibilidad de cada parametro
+```
+
+El fixture (`src/data/signal-sequences.json`) no son mensajes sueltos sino
+**secuencias temporales**: "a los 0 s un patron de 45, a los 9 s el LLM con 60 —
+¿debe alertar?". Es lo unico que mide acumulacion, que es lo que la ventana
+añade.
+
+A diferencia de `bench/local-provider.mjs`, que reproduce a mano las constantes
+del provider y avisa "Must mirror src/...", este banco importa el motor real. Un
+banco que duplica la implementacion mide la copia.
+
+Resultado con los valores por defecto: 17/17, 100% recall, 0 falsas alarmas. Ese
+numero **por si solo no vale nada**: el fixture y los parametros los escribio la
+misma persona. Lo que informa es el barrido:
+
+| Parametro | Meseta medida | Que pasa fuera |
+|-----------|---------------|----------------|
+| `windowMs` | 15–30 s | Por debajo, señales separadas 9–13 s no llegan a corroborarse. Por encima de 45 s, señales sin relacion se corroboran entre si |
+| `minEvidence` | 0.05–0.15 | A partir de 0.20 empieza a dejar amenazas sin avisar |
+| `edgeDecay` | ≥ 0.5 | Por debajo, una señal del principio de la ventana se evapora antes de poder corroborar |
+| Umbral de sospecha | ≤ 40 | Por encima, amenazas reales se quedan por debajo del umbral |
+
+Lo interesante: **la meseta de la ventana cae exactamente en el rango 15–30 s que
+pedia el brief**, sin haberlo forzado. Y `minEvidence` esta en 0.10 y no en 0.15
+para no dejar el valor por defecto pegado al borde.
+
+Con 17 secuencias esto es una señal, no una prueba — la misma advertencia que el
+corpus de 33 casos. Varios valores por defecto siguen en el borde de su meseta, y
+cada uno depende de un solo caso. La forma de subir el techo es agrandar el
+fixture con secuencias reales.
 
 ## Inyeccion de prompt: por que ya no es un filtro
 
@@ -345,6 +431,8 @@ de una linea en `src/services/voice/index.ts`.
 ```bash
 node bench/local-provider.mjs   # evalua el proveedor local (leave-one-out)
 node bench/local-sweep.mjs      # barrido de parametros del clasificador
+npm run bench:fusion            # evalua el motor de fusion sobre secuencias
+npm run bench:fusion-sweep      # sensibilidad de los parametros del motor
 ```
 
 Resultado medido del proveedor local sobre el corpus (leave-one-out, 33 casos):

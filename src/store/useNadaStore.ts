@@ -44,6 +44,22 @@ export interface ScamAnalysis {
   explanation: string;
   scanSource: 'local' | 'gemini' | 'hybrid';
   recommendations: string[];
+  /**
+   * Si procede AVISAR — tono, notificacion, entrada en alertas.
+   *
+   * Distinto de `verdict`. El principio del proyecto es que ninguna alerta
+   * salta por una señal aislada, no que haya que ocultar el riesgo: la banda se
+   * muestra siempre, la alarma se reserva para lo corroborado o para una
+   * amenaza explicita de categoria tasada.
+   *
+   * Opcional porque la persistencia de zustand guarda alertas de versiones
+   * anteriores que no lo traen.
+   */
+  alert?: boolean;
+  /** Dos o mas fuentes independientes sostienen el resultado. */
+  corroborated?: boolean;
+  /** Confianza del resultado fusionado, 0-1. */
+  confidence?: number;
 }
 
 // Daily threat tracking for trend chart

@@ -602,7 +602,30 @@ class ProtectionEngine {
   }
 
   // ── Threat Alert with Audio + Push Notification ───────────────
+  /**
+   * Punto unico por el que sale una alerta: tono, notificacion y entrada en la
+   * lista. Por eso la regla del §3 —ninguna alerta se dispara por una señal
+   * aislada— se aplica aqui y no en cada uno de los cuatro sitios que llaman.
+   *
+   * Lo que se retiene es la ALARMA, no la informacion. El riesgo calculado sigue
+   * llegando a la interfaz por onAnalysisResult: el usuario puede mirarlo si
+   * quiere. Lo que no pasa es que suene un tono y salte una notificacion porque
+   * un unico detector vio algo que nada mas respalda — que es exactamente el
+   * Problema A que se pidio atacar.
+   */
   triggerThreatAlert(result: ScamAnalysis, description: string, app: string) {
+    // `alert` es opcional: un resultado sin el campo viene de un camino que aun
+    // no pasa por el motor, y ahi se mantiene el comportamiento de antes.
+    if (result.alert === false) {
+      this.log(
+        `SIN CORROBORAR: riesgo ${result.riskScore}/100 (${result.verdict}) — ` +
+          'una sola señal, no se alarma al usuario.',
+        'info',
+      );
+      this.callbacks?.onAnalysisResult(result);
+      return;
+    }
+
     // El tono acompaña a la alerta visual, no la reemplaza. Una sospecha (que
     // puede repetirse mientras la conversación sigue) suena suave a propósito;
     // el volumen se reserva para lo confirmado.

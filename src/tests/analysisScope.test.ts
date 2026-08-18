@@ -37,7 +37,7 @@ import {
   isAnalysisAborted,
   AnalysisAbortedError,
 } from '@/services/geminiService';
-import { riskScorer } from '@/utils/riskScorer';
+import { clearAllLanes } from '@/shared/risk';
 
 const tick = (ms = 5) => new Promise((r) => setTimeout(r, ms));
 
@@ -53,7 +53,7 @@ const tick = (ms = 5) => new Promise((r) => setTimeout(r, ms));
 describe('analysis scoping', () => {
   beforeEach(() => {
     aiDelayMs = 60;
-    riskScorer.clear();
+    clearAllLanes();
     (['ui', 'clipboard', 'screen', 'voice'] as const).forEach(cancelAnalysis);
   });
 

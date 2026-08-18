@@ -1,5 +1,5 @@
 import { visionService } from './visionService';
-import { riskScorer } from '@/utils/riskScorer';
+import { getFusionEngine } from '@/shared/risk';
 import { playAlertTone } from '@/utils/audioAlert';
 import { notificationService } from './notificationService';
 import type { ScamAnalysis } from '@/store/useNadaStore';
@@ -155,7 +155,9 @@ class VideoShieldService {
     if (now - this.lastAlertAt < ALERT_COOLDOWN_MS) return;
     this.lastAlertAt = now;
 
-    riskScorer.addSignal('video-deepfake', confidence, 2.0);
+    // Carril propio: una videollamada dudosa no debe subir el riesgo de lo
+    // que se copie al portapapeles diez segundos despues.
+    getFusionEngine('video').addSignal('deepfake', confidence, 0.7);
 
     const verdict: ScamAnalysis['verdict'] = confidence >= 70 ? 'PELIGROSO' : 'SOSPECHOSO';
     const result: ScamAnalysis = {
