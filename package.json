@@ -19,6 +19,8 @@
     "typecheck": "tsc --noEmit && tsc -p tsconfig.server.json",
     "bench:fusion": "tsx bench/fusion.ts",
     "bench:fusion-sweep": "tsx bench/fusion-sweep.ts",
+    "bench:regex": "tsx bench/measure-regex.ts",
+    "bench:regions": "tsx bench/lexicon-regions.ts",
     "icon": "node scripts/generate-icon.mjs",
     "electron:dev": "npm run icon && tsc -p tsconfig.electron.json && concurrently -k \"vite\" \"wait-on http://127.0.0.1:5173 && electron .\"",
     "electron:build": "npm run icon && tsc -p tsconfig.electron.json && tsc -b && vite build && electron-builder --win --x64",

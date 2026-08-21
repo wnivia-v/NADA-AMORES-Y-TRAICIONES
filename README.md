@@ -74,7 +74,7 @@ NADA es una aplicacion de proteccion contra estafas, fraudes romanticos y manipu
 | Backend | Node (node:http), sin dependencias |
 | Desktop | Electron 33, electron-builder |
 | Build | Vite 6, vite-plugin-pwa |
-| Tests | Vitest 4 (jsdom, fake-indexeddb) — 223 tests |
+| Tests | Vitest 4 (jsdom, fake-indexeddb) — 248 tests |
 | URLs | Google Safe Browsing API v4 |
 
 ## Inicio Rapido
@@ -100,7 +100,7 @@ cp .env.example server/.env    # rellena solo el bloque de SERVIDOR
 npm run server:dev             # escucha en 127.0.0.1:8787
 
 # 6. Tests
-npm test                   # 223 tests, una pasada
+npm test                   # 248 tests, una pasada
 npm run test:watch         # modo watch
 
 # 7. Build produccion
@@ -196,7 +196,7 @@ Honestidad sobre lo que funciona hoy:
 | Groq | Implementado. Sin medir: requiere una clave gratuita. |
 | Claude | Implementado, de pago. La clave vive ahora en el servidor, no en el bundle. |
 | AWS Bedrock | **No funciona sin trabajo extra.** Sigue necesitando un proxy propio, que ahora llama el servidor y no el navegador. |
-| Deteccion local (regex) | Funciona. Precision y recall aun sin medir contra el corpus. |
+| Deteccion local (regex) | **Medido**: 75.0% acierto exacto, 82.4% recall, 0% falsas alarmas, 0 fallos graves sobre los 44 casos del corpus. Era 34.1% / 35.3% / 0% / 14 antes de la Fase 3. |
 | OCR en produccion | Sin verificar en runtime. Tesseract carga su worker desde `cdn.jsdelivr.net`; la CSP ya lo permite, pero no se ha ejecutado un OCR real en el build empaquetado. |
 | Escudo de video (deepfake) | Implementado: captura la videollamada via `getDisplayMedia`, biometria facial (EAR/jitter) + sincronia labial real (correlacion boca-audio, sin placeholder). Es heuristica, no un clasificador entrenado contra deepfakes reales, y sin pista de audio la sincronia labial queda explicitamente sin medir en vez de asumir que esta bien. Activacion manual (requiere permiso del navegador), no arranca solo con el resto de la proteccion. |
 
@@ -244,7 +244,8 @@ src/
 ├── store/              # Zustand store con persist
 ├── tests/              # Vitest: patrones, fusion, scamDB, scoping, store, OCR
 │   └── fixtures/       # scam-corpus.json — corpus etiquetado de referencia
-└── data/               # scam-corpus.json + signal-sequences.json (fusion)
+└── data/               # scam-corpus.json, signal-sequences.json (fusion),
+                        # regional-cases.json (modismos por region)
 └── utils/              # Prompts, patterns, riskScorer, translations, audioAlert
 server/                 # Backend minimo — node:http, sin dependencias
 ├── src/config          # Claves de API (process.env, sin prefijo VITE_)
@@ -263,6 +264,118 @@ docs/dev/
 ├── hooks/              # Guard de infra viva, guard de cambios en deteccion
 └── steering/           # Contexto y estandares del proyecto
 ```
+
+## Calibracion regional: lo que la medicion encontro
+
+La capa de patrones nunca se habia medido contra el corpus completo. Al hacerlo,
+el resultado fue peor de lo que nadie suponia:
+
+| | Antes | Ahora |
+|---|-------|-------|
+| Acierto exacto | 34.1% | **75.0%** |
+| Recall de amenazas | 35.3% | **82.4%** |
+| Falsas alarmas | 0.0% | **0.0%** |
+| Fallos graves (PELIGROSO leido como SEGURO) | 14 | **0** |
+
+```bash
+npm run bench:regex     # la tabla de arriba, sobre los 44 casos del corpus
+npm run bench:regions   # falsos positivos desglosados por region
+```
+
+### El agujero: fallaba 11 de 11 casos de INCIBE
+
+Los once casos del corpus tomados de campañas documentadas por INCIBE puntuaban
+entre **0 y 29** sobre un umbral de 70. Ni uno solo llegaba.
+
+El motivo, una vez visto, es evidente: el lexico se habia escrito para amenazas
+entre personas —violencia, acoso, sextorsion, secuestro virtual— y apenas cubria
+la suplantacion institucional, que es la mitad del fraude que se denuncia de
+verdad. Un SMS que dice ser de Correos y pide 1,79 € por reenviar un paquete no
+insulta a nadie ni amenaza a nadie, y por eso el detector no lo veia.
+
+Las familias añadidas salen de los avisos de ciudadania que INCIBE publica:
+suplantacion bancaria, Seguridad Social, Agencia Tributaria, AEMET, DGT y
+paqueteria; el familiar en apuros; el pago por adelantado; el cambio de cuenta
+bancaria; y la sextorsion con plazo y criptomoneda.
+
+De todas ellas la señal mas solida resulto ser **el enlace**: una marca conocida
+pegada con guion a una palabra de seguridad, colgada de un TLD barato
+(`.top`, `.xyz`, `.tk`, `.buzz`). No depende del idioma ni del texto, y aparece
+en los once casos.
+
+### Cuatro huecos de conjugacion
+
+Medir sacó a la luz un patron de error que se repetia:
+
+| Entrada | Cubria | No cubria | Puntuaba |
+|---------|--------|-----------|----------|
+| Sextorsion | `publicaré`, `difundiré` (futuro) | `publico tus fotos` (presente) | **0** |
+| Presencia fisica | `vamos a tu casa` (plural) | `voy a tu casa` (singular) | **0** |
+| Agresion | amenaza de muerte | `te parto la cara` | **0** |
+| Transferencia | `transferir` en el patron **portugues** | `transfiere` en español | 14 |
+
+Los dos primeros son los graves. La amenaza real se dice en presente porque
+suena mas inminente, y un agresor que actua solo dice "voy", no "vamos" — o sea
+que el detector fallaba precisamente en las formas mas frecuentes. Y el lexico
+no tenia ninguna entrada para una paliza anunciada, que es la amenaza mas comun
+en violencia de pareja: la mitad del nombre de este producto.
+
+### Region y amortiguadores
+
+El esquema del lexico gana dos campos, que es lo que pedia la Fase 3:
+
+- **`regions`** — donde aplica una entrada. Casi todo sigue siendo universal a
+  proposito: marcar una entrada con region la vuelve invisible fuera de ella, y
+  esconder una amenaza real por etiquetarla de mas es peor que un falso positivo.
+- **`kind`** — amenaza, modismo o broma. El lexico solo sabia sumar; ahora el
+  contexto puede desmentir a la palabra.
+
+Los **amortiguadores** no bajan la puntuacion: retiran el peso de las
+coincidencias que explican, y solo esas. "Te mato si no traes el pan, jajaja"
+pierde la amenaza de violencia sin que se toque nada mas del mensaje.
+
+El mas importante no es dialectal sino de intencion:
+
+> "Me ha llegado esto del banco diciendo que tengo un cargo de 300 euros, tu que
+> crees, es estafa?"
+
+Ese texto **contiene** una estafa. Quien lo manda es la victima potencial
+pidiendo ayuda. Sin ese amortiguador, NADA alarma a alguien por hacer justo lo
+correcto — y es el falso positivo mas probable de todo el producto.
+
+Cada amortiguador tiene su caso de control con la intencion opuesta y el mismo
+vocabulario, para que la calibracion no se convierta en silenciar amenazas.
+
+### Procedencia, dicha claramente
+
+Las entradas de amenaza derivan de campañas que INCIBE documenta publicamente, y
+llevan el campo `source`. Texto publico, que no es dato biometrico.
+
+Los amortiguadores **no**. INCIBE publica fraudes, no modismos, asi que esa
+mitad esta escrita para calibracion y no tiene fuente externa que la respalde.
+`src/data/regional-cases.json` lo declara en su cabecera y sigue marcado
+`sin revisar por hablantes nativos de cada region`. Ampliar esa lista sin
+revision es el camino mas corto para silenciar una amenaza real.
+
+Nota de honestidad sobre el banco por region: con el fixture actual, declarar la
+region **no cambia ningun veredicto**. El mecanismo funciona y esta medido, pero
+su utilidad todavia no esta demostrada — hacen falta casos reales de cada region
+para saber si merece la pena preguntarla.
+
+### La evasion que quedaba abierta
+
+La Fase 1 cerro dos evasiones en la capa del LLM —caracteres invisibles y
+homoglifos cirilicos— pero `normalizeForMatching` seguia sin aplicarlas, asi que
+la capa de patrones las conservaba. Medido:
+
+| | Antes | Ahora |
+|---|-------|-------|
+| `te voy a matar` | detecta | detecta |
+| `te voy a ma<U+200B>tar` | **no detecta** | detecta |
+| `te voy а matar` (а cirilica) | **no detecta** | detecta |
+
+Una amenaza de muerte con un caracter que no se ve pasaba entera. Ahora las tres
+puntuan igual.
 
 ## Fusion de señales: por que dejo de promediar
 
@@ -426,16 +539,18 @@ de una linea en `src/services/voice/index.ts`.
 
 ## Deteccion: como se mide
 
-`src/data/scam-corpus.json` es el corpus etiquetado (33 casos: SEGURO / SOSPECHOSO / PELIGROSO). No es solo material de test: el proveedor local lo importa en runtime y clasifica por similitud contra el. Incluye casos de precision que **no** deben dispararse, variantes sin acentos y vocabulario regional, y un caso de prompt injection en español.
+`src/data/scam-corpus.json` es el corpus etiquetado (44 casos: SEGURO / SOSPECHOSO / PELIGROSO), once de ellos tomados de campañas documentadas por INCIBE. No es solo material de test: el proveedor local lo importa en runtime y clasifica por similitud contra el. Incluye casos de precision que **no** deben dispararse, variantes sin acentos y vocabulario regional, y un caso de prompt injection en español.
 
 ```bash
 node bench/local-provider.mjs   # evalua el proveedor local (leave-one-out)
 node bench/local-sweep.mjs      # barrido de parametros del clasificador
 npm run bench:fusion            # evalua el motor de fusion sobre secuencias
 npm run bench:fusion-sweep      # sensibilidad de los parametros del motor
+npm run bench:regex             # capa de patrones sobre el corpus completo
+npm run bench:regions           # falsos positivos desglosados por region
 ```
 
-Resultado medido del proveedor local sobre el corpus (leave-one-out, 33 casos):
+Resultado medido del proveedor local sobre el corpus (leave-one-out):
 
 | Metrica | Valor |
 |---------|-------|

@@ -12,7 +12,8 @@
 // is the scoring engine over them.
 // =============================================================================
 
-import { LEXICON, COMBOS, type ThreatCategory } from './threatLexicon';
+import { LEXICON, COMBOS, DAMPENERS, type ThreatCategory, type Region } from './threatLexicon';
+import { hardenInput } from '@/shared/llm/normalize';
 import { matchLearnedPhrases } from '@/services/threatMemory';
 
 interface PatternMatch {
@@ -29,6 +30,20 @@ export interface LocalScanResult {
   categories: ThreatCategory[];
   /** Combination rules that fired, in plain language. */
   combos: string[];
+  /** Amortiguadores que explicaron alguna coincidencia y retiraron su peso. */
+  dampened: string[];
+}
+
+export interface ScanOptions {
+  /**
+   * Region del usuario. Por defecto '*': se evaluan solo las entradas
+   * universales y ninguna de las marcadas por region.
+   *
+   * Al reves seria peor de lo que parece. Aplicar los modismos peninsulares a
+   * un mensaje mexicano no añade cobertura: añade falsos positivos con acento
+   * ajeno, que es exactamente el Problema A.
+   */
+  region?: Region;
 }
 
 /**
@@ -45,8 +60,14 @@ export interface LocalScanResult {
  * classes like [ií], and the bare vowel is in every class.
  */
 export function normalizeForMatching(text: string): string {
-  return text
-    .normalize('NFD')
+  // hardenInput quita invisibles y pliega homoglifos antes de nada.
+  //
+  // Sin esto, la capa regex conservaba las dos evasiones que la Fase 1 ya habia
+  // cerrado en la capa del LLM: un espacio de ancho cero dentro de la palabra, o
+  // una "a" cirilica que se dibuja igual que la latina, y ningun patron
+  // coincidia. Cerrarlo aqui alinea las dos capas.
+  return hardenInput(text)
+    .text.normalize('NFD')
     // Combining diacritics left behind by NFD (also turns ñ into n, which the
     // [nñ] classes already accept).
     .replace(/[̀-ͯ]/g, '')
@@ -61,15 +82,34 @@ function countMatches(regex: RegExp, text: string): number {
   return (text.match(new RegExp(regex.source, flags)) ?? []).length;
 }
 
-export function scanLocalPatterns(text: string): LocalScanResult {
+export function scanLocalPatterns(text: string, options: ScanOptions = {}): LocalScanResult {
+  const region = options.region ?? '*';
   const matches: PatternMatch[] = [];
   const categories = new Set<ThreatCategory>();
   const combos: string[] = [];
+  const dampened: string[] = [];
   let totalWeight = 0;
 
   const haystack = normalizeForMatching(text);
 
+  // Amortiguadores primero: hay que saber que categorias quedan explicadas
+  // ANTES de sumarles peso, no despues.
+  const explained = new Set<ThreatCategory>();
+  for (const damp of DAMPENERS) {
+    if (damp.regions && !damp.regions.includes(region)) continue;
+    if (!damp.regex.test(haystack)) continue;
+    for (const category of damp.reduces) explained.add(category);
+    dampened.push(damp.label);
+  }
+
   for (const entry of LEXICON) {
+    // Una entrada marcada por region no existe fuera de ella.
+    if (entry.regions && !entry.regions.includes(region)) continue;
+
+    // El amortiguador no borra la coincidencia: retira su peso y deja la
+    // categoria fuera del recuento, para que tampoco arrastre un COMBO.
+    if (explained.has(entry.category)) continue;
+
     let hitWeight = 0;
 
     if (entry.repeatable) {
@@ -112,5 +152,5 @@ export function scanLocalPatterns(text: string): LocalScanResult {
   const riskScore = Math.min(100, Math.round(totalWeight * 1.2));
   const tactics = [...matches.map((m) => m.category), ...combos];
 
-  return { riskScore, tactics, matches, categories: [...categories], combos };
+  return { riskScore, tactics, matches, categories: [...categories], combos, dampened };
 }
