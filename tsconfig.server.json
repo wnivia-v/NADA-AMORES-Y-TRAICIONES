@@ -17,5 +17,15 @@
     "resolveJsonModule": true,
     "noEmit": true
   },
-  "include": ["server/src", "src/shared"]
+  "include": ["server/src", "src/shared"],
+  // El modulo de vision es de dispositivo por diseño: §4.1 exige que ningun
+  // frame facial salga del equipo, asi que codigo de vision compilado para el
+  // servidor seria una contradiccion. Se excluye a proposito, y no se le añade
+  // la lib DOM al backend — eso permitiria que codigo de servidor usara APIs de
+  // navegador por descuido, que es justo lo que este limite evita.
+  //
+  // `src/shared` significa aqui "compartido entre contextos": llm y risk los
+  // comparten cliente y servidor; vision la comparten el hilo principal y el
+  // worker, que siguen siendo el dispositivo.
+  "exclude": ["src/shared/vision"]
 }
