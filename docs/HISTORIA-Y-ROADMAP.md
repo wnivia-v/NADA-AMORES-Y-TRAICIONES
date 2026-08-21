@@ -53,23 +53,40 @@ Las fases anteriores se probaron con tests y con casos de ejemplo. Esta se prob�
 - **Alertas que se trababan**: tras la primera alerta el escudo de voz se quedaba mudo. Los análisis se cancelaban entre sí (la IA tarda 8 segundos, se lanzaba uno nuevo cada 3). Se separó en dos pasadas: una local instantánea que no se puede cancelar, y la de IA como refuerzo. Las alertas ahora se diferencian por *tipo de amenaza*, no por la frase exacta — mientras alguien habla el texto cambia todo el tiempo aunque el peligro sea el mismo.
 - **180 pruebas automatizadas** en verde, incluyendo tests escritos con las transcripciones textuales de los casos reales que fallaron.
 
-## 6. Estado actual (esta build)
+## 6. El diccionario se apoya en fuentes oficiales — 21 de agosto de 2026
+
+Hasta acá el diccionario de amenazas se había escrito a partir del material que llegaba a mano: los audios y capturas que fallaron en pruebas reales. Eso deja un sesgo evidente — solo reconoce las estafas que a alguien se le ocurrió probar.
+
+Esta etapa lo amplió con los **avisos publicados por INCIBE** (Instituto Nacional de Ciberseguridad de España) y los casos de su línea de ayuda 017: campañas fechadas y documentadas, con los ganchos textuales que realmente se usaron contra personas reales.
+
+Cuatro familias completas eran invisibles para la herramienta antes de esto:
+
+- **El familiar en apuros**: *"Hola mamá, se me ha roto el móvil, este es mi nuevo número."* No tiene ninguna palabra peligrosa — es una frase que un hijo real podría escribir. Lo que la delata es la combinación de identidad familiar declarada más cambio de canal.
+- **Tasas de aduana**: un paquete retenido, una tasa pequeña y un enlace. El importe bajo es el truco: pagar sale más barato que verificar.
+- **Bizum inverso**: en plataformas de compraventa el "comprador" envía una *solicitud* de dinero en vez de un pago, y el vendedor la confirma creyendo que cobra.
+- **Soporte con acceso remoto**: la víctima instala AnyDesk o TeamViewer y el atacante vacía la cuenta desde el dispositivo de confianza de la víctima, esquivando el doble factor del banco.
+
+También se agregaron sextorsión masiva con falso software espía, la comisión para poder retirar en plataformas de inversión falsas, empleos falsos de tareas y likes, suplantación de organismos públicos, amenaza de difusión de material privado y **grooming** — esta última con los sondeos que INCIBE identifica como fase temprana (edad, si el menor está solo, si los padres saben), a peso bajo justamente porque son preguntas que un familiar real podría hacer: lo que identifica el grooming es la combinación con el pedido de secreto o de imágenes.
+
+El diccionario pasó de 51 a **72 patrones**, de 19 a **25 categorías** y de 11 a **26 reglas de combinación**. 198 tests en verde, con los guiones documentados escritos textualmente.
+
+## 7. Estado actual (esta build)
 
 | Área | Estado |
 |---|---|
 | Detección de texto (portapapeles, pegado manual) | Funcional, multi-capa, 5 proveedores de IA disponibles |
 | Detección de voz en tiempo real | Funcional en web/Electron y Android (nativo), con Whisper local como respaldo si la red bloquea el reconocimiento del navegador |
-| Diccionario de amenazas | 51 patrones, 19 categorías, 11 reglas de combinación, ES/EN/PT |
+| Diccionario de amenazas | 72 patrones, 25 categorías, 26 reglas de combinación, ES/EN/PT, alimentado con los avisos documentados de INCIBE |
 | OCR de capturas de pantalla | Funcional, con preprocesamiento de imagen |
 | Detección de deepfake en videollamada | Funcional, heurística biométrica (no un modelo entrenado contra deepfakes reales) |
 | Escritorio (Electron) | Funcional, con overlay siempre-encima |
 | Android (Capacitor) | APK directo, voz nativa funcional; captura de pantalla y overlay siempre-encima **aún no** (requieren plugins nativos adicionales) |
 | iOS | No existe — Apple no permite overlays sobre otras apps bajo ninguna circunstancia; una app iOS nativa es un proyecto aparte |
-| Pruebas automatizadas | 180 tests en 15 archivos, todos en verde |
+| Pruebas automatizadas | 198 tests en 16 archivos, todos en verde |
 
 ---
 
-## 7. Roadmap
+## 8. Roadmap
 
 ### Corto plazo (gratis, sin nueva infraestructura)
 - Activar una clave de Groq (gratis, sin tarjeta) para que el análisis de texto/voz generalice a frases dichas con fraseo distinto a los ejemplos conocidos — hoy, sin ninguna clave de nube, la única IA activa es el clasificador local, deliberadamente conservador.
