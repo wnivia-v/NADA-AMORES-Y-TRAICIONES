@@ -105,7 +105,15 @@ export function systemPromptFor(task: AnalysisTask): string {
  * con que el atacante lo escriba. Uno que cambia en cada llamada y no aparece
  * en ningun sitio antes de enviarse, no.
  */
-function newNonce(): string {
+/**
+ * Marcador aleatorio de delimitacion.
+ *
+ * Exportado porque el backoffice necesita exactamente el mismo mecanismo: alli
+ * el agente tambien lee texto ajeno —de estafadores, ademas— y el aislamiento
+ * se consigue igual. Un segundo generador "parecido" seria la forma tipica de
+ * que uno de los dos acabe siendo mas debil sin que nadie se entere.
+ */
+export function newNonce(): string {
   const bytes = new Uint8Array(9);
   const webcrypto = globalThis.crypto;
   if (webcrypto?.getRandomValues) {

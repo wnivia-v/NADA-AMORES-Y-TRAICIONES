@@ -55,7 +55,26 @@ async function postJson(url: string, headers: Record<string, string>, body: unkn
 
 type RawResponse = { text: string } | null;
 
-async function callGroq(request: AnalysisRequest): Promise<RawResponse> {
+/**
+ * Los dos turnos que se le mandan a un modelo.
+ *
+ * La capa de transporte no sabe nada del analisis de fraude: recibe un turno de
+ * sistema y uno de usuario y los entrega. Existe asi porque el backoffice
+ * tambien necesita hablar con un modelo —para que un agente redacte una
+ * propuesta— y su tarea no tiene nada que ver con la del camino caliente. Un
+ * unico cliente HTTP, dos usos, y ninguna copia del manejo de errores.
+ *
+ * La separacion system/user NO es un detalle de formato: es el aislamiento del
+ * §Fase 1. Quien construya los turnos es responsable de que el contenido ajeno
+ * viaje solo en `user` y delimitado.
+ */
+export interface ChatTurns {
+  system: string;
+  user: string;
+  maxTokens?: number;
+}
+
+async function callGroq(turns: ChatTurns): Promise<RawResponse> {
   const config = upstreamConfig('groq');
   if (!config) return null;
 
@@ -65,10 +84,10 @@ async function callGroq(request: AnalysisRequest): Promise<RawResponse> {
     {
       model: config.model,
       messages: [
-        { role: 'system', content: systemPromptFor(request.task) },
-        { role: 'user', content: renderUserContent(request) },
+        { role: 'system', content: turns.system },
+        { role: 'user', content: turns.user },
       ],
-      max_tokens: 1024,
+      max_tokens: turns.maxTokens ?? 1024,
       temperature: 0,
       response_format: { type: 'json_object' },
     },
@@ -78,7 +97,7 @@ async function callGroq(request: AnalysisRequest): Promise<RawResponse> {
   return typeof text === 'string' ? { text } : null;
 }
 
-async function callClaude(request: AnalysisRequest): Promise<RawResponse> {
+async function callClaude(turns: ChatTurns): Promise<RawResponse> {
   const config = upstreamConfig('claude');
   if (!config) return null;
 
@@ -87,12 +106,12 @@ async function callClaude(request: AnalysisRequest): Promise<RawResponse> {
     { 'x-api-key': config.apiKey, 'anthropic-version': '2023-06-01' },
     {
       model: config.model,
-      max_tokens: 1024,
+      max_tokens: turns.maxTokens ?? 1024,
       temperature: 0,
       // El parametro `system` es exactamente la separacion de roles que pide la
       // Fase 1: las instrucciones no viajan dentro del turno del usuario.
-      system: systemPromptFor(request.task),
-      messages: [{ role: 'user', content: renderUserContent(request) }],
+      system: turns.system,
+      messages: [{ role: 'user', content: turns.user }],
     },
   )) as { content?: Array<{ text?: string }> };
 
@@ -100,7 +119,7 @@ async function callClaude(request: AnalysisRequest): Promise<RawResponse> {
   return typeof text === 'string' ? { text } : null;
 }
 
-async function callBedrock(request: AnalysisRequest): Promise<RawResponse> {
+async function callBedrock(turns: ChatTurns): Promise<RawResponse> {
   const config = upstreamConfig('bedrock');
   if (!config?.endpoint) return null;
 
@@ -114,9 +133,9 @@ async function callBedrock(request: AnalysisRequest): Promise<RawResponse> {
     { 'x-api-key': config.apiKey },
     {
       model: config.model,
-      max_tokens: 1024,
-      system: systemPromptFor(request.task),
-      messages: [{ role: 'user', content: renderUserContent(request) }],
+      max_tokens: turns.maxTokens ?? 1024,
+      system: turns.system,
+      messages: [{ role: 'user', content: turns.user }],
     },
   )) as { content?: string | Array<{ text?: string }>; completion?: string };
 
@@ -125,15 +144,29 @@ async function callBedrock(request: AnalysisRequest): Promise<RawResponse> {
   return typeof text === 'string' ? { text } : null;
 }
 
-export function callUpstream(id: UpstreamId, request: AnalysisRequest): Promise<RawResponse> {
+/** Manda dos turnos ya construidos. Es lo que usa el backoffice. */
+export function callUpstreamChat(id: UpstreamId, turns: ChatTurns): Promise<RawResponse> {
   switch (id) {
     case 'groq':
-      return callGroq(request);
+      return callGroq(turns);
     case 'claude':
-      return callClaude(request);
+      return callClaude(turns);
     case 'bedrock':
-      return callBedrock(request);
+      return callBedrock(turns);
     default:
       return Promise.resolve(null);
   }
+}
+
+/**
+ * El camino caliente: analiza un mensaje.
+ *
+ * Construye los turnos a partir del AnalysisRequest, que es donde vive la
+ * separacion instrucciones/dato de la Fase 1, y delega en el transporte.
+ */
+export function callUpstream(id: UpstreamId, request: AnalysisRequest): Promise<RawResponse> {
+  return callUpstreamChat(id, {
+    system: systemPromptFor(request.task),
+    user: renderUserContent(request),
+  });
 }
