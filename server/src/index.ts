@@ -106,8 +106,21 @@ function withJsonBody(
   origin: string | undefined,
   handler: (parsed: unknown) => Promise<HandlerResponse>,
 ): void {
+  // Los dos fallos posibles se distinguen a proposito.
+  //
+  // La primera version tenia un solo .catch() al final que respondia 413 a todo,
+  // asi que una base de datos caida se reportaba como "cuerpo demasiado grande"
+  // — y quien fuera a depurarlo se iba a mirar el tamaño de las peticiones. Un
+  // mensaje de error que apunta al sitio equivocado cuesta mas tiempo que no
+  // tener mensaje.
   readBody(req)
+    .catch(() => {
+      send(res, origin, { status: 413, body: { error: 'cuerpo demasiado grande' } });
+      return null;
+    })
     .then((rawBody) => {
+      if (rawBody === null) return undefined;
+
       let parsed: unknown;
       try {
         parsed = JSON.parse(rawBody);
@@ -115,9 +128,16 @@ function withJsonBody(
         send(res, origin, { status: 400, body: { error: 'JSON invalido' } });
         return undefined;
       }
-      return handler(parsed).then((result) => send(res, origin, result));
-    })
-    .catch(() => send(res, origin, { status: 413, body: { error: 'cuerpo demasiado grande' } }));
+
+      return handler(parsed)
+        .then((result) => send(res, origin, result))
+        .catch((error: unknown) => {
+          // El motivo va al registro del operador, no al cliente: puede llevar
+          // dentro la cadena de conexion o parte de la consulta.
+          console.error('[NADA][server] fallo al procesar la peticion:', error);
+          send(res, origin, { status: 500, body: { error: 'error interno' } });
+        });
+    });
 }
 
 /** Resuelve la sesion y delega, o responde 401. */
@@ -127,13 +147,21 @@ function withAuth(
   origin: string | undefined,
   handler: (auth: NonNullable<Awaited<ReturnType<typeof authenticate>>>) => Promise<HandlerResponse>,
 ): void {
-  void authenticate(bearerToken(req)).then((auth) => {
-    if (!auth) {
-      send(res, origin, { status: 401, body: { error: 'sesion invalida' } });
-      return;
-    }
-    return handler(auth).then((result) => send(res, origin, result));
-  });
+  void authenticate(bearerToken(req))
+    .then((auth) => {
+      if (!auth) {
+        send(res, origin, { status: 401, body: { error: 'sesion invalida' } });
+        return undefined;
+      }
+      return handler(auth).then((result) => send(res, origin, result));
+    })
+    .catch((error: unknown) => {
+      // authenticate() consulta el almacen, asi que tambien puede fallar por
+      // la base de datos. Sin este catch, la promesa quedaba rechazada sin
+      // manejar y el cliente se quedaba esperando para siempre.
+      console.error('[NADA][server] fallo al autenticar:', error);
+      send(res, origin, { status: 500, body: { error: 'error interno' } });
+    });
 }
 
 const server = createServer((req, res) => {

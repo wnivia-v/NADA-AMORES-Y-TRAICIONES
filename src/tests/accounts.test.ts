@@ -17,7 +17,7 @@ import {
 } from '../../server/src/handlers/accounts';
 import { handleFeedback, validateReport } from '../../server/src/handlers/feedback';
 import { MemoryStore } from '../../server/src/store/memory';
-import { useStore, activeStore } from '../../server/src/store';
+import { setStore, activeStore } from '../../server/src/store';
 import type { Store } from '../../server/src/store/types';
 import { hashToken, hashPassword, verifyPassword, MIN_PASSWORD_LENGTH } from '../../server/src/auth/credentials';
 import { loginLimiter, registerLimiter, REPORTS_PER_HOUR } from '../../server/src/auth/rateLimit';
@@ -31,7 +31,7 @@ function suiteDeCuentas(nombre: string, preparar: () => Promise<{ store: Store; 
 
     beforeAll(async () => {
       const prepared = await preparar();
-      useStore(prepared.store, nombre === 'postgres' ? 'postgres' : 'memoria');
+      setStore(prepared.store, nombre === 'postgres' ? 'postgres' : 'memoria');
       reset = prepared.reset;
     });
 

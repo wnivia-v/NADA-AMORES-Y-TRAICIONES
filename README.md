@@ -1142,6 +1142,72 @@ importada. Asi el ataque de secuestro se prueba entero —esta en
 `src/tests/backofficeAgent.test.ts`— sin credenciales y sin red. Un agente que
 solo se puede probar con una clave de API es un agente que nadie prueba.
 
+## Arranque de sesion: nada de esto se hace a mano
+
+`.claude/hooks/session-start.sh` deja el entorno listo en cada sesion web:
+dependencias, cluster de PostgreSQL arrancado, rol y bases creados, migraciones
+aplicadas, cliente de Prisma generado, recursos de MediaPipe preparados y worker
+de vision compilado. Ademas exporta `DATABASE_URL` y `TEST_DATABASE_URL`, asi que
+`npm test` corre la bateria **completa** (424) sin que nadie recuerde la
+variable.
+
+Nada de esto hace falta en produccion: alli la base es un servicio gestionado
+que esta siempre encendido y al que solo se apunta con una cadena de conexion.
+El hook resuelve una molestia de este contenedor efimero, no del producto.
+
+### Que pasa si la base no esta
+
+Antes de este trabajo, **algo peor de lo que parecia**. Al validar el hook
+salieron dos defectos:
+
+| | Antes | Ahora |
+|---|---|---|
+| Al arrancar | `almacen: postgres` — con la base caida | `no se pudo abrir PostgreSQL… se sigue EN MEMORIA` |
+| Al registrarse | **413 "cuerpo demasiado grande"** | 202, degradado a memoria |
+
+El primero: el cliente de Prisma **conecta de forma perezosa**, asi que
+construirlo no toca la red y el respaldo a memoria nunca llegaba a activarse. Un
+respaldo que no se activa porque nadie comprobo nada es peor que no tenerlo: da
+confianza falsa justo donde hacia falta la de verdad. Ahora se llama a
+`$connect()` al arrancar, para que el fallo ocurra donde se puede ver.
+
+El segundo era peor para quien tuviera que depurarlo. Un solo `.catch()` al
+final de la cadena respondia 413 a cualquier fallo, asi que una base de datos
+caida se reportaba como peticion demasiado grande — y quien fuera a investigarlo
+se iria a mirar limites de tamaño y configuraciones de proxy. Un mensaje de
+error que apunta al sitio equivocado cuesta mas tiempo que no tener mensaje.
+
+### El linter nunca habia funcionado
+
+Lo encontro el hook al validarse, que es para lo que sirve validar un hook.
+`npm run lint` estaba declarado desde el principio y no podia funcionar: ESLint 9
+instalado, **ninguna** configuracion de ningun formato, y el script usando
+`--ext`, que la version 9 elimino. Salia con codigo 2 y pasaba por "sin errores"
+para cualquiera que no leyera la salida.
+
+Ahora hay `eslint.config.js` y `npm run lint` sale en **verde** (16 avisos, 0
+errores). La configuracion es corta a proposito: un linter que avisa de
+doscientas cosas el primer dia se desactiva el segundo, asi que solo estan las
+reglas que cazan errores de verdad — el formato lo decide quien escribe, y los
+tipos ya los comprueba `tsc`, que es mejor en eso.
+
+De los 75 problemas iniciales, la mayoria era **configuracion mia mal puesta**
+(`no-undef` marcando `console` y `setTimeout` en TypeScript, que es un falso
+positivo conocido). Cuatro eran reales y estan corregidos:
+
+- `useStore` en el servidor no es un hook de React, y en un proyecto con React
+  ese nombre promete algo que no es. Renombrado a `setStore`.
+- Un `useEffect` en Ajustes que al montar volvia a poner exactamente lo que
+  `useState` ya habia puesto: un render de mas para no cambiar nada. Eliminado.
+- Un ternario usado como sentencia en el banco de Chromium.
+- Una barra escapada de mas dentro de una clase de caracteres del lexico.
+
+Ese ultimo cambio movio la huella del lexico (`a6e739be` → `5bf4ee36`) aunque la
+expresion es equivalente: la huella hashea el **codigo fuente**, no el
+significado. Es el lado conservador correcto — mejor tratar reportes viejos como
+de otra version que atribuirlos mal a la actual. Las metricas del corpus lo
+confirman: identicas antes y despues.
+
 ## Licencia
 
 Equipo Antigravity.

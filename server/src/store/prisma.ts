@@ -141,6 +141,18 @@ export class PrismaStore implements Store {
     await this.db.verification.deleteMany({});
   }
 
+  /**
+   * Abre la conexion de verdad.
+   *
+   * Prisma conecta de forma perezosa —construir el cliente no toca la red— asi
+   * que sin llamar a esto un servidor con la base caida arranca tan tranquilo y
+   * revienta en la primera peticion. Se llama al arrancar para que el fallo
+   * ocurra donde se puede ver.
+   */
+  async connect(): Promise<void> {
+    await this.db.$connect();
+  }
+
   async disconnect(): Promise<void> {
     await this.db.$disconnect();
   }

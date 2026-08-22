@@ -26,8 +26,14 @@ export function activeStoreKind(): 'memoria' | 'postgres' {
   return activeKind;
 }
 
-/** Instala un almacen. Lo usan el arranque y los tests. */
-export function useStore(next: Store, kind: 'memoria' | 'postgres'): void {
+/**
+ * Instala un almacen. Lo usan el arranque y los tests.
+ *
+ * Se llamaba `useStore`, y el linter tenia razon al quejarse: en un proyecto
+ * con React, un nombre que empieza por `use` promete un hook. No lo es, y quien
+ * lo lea de pasada puede creer que si.
+ */
+export function setStore(next: Store, kind: 'memoria' | 'postgres'): void {
   active = next;
   activeKind = kind;
 }
@@ -52,11 +58,23 @@ export async function initStore(): Promise<'memoria' | 'postgres'> {
 
   try {
     const { createPrismaStore } = await import('./prisma');
-    useStore(createPrismaStore(url), 'postgres');
+    const store = createPrismaStore(url);
+
+    // CONECTAR DE VERDAD antes de declararlo activo.
+    //
+    // El cliente de Prisma es perezoso: construirlo no abre ninguna conexion, y
+    // sin esta llamada el servidor anunciaba "almacen: postgres" con la base
+    // caida y luego fallaba en cada peticion. Un respaldo que no se activa
+    // porque nadie comprobo nada es peor que no tener respaldo: da confianza
+    // falsa justo donde hacia falta la de verdad.
+    await store.connect();
+
+    setStore(store, 'postgres');
     return 'postgres';
   } catch (error) {
-    console.error('[NADA][store] no se pudo abrir PostgreSQL:', error);
-    console.error('[NADA][store] ¿falta `npx prisma generate`? Se sigue en memoria.');
+    console.error('[NADA][store] no se pudo abrir PostgreSQL:', error instanceof Error ? error.message : error);
+    console.error('[NADA][store] se sigue EN MEMORIA: las cuentas se pierden al reiniciar.');
+    console.error('[NADA][store] ¿esta arrancado el cluster? `npm run db:up`. ¿Falta `npx prisma generate`?');
     return 'memoria';
   }
 }

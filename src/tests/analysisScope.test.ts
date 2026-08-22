@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Controllable AI provider: resolves after a delay so we can interleave calls.
 let aiDelayMs = 60;
-let aiResult: unknown = {
+const aiResult: unknown = {
   type: 'llm-risk',
   value: 10,
   confidence: 0.9,

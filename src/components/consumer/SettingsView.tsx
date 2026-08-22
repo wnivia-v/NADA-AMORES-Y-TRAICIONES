@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNadaStore } from '@/store/useNadaStore';
 import { translations } from '@/utils/translations';
 import { getProvidersStatus, getProviderConfig, saveProviderConfig } from '@/services/aiProviders';
@@ -31,14 +31,11 @@ export function SettingsView() {
   const { theme, setTheme, language, setLanguage, activeTab, setActiveTab } = useNadaStore();
   const t = translations[language];
 
-  const [providers, setProviders] = useState(getProvidersStatus());
-  const [config, setConfig] = useState(getProviderConfig());
-
-  // Refresh provider status
-  useEffect(() => {
-    setProviders(getProvidersStatus());
-    setConfig(getProviderConfig());
-  }, []);
+  // El inicializador va como funcion para que se evalue una sola vez y no en
+  // cada render. Aqui habia ademas un useEffect que, al montar, volvia a poner
+  // exactamente estos mismos valores: un render de mas para no cambiar nada.
+  const [providers, setProviders] = useState(() => getProvidersStatus());
+  const [config, setConfig] = useState(() => getProviderConfig());
 
   const toggleProvider = (id: ProviderId) => {
     const updated = {

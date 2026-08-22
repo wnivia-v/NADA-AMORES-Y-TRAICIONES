@@ -478,7 +478,7 @@ export const LEXICON: readonly LexiconEntry[] = [
     id: 'inst-plazo-admin', category: 'plazo-administrativo', weight: 12, langs: ['es'],
     label: 'Plazo administrativo que vence',
     source: SRC_INCIBE,
-    regex: /(a\s*partir\s*del?\s*\d|ultimo\s*dia\s*para|antes\s*del?\s*\d{1,2}[\/\-\s]|no\s*(podra|podras|puedes|puede)\s*(utilizar|usar|acceder)|requiere\s*renovacion|renovacion\s*obligatoria|pendiente\s*de\s*(pago|regularizar)|sin\s*recargo)/,
+    regex: /(a\s*partir\s*del?\s*\d|ultimo\s*dia\s*para|antes\s*del?\s*\d{1,2}[/\-\s]|no\s*(podra|podras|puedes|puede)\s*(utilizar|usar|acceder)|requiere\s*renovacion|renovacion\s*obligatoria|pendiente\s*de\s*(pago|regularizar)|sin\s*recargo)/,
   }),
   E({
     id: 'inst-activacion', category: 'phishing-credenciales', weight: 14, langs: ['es'],
