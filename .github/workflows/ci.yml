@@ -9,9 +9,18 @@
 
 name: CI
 
+# `push` solo sobre main. Antes era ['**'], y como `pull_request` tambien
+# dispara, cada empujon a una rama con PR abierta lanzaba DOS ejecuciones
+# identicas: el doble de minutos de runner y dos checks que dicen lo mismo.
+# No las deduplica el grupo de concurrencia porque github.ref vale distinto en
+# cada evento (refs/heads/<rama> frente a refs/pull/<n>/merge), asi que caen en
+# grupos distintos y ninguna cancela a la otra.
+#
+# Lo que se pierde: una rama SIN PR abierta ya no tiene CI automatica. Para eso
+# esta workflow_dispatch, que se puede lanzar a mano sobre cualquier rama.
 on:
   push:
-    branches: ['**']
+    branches: [main]
   pull_request:
   workflow_dispatch:
 
@@ -20,7 +29,11 @@ permissions:
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # En una PR, un commit nuevo deja obsoleta la ejecucion anterior: cancelarla
+  # es lo correcto. En main NO: cada commit que aterriza tiene que quedar
+  # verificado por si mismo, y si dos entran seguidos, cancelar el primero deja
+  # un commit de main sin comprobar nunca.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   verify:
