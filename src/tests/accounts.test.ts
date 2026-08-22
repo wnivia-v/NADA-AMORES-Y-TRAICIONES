@@ -107,9 +107,60 @@ function suiteDeCuentas(nombre: string, preparar: () => Promise<{ store: Store; 
       expect(repetido.body).toEqual(primero.body);
     });
 
-    it('el registro repetido no pisa la cuenta existente', async () => {
+    it('NO se puede averiguar si un correo tiene cuenta', async () => {
+      // El oraculo que encontro la revision de seguridad. Bastaban dos
+      // peticiones: registrar el correo ajeno con MI contraseña —202 en los dos
+      // casos— e intentar entrar. Si entraba, el correo estaba libre; si no,
+      // estaba registrado. Sin medir tiempos y sin ambiguedad.
+      //
+      // En un producto para gente que puede estar huyendo de alguien, confirmar
+      // la pertenencia es exactamente el daño que se queria evitar.
+      await handleRegister({ email: 'existe@ejemplo.test', password: 'la suya larga y buena' }, ctx);
+      const cuenta = await activeStore().accountByEmail('existe@ejemplo.test');
+      await activeStore().markVerified(cuenta!.id, new Date());
+
+      const sonda = async (email: string) => {
+        await handleRegister({ email, password: 'la contraseña del atacante' }, ctx);
+        return handleLogin({ email, password: 'la contraseña del atacante' }, ctx);
+      };
+
+      const registrado = await sonda('existe@ejemplo.test');
+      const libre = await sonda('libre@ejemplo.test');
+
+      // Indistinguibles: la cuenta recien creada tampoco puede entrar.
+      expect(libre.status).toBe(registrado.status);
+      expect(libre.body).toEqual(registrado.body);
+      expect(libre.status).toBe(401);
+    });
+
+    it('sin verificar el correo no se abre sesion', async () => {
+      await handleRegister({ email: 'sinver@ejemplo.test', password: 'una frase larga valida' }, ctx);
+      const res = await handleLogin({ email: 'sinver@ejemplo.test', password: 'una frase larga valida' }, ctx);
+      expect(res.status).toBe(401);
+    });
+
+    it('una cuenta SIN verificar la puede reclamar quien tenga el buzon', async () => {
+      // Sondear un correo ajeno creaba una cuenta real con la contraseña del
+      // atacante, y la persona legitima ya no podia registrarse nunca. Como
+      // nadie ha demostrado ser dueño de esa direccion, se puede reclamar — y
+      // el enlace va al buzon, no a quien lo pide.
+      await handleRegister({ email: 'ocupado@ejemplo.test', password: 'la del atacante larga' }, ctx);
+      await handleRegister({ email: 'ocupado@ejemplo.test', password: 'la mia de verdad larga' }, ctx);
+
+      const cuenta = await activeStore().accountByEmail('ocupado@ejemplo.test');
+      await activeStore().markVerified(cuenta!.id, new Date());
+
+      const conLaMia = await handleLogin({ email: 'ocupado@ejemplo.test', password: 'la mia de verdad larga' }, ctx);
+      const conLaSuya = await handleLogin({ email: 'ocupado@ejemplo.test', password: 'la del atacante larga' }, ctx);
+      expect(conLaMia.status).toBe(200);
+      expect(conLaSuya.status).toBe(401);
+    });
+
+    it('una cuenta YA VERIFICADA no se pisa', async () => {
       await handleRegister({ email: 'y@ejemplo.test', password: 'frase larga original' }, ctx);
       const antes = await activeStore().accountByEmail('y@ejemplo.test');
+      await activeStore().markVerified(antes!.id, new Date());
+
       await handleRegister({ email: 'y@ejemplo.test', password: 'frase del atacante' }, ctx);
       const despues = await activeStore().accountByEmail('y@ejemplo.test');
 

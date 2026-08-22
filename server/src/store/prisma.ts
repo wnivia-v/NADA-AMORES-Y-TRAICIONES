@@ -33,8 +33,24 @@ export class PrismaStore implements Store {
 
   // --- Cuentas ---
 
+  /**
+   * Crea la cuenta, o la reemplaza si existia SIN VERIFICAR.
+   *
+   * Es upsert y no create por el camino de reclamacion: una cuenta que nadie ha
+   * confirmado no tiene dueño todavia, y quien controle el buzon puede
+   * quedarsela. El manejador es el que decide si procede — aqui solo se hace
+   * posible. Con `create` a secas, reclamar reventaba por clave duplicada.
+   */
   async createAccount(account: AccountRecord): Promise<void> {
-    await this.db.account.create({ data: account });
+    await this.db.account.upsert({
+      where: { id: account.id },
+      create: account,
+      update: {
+        passwordHash: account.passwordHash,
+        passwordSalt: account.passwordSalt,
+        region: account.region,
+      },
+    });
   }
 
   async accountByEmail(email: string): Promise<AccountRecord | null> {

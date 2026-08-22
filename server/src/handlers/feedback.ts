@@ -56,6 +56,27 @@ function stringList(value: unknown): string[] {
     .map((v) => v.slice(0, MAX_STRING));
 }
 
+/**
+ * Un identificador es un identificador, no prosa.
+ *
+ * `lexiconIds` y `region` acaban delante del agente del backoffice, que lee
+ * texto de estafadores y escribe reglas de deteccion. Aceptarlos como 120
+ * caracteres libres significaba que quien manda un reporte podia escribir lo que
+ * quisiera en esos campos. El aislamiento del prompt ya no depende de esto
+ * —ahora todo viaja delimitado y como JSON— pero un id con saltos de linea
+ * dentro no tiene ningun uso legitimo, y lo que no tiene uso legitimo no se
+ * acepta.
+ */
+const IDENTIFIER = /^[a-z0-9._:-]{1,60}$/;
+
+function identifierList(value: unknown): string[] {
+  return stringList(value).filter((v) => IDENTIFIER.test(v));
+}
+
+function identifier(value: unknown, fallback: string): string {
+  return typeof value === 'string' && IDENTIFIER.test(value) ? value : fallback;
+}
+
 function boundedNumber(value: unknown, min: number, max: number): number | null {
   if (typeof value !== 'number' || !Number.isFinite(value)) return null;
   if (value < min || value > max) return null;
@@ -170,12 +191,12 @@ export function validateReport(raw: unknown): ValidationResult {
       alerted: shown['alerted'] === true,
       corroborated: shown['corroborated'] === true,
       scanSource: typeof shown['scanSource'] === 'string' ? shown['scanSource'].slice(0, MAX_STRING) : 'local',
-      lexiconIds: stringList(trace['lexiconIds']),
+      lexiconIds: identifierList(trace['lexiconIds']),
       combos: stringList(trace['combos']),
       dampened: stringList(trace['dampened']),
       localScore: Math.round(localScore),
       llmScore: llmScore === null ? null : Math.round(llmScore),
-      injectionHits: stringList(trace['injectionHits']),
+      injectionHits: identifierList(trace['injectionHits']),
       drivers,
       note: typeof noteRaw === 'string' && noteRaw.trim() ? noteRaw.trim().slice(0, MAX_NOTE) : null,
       // LA REGLA. Si la superficie no es de texto, no hay contenido, diga lo que
@@ -183,10 +204,10 @@ export function validateReport(raw: unknown): ValidationResult {
       content: TEXT_SURFACES.includes(surface) && typeof contentRaw === 'string'
         ? contentRaw.slice(0, MAX_CONTENT)
         : null,
-      region: typeof context['region'] === 'string' ? context['region'].slice(0, MAX_STRING) : 'default',
-      language: typeof context['language'] === 'string' ? context['language'].slice(0, MAX_STRING) : 'es',
+      region: identifier(context['region'], 'default'),
+      language: identifier(context['language'], 'es'),
       appVersion: typeof context['appVersion'] === 'string' ? context['appVersion'].slice(0, MAX_STRING) : '0.0.0',
-      lexiconVersion: lexiconVersion.slice(0, MAX_STRING),
+      lexiconVersion: identifier(lexiconVersion, 'desconocida'),
       reviewedAt: null,
     },
   };

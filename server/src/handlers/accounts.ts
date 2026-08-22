@@ -82,22 +82,29 @@ export async function handleRegister(raw: unknown, ctx: RequestContext): Promise
   if (!looksLikeEmail(email)) return { status: 400, body: { error: 'correo invalido' } };
 
   const existing = await activeStore().accountByEmail(email);
-  if (existing) {
-    // Ya registrado: se responde EXACTAMENTE lo mismo y no se crea nada. Quien
-    // pruebe correos ajenos no aprende nada; quien se registro de verdad y lo
-    // olvido puede pedir otro enlace por el flujo de verificacion.
-    return REGISTER_ACK;
-  }
+
+  // Una cuenta VERIFICADA no se toca, y se responde exactamente lo mismo: quien
+  // pruebe correos ajenos no aprende nada.
+  if (existing?.verifiedAt) return REGISTER_ACK;
 
   const digest = await hashPassword(password);
-  const accountId = randomUUID();
+  const accountId = existing?.id ?? randomUUID();
+
+  // Una cuenta SIN VERIFICAR se puede reclamar, y hace falta que se pueda.
+  //
+  // Sondear un correo ajeno creaba una cuenta real con la contraseña del
+  // atacante, y a partir de ahi la persona legitima ya no podia registrarse
+  // nunca: recibia el mismo 202 mudo y ningun correo, con su direccion ocupada.
+  // Como nadie ha demostrado todavia ser dueño de esa direccion, quien controle
+  // el buzon puede quedarsela — el enlace va al buzon, no a quien lo pide, asi
+  // que el atacante no puede completarlo.
   await activeStore().createAccount({
     id: accountId,
     email,
     passwordHash: digest.hash,
     passwordSalt: digest.salt,
     verifiedAt: null,
-    createdAt: new Date(),
+    createdAt: existing?.createdAt ?? new Date(),
     region,
   });
 
@@ -160,7 +167,20 @@ export async function handleLogin(raw: unknown, ctx: RequestContext): Promise<Ha
     : { hash: '00'.repeat(64), salt: 'inexistente' };
   const ok = await verifyPassword(password, digest);
 
-  if (!account || !ok) {
+  // SIN VERIFICAR NO HAY SESION, y el error es el mismo de siempre.
+  //
+  // Esto cierra un oraculo de enumeracion que la version anterior tenia abierto
+  // y que echaba abajo la decision (1) de la cabecera. Bastaban dos peticiones:
+  // registrar el correo de la victima con MI contraseña —202 tanto si existia
+  // como si no— y despues intentar entrar con ella. Si entraba, el correo no
+  // estaba registrado (acababa de crearlo yo); si no entraba, si lo estaba. Sin
+  // medir tiempos y sin ambiguedad.
+  //
+  // Exigiendo verificacion, las dos ramas responden 401: la cuenta recien
+  // creada tampoco entra. En un producto para gente que puede estar huyendo de
+  // alguien, confirmar la pertenencia era exactamente el daño que se queria
+  // evitar.
+  if (!account || !ok || account.verifiedAt === null) {
     return { status: 401, body: { error: 'correo o contraseña incorrectos' } };
   }
 

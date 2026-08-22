@@ -134,6 +134,9 @@ describe('conversacion completa con un servidor', () => {
         subject: 'Verifica tu cuenta',
         text: 'Entra aqui: https://ejemplo.test/?token=abc',
       },
+      // El servidor de mentira no habla TLS. Fuera de los tests, esto no se
+      // concede: el mensaje lleva el token de verificacion dentro.
+      { allowPlaintext: true },
     );
 
     const ordenes = recibido.ordenes.map((o) => o.split(' ')[0]);
@@ -160,9 +163,9 @@ describe('credenciales', () => {
     await new Promise<void>((resolve) => { server.close(() => resolve()); });
   });
 
-  it('SIN TLS no se mandan, aunque el servidor las pida', async () => {
-    // Un servidor que ofrece AUTH sobre un canal en claro es exactamente donde
-    // se pierden las credenciales del buzon.
+  it('SIN TLS no se manda NADA, ni credenciales ni mensaje', async () => {
+    // No es solo por las credenciales: el correo lleva el token de
+    // verificacion, asi que en claro se entrega la cuenta a quien lo lea.
     await expect(sendMail(
       { host: '127.0.0.1', port: puerto(server), implicitTls: false, user: 'u', password: 'p' },
       { from: 'a@b.test', to: 'c@d.test', subject: 's', text: 't' },

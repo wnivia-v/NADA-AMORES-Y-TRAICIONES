@@ -225,10 +225,24 @@ export async function sendMail(
       greeting = await session.command('EHLO nada', 250);
     }
 
+    // TLS OBLIGATORIO ANTES DE MANDAR NADA, no solo antes de las credenciales.
+    //
+    // La version anterior solo protegia el AUTH, y ademas unicamente cuando
+    // habia usuario y contraseña configurados. Con un relay interno sin
+    // autenticacion —el caso mas comun— bastaba con que alguien en la ruta
+    // borrase `250-STARTTLS` de la respuesta al EHLO: `encrypted` se quedaba en
+    // false, no saltaba ninguna excepcion, y el correo salia en claro CON EL
+    // TOKEN DE VERIFICACION dentro. Quien lo leyera podia verificar esa cuenta.
+    //
+    // El mensaje es tan sensible como las credenciales, asi que se exige lo
+    // mismo para los dos.
+    if (!encrypted && !options.allowPlaintext) {
+      throw new SmtpError(
+        'el servidor no ofrece TLS: el enlace de verificacion no sale en claro',
+      );
+    }
+
     if (config.user && config.password) {
-      if (!encrypted && !options.allowPlaintext) {
-        throw new SmtpError('el servidor no ofrece TLS: no se mandan credenciales en claro');
-      }
       await session.command('AUTH LOGIN', 334);
       await session.command(Buffer.from(config.user).toString('base64'), 334);
       await session.command(Buffer.from(config.password).toString('base64'), 235);

@@ -23,6 +23,7 @@ export class MemoryStore implements Store {
   private verifications = new Map<string, VerificationRecord>();
   private reports = new Map<string, StoredReport>();
 
+  /** Crea, o reemplaza si existia sin verificar. Ver la version de Prisma. */
   async createAccount(account: AccountRecord): Promise<void> {
     this.accounts.set(account.id, account);
     this.emailIndex.set(account.email, account.id);

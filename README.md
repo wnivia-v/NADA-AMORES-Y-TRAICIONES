@@ -1208,6 +1208,79 @@ significado. Es el lado conservador correcto — mejor tratar reportes viejos co
 de otra version que atribuirlos mal a la actual. Las metricas del corpus lo
 confirman: identicas antes y despues.
 
+## Revision de seguridad: tres hallazgos, y por que importan
+
+Antes de fusionar, una revision independiente —hecha por quien NO escribio el
+codigo, que es donde esta el valor— encontro tres fallos. Los tres corregidos,
+los tres con test de regresion.
+
+### 1. El aislamiento del prompt solo cubria un campo (ALTO)
+
+`src/shared/backoffice/agentPrompt.ts` prometia en su cabecera que las muestras
+viajan entre marcadores con identificador aleatorio. **Era cierto solo para
+`content`.** La entrada del lexico, las regiones y la nota del usuario se
+interpolaban en el mismo turno pero **fuera** del bloque delimitado — la parte
+que el modelo lee como marco de confianza. Los tres los controla quien manda el
+reporte.
+
+Peor: `scanForInjection` solo miraba el texto de la muestra, asi que una
+inyeccion colocada en la nota **no aparecia en el aviso al revisor**. Caian dos
+de las tres capas declaradas.
+
+Es el peor tipo de fallo: un comentario que promete una garantia que el codigo
+no da. Quien lo lea confia y no mira.
+
+Ahora todo lo que viene de un reporte va **dentro** de los marcadores y como
+JSON —que escapa comillas y saltos de linea, asi que una nota no puede cerrar la
+cadena que la contiene— y el escaneo cubre texto, nota, region y entrada. En el
+servidor, `lexiconIds` y `region` pasan a validarse como identificadores
+(`^[a-z0-9._:-]{1,60}$`): no son prosa, y lo que no tiene uso legitimo no se
+acepta.
+
+### 2. Se podia averiguar si un correo tenia cuenta (MEDIO)
+
+La cabecera de `accounts.ts` declara que nunca se dice si un correo esta
+registrado. **Dos peticiones lo decian**, sin medir tiempos:
+
+1. Registrar el correo ajeno con MI contraseña → 202 tanto si existia como si no.
+2. Intentar entrar con ella → 200 si el correo estaba libre (la cuenta la acababa
+   de crear yo), 401 si ya estaba registrado.
+
+Y ademas sondear un correo libre **creaba una cuenta real** con ese correo: la
+persona legitima ya no podia registrarse nunca — recibia el mismo 202 mudo y
+ningun correo, con su direccion ocupada.
+
+En un producto para gente que puede estar huyendo de alguien, confirmar la
+pertenencia es exactamente el daño que se queria evitar.
+
+Corregido: **sin correo verificado no se abre sesion**, con lo que las dos ramas
+responden 401 y el oraculo se cierra. Y una cuenta sin verificar se puede
+reclamar: nadie ha demostrado ser su dueño todavia, y el enlace va al buzon, no
+a quien lo pide.
+
+### 3. El token de verificacion podia viajar en claro (MEDIO)
+
+El STARTTLS del cliente SMTP era oportunista: si el servidor no lo anunciaba, se
+seguia sin cifrar. La unica proteccion cubria las **credenciales**, y solo cuando
+habia usuario y contraseña configurados — con un relay interno sin
+autenticacion, el caso mas comun, no cubria nada.
+
+Alguien en la ruta que borre `250-STARTTLS` de la respuesta al EHLO consigue que
+el correo salga en texto plano **con el token de verificacion dentro**, y con ese
+token verifica la cuenta que quiera.
+
+Corregido: TLS obligatorio **antes de mandar nada**, no solo antes del AUTH. El
+mensaje es tan sensible como las credenciales.
+
+### Lo que la revision dio por bueno
+
+Tokens de 32 bytes guardados hasheados; scrypt con sal y comparacion en tiempo
+constante; sin `$queryRaw` en ninguna parte; validacion de certificados activa
+con `servername` fijado; inyeccion de cabeceras SMTP cerrada antes de abrir el
+socket; ninguna clave de proveedor cruzando a `define` de Vite; CORS sin comodin
+ni credenciales; y el hecho de que la salida del agente no puede tocar produccion
+porque solo devuelve datos.
+
 ## Licencia
 
 Equipo Antigravity.
