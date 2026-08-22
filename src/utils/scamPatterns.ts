@@ -12,7 +12,10 @@
 // is the scoring engine over them.
 // =============================================================================
 
-import { LEXICON, COMBOS, DAMPENERS, type ThreatCategory, type Region } from './threatLexicon';
+import {
+  LEXICON, COMBOS, DAMPENERS,
+  type ThreatCategory, type Region, type LexiconEntry, type ComboRule, type DampenerEntry,
+} from './threatLexicon';
 import { hardenInput } from '@/shared/llm/normalize';
 import { matchLearnedPhrases } from '@/services/threatMemory';
 
@@ -44,6 +47,27 @@ export interface LocalScanResult {
   dampened: string[];
 }
 
+/**
+ * El vocabulario contra el que se escanea.
+ *
+ * Existe como parametro por el backoffice: para medir una propuesta de un
+ * agente hay que poder escanear el corpus con un lexico MODIFICADO sin tocar el
+ * de produccion ni escribir un solo archivo. Esa es la garantia del §4.2 hecha
+ * codigo — el agente propone sobre una copia, nunca sobre lo que corre.
+ */
+export interface Vocabulary {
+  lexicon: readonly LexiconEntry[];
+  combos: readonly ComboRule[];
+  dampeners: readonly DampenerEntry[];
+}
+
+/** El vocabulario de produccion. Lo que se usa si nadie dice otra cosa. */
+export const PRODUCTION_VOCABULARY: Vocabulary = {
+  lexicon: LEXICON,
+  combos: COMBOS,
+  dampeners: DAMPENERS,
+};
+
 export interface ScanOptions {
   /**
    * Region del usuario. Por defecto '*': se evaluan solo las entradas
@@ -54,6 +78,8 @@ export interface ScanOptions {
    * ajeno, que es exactamente el Problema A.
    */
   region?: Region;
+  /** Vocabulario alternativo. Solo lo usa el backoffice para medir propuestas. */
+  vocabulary?: Vocabulary;
 }
 
 /**
@@ -94,6 +120,7 @@ function countMatches(regex: RegExp, text: string): number {
 
 export function scanLocalPatterns(text: string, options: ScanOptions = {}): LocalScanResult {
   const region = options.region ?? '*';
+  const { lexicon, combos: comboRules, dampeners } = options.vocabulary ?? PRODUCTION_VOCABULARY;
   const matches: PatternMatch[] = [];
   const categories = new Set<ThreatCategory>();
   const combos: string[] = [];
@@ -105,14 +132,14 @@ export function scanLocalPatterns(text: string, options: ScanOptions = {}): Loca
   // Amortiguadores primero: hay que saber que categorias quedan explicadas
   // ANTES de sumarles peso, no despues.
   const explained = new Set<ThreatCategory>();
-  for (const damp of DAMPENERS) {
+  for (const damp of dampeners) {
     if (damp.regions && !damp.regions.includes(region)) continue;
     if (!damp.regex.test(haystack)) continue;
     for (const category of damp.reduces) explained.add(category);
     dampened.push(damp.label);
   }
 
-  for (const entry of LEXICON) {
+  for (const entry of lexicon) {
     // Una entrada marcada por region no existe fuera de ella.
     if (entry.regions && !entry.regions.includes(region)) continue;
 
@@ -143,7 +170,7 @@ export function scanLocalPatterns(text: string, options: ScanOptions = {}): Loca
   // Combination bonuses. A scam is a shape — pressure, an untraceable payment,
   // isolation — and each part alone is ordinary conversation. Scoring the
   // shape is what catches scripts whose individual words look harmless.
-  for (const combo of COMBOS) {
+  for (const combo of comboRules) {
     if (combo.requires.every((c) => categories.has(c))) {
       totalWeight += combo.bonus;
       combos.push(combo.label);

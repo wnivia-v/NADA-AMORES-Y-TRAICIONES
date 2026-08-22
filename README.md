@@ -913,6 +913,102 @@ escribe en el registro del servidor; en produccion sin `MAIL_TRANSPORT` el
 servidor **avisa al arrancar** y el registro devuelve error. Es preferible
 fallar en el despliegue a fallar en silencio en manos de un usuario.
 
+## Backoffice de agentes: proponer, medir, aprobar
+
+§4.2 dice que en el camino caliente no decide ningun agente, y que los agentes
+viven fuera de linea con aprobacion humana obligatoria. Esto es esa frase hecha
+codigo.
+
+**Un agente no cambia nada: propone un DIFF.** El diff se aplica sobre una
+**copia** del vocabulario, se mide contra el corpus entero, y solo entonces
+decide una persona. El agente no tiene forma de escribir en produccion aunque
+quiera, porque nada de lo que devuelve es codigo — es una estructura de datos
+que hay que validar antes de mirarla siquiera, con el mismo parseo cerrado por
+defecto que la señal del LLM en la Fase 1.
+
+```bash
+npx tsx bench/backoffice.ts clusters <reportes.json>   # que hay que arreglar
+npx tsx bench/backoffice.ts evaluate <propuesta.json>  # ¿mejora o empeora?
+```
+
+### Agrupar: de mil quejas a una tarea
+
+Mil reportes sueltos son ruido. Lo que los convierte en trabajo concreto es la
+pregunta *¿que entrada del lexico esta detras?*, asi que se agrupa por
+**(entrada, clase de error)**. Quince falsos positivos que apuntan todos a
+`fin-send-money` no son quince quejas: son una frase concreta que amortiguar. Y
+quince falsos **negativos** sin ninguna entrada detras no son un problema de una
+entrada — son vocabulario que falta, que es la señal mas util que existe.
+
+### Medir: lo que importa no es el promedio
+
+Una propuesta puede subir la exactitud global y a la vez romper un caso grave.
+El promedio lo esconde; la lista de casos no. Por eso el evaluador devuelve
+**caso por caso**, en las dos direcciones, y no solo un numero.
+
+Y hay **rechazos automaticos**. Una propuesta que crea una falsa alarma, que
+pierde una amenaza que antes se veia, o que añade un fallo grave, **no llega a la
+persona**. No es desconfianza hacia el agente: la atencion humana es el recurso
+escaso, y gastarla en propuestas que ya se sabe que empeoran las cosas garantiza
+que se gaste mal en las que importan.
+
+Todo lo demas si va a revision, incluidas las propuestas que no mejoran nada:
+puede haber contexto que el corpus no captura, y ese juicio es justamente lo que
+se le pide a la persona.
+
+### Dos ejecuciones reales
+
+**Una propuesta plausible y dañina.** "Detectar cualquier mencion de dinero como
+riesgo" — el tipo de idea que suena razonable en una reunion:
+
+```
+  EMPEORAN (8):
+    safe-005          SEGURO(19) -> SOSPECHOSO(67)   "Su compra en Supermercado Central..."
+    edge-005          SEGURO(36) -> PELIGROSO(84)    "ya pague la cuenta de la luz..."
+    safe-amount-001   SEGURO(0)  -> SOSPECHOSO(48)   "te mando los 300 euros de la fianza..."
+    fp-campo-001      SEGURO(30) -> PELIGROSO(78)    "mandame 20 euros para la cena..."
+    ...
+  RECHAZO AUTOMATICO: crea 7 falsa(s) alarma(s): es el Problema A otra vez
+```
+
+Nunca llego a una persona.
+
+**Una propuesta razonable que igualmente hay que rechazar.** Tres reportes de
+campo señalaban `fin-send-money` disparando sobre peticiones cotidianas
+("mandame 20 euros para la cena"), asi que escribi un amortiguador para eso. El
+banco dijo: 0 falsas alarmas **antes** y 0 **despues**.
+
+Al medirlo, esos textos puntuan **30/100 — banda SEGURO**. La entrada si dispara,
+pero una sola señal no alarma: la regla de corroboracion de la Fase 2 ya estaba
+haciendo su trabajo. El amortiguador no arreglaba nada porque no habia nada roto.
+
+Es el resultado mas util de los dos. Una propuesta bienintencionada, escrita a
+partir de reportes reales, que la medicion detuvo antes de añadir complejidad
+que no compra nada. Los dos textos si entraron al corpus (`fp-campo-001/002`)
+como **guardianes del limite por abajo** — y se ganaron el sitio en el acto:
+fueron de los primeros en romperse con la propuesta dañina.
+
+Una nota sobre los numeros de campo: los reportes de ejemplo decian 44 y 41
+puntos. Medidos, eran 30. Un reporte trae lo que el usuario vio, no la verdad;
+el corpus es lo que arbitra.
+
+### Donde vive, y por que ahi
+
+`src/shared/backoffice` esta **excluido del typecheck del servidor** a proposito,
+igual que el modulo de vision. El backoffice corre en la herramienta de linea de
+comandos sobre un fichero exportado, nunca dentro del API — que es exactamente lo
+que §4.2 pide. Un agente que trabaja sobre un export no puede afectar a ninguna
+llamada en curso ni a ninguna persona mientras piensa.
+
+### Lo que falta
+
+**El agente que escribe la propuesta.** Toda la maquinaria que la valida, la
+aplica sobre una copia, la mide y la somete a aprobacion esta hecha y probada; lo
+que falta es la llamada al modelo que rellena el JSON. Es la parte que menos
+codigo tiene y la unica que necesita credenciales, asi que se queda para cuando
+las haya. El contrato ya esta cerrado: si el modelo devuelve basura, se rechaza
+entera.
+
 ## Licencia
 
 Equipo Antigravity.

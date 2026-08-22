@@ -319,6 +319,20 @@
       "category": "conversacion-normal",
       "text": "El presupuesto del taller son 300 euros, me pareceo caro pero es lo que hay. Gane 500 euros extra este mes asi que lo cubro.",
       "note": "Cifras en euros en contexto perfectamente normal. Es el falso positivo obvio de cualquier patron que mire cantidades."
+    },
+    {
+      "id": "fp-campo-001",
+      "label": "SEGURO",
+      "category": "conversacion-normal",
+      "text": "Oye mandame 20 euros para la cena de manana que voy justo, ya te los devuelvo",
+      "note": "Guarda el limite por abajo de la extension de fin-send-money a cantidades. La entrada SI dispara aqui (30/100), pero se queda en SEGURO porque una sola señal no alarma. Si alguien sube ese peso o añade otra entrada que coincida, este caso lo dira."
+    },
+    {
+      "id": "fp-campo-002",
+      "label": "SEGURO",
+      "category": "conversacion-normal",
+      "text": "pasame 15 euros de la apuesta que perdiste jajaja",
+      "note": "Mismo guardian: cantidad de dos cifras con un motivo cotidiano. 30/100, banda SEGURO. La regla de corroboracion es lo que lo mantiene ahi."
     }
   ]
 }

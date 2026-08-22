@@ -24,8 +24,14 @@
   // la lib DOM al backend — eso permitiria que codigo de servidor usara APIs de
   // navegador por descuido, que es justo lo que este limite evita.
   //
+  // El backoffice se excluye por el mismo motivo y por uno mas. §4.2 dice que
+  // los agentes viven FUERA DE LINEA: el backoffice corre en la herramienta de
+  // linea de comandos sobre un export, nunca dentro del API. Ademas importa el
+  // lexico de la app, que el servidor no tiene por que poder alcanzar.
+  //
   // `src/shared` significa aqui "compartido entre contextos": llm y risk los
   // comparten cliente y servidor; vision la comparten el hilo principal y el
-  // worker, que siguen siendo el dispositivo.
-  "exclude": ["src/shared/vision"]
+  // worker, que siguen siendo el dispositivo; feedback y policy los comparten
+  // cliente y servidor.
+  "exclude": ["src/shared/vision", "src/shared/backoffice"]
 }
