@@ -48,7 +48,9 @@ En `geminiService.ts`, el score final es `Math.max(mezcla_80/20, localResult.ris
 
 ## Diccionario de amenazas (`utils/threatLexicon.ts`)
 
-51 entradas en 19 categorías, ES/EN/PT, más 11 reglas de combinación en `COMBOS`.
+72 entradas en 25 categorías, ES/EN/PT, más 26 reglas de combinación en `COMBOS`.
+
+Las entradas marcadas INCIBE provienen de los avisos publicados por el instituto nacional de ciberseguridad de España (`incibe.es/ciudadania/avisos`) y de los casos de su línea 017: campañas fechadas y documentadas que se ejecutaron contra personas reales. Preferir esa fuente antes que inventar redacciones plausibles — registra los ganchos exactos, y cuatro familias enteras (tasas de aduana, Bizum inverso, soporte con acceso remoto, familiar con número nuevo) eran invisibles para el lexicon hasta que se leyeron esos avisos.
 
 La regla de diseño que hay que respetar al agregar entradas: **los pesos individuales quedan por debajo del umbral de alerta**; la precisión la aportan las combinaciones. Una estafa es una forma (presión + pago irrastreable + aislamiento), y cada parte suelta es conversación normal. Subir un peso individual para "que detecte más" es exactamente cómo se empieza a alertar sobre "no cuelgues que ya te paso con mi mamá" — hay tests que lo impiden.
 

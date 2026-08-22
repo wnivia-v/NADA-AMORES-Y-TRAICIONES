@@ -14,13 +14,13 @@ Contexto de mercado (cifra ampliamente reportada, no verificada por este equipo)
 
 - Análisis de texto (pegado manual o portapapeles automático) contra 5 capas de detección, con 5 proveedores de IA posibles.
 - Reconocimiento de voz en tiempo real con transcripción visible en vivo, en web, escritorio (Electron) **y Android nativo**, con Whisper corriendo en el propio dispositivo como respaldo si la red bloquea el reconocimiento del navegador.
-- Diccionario de amenazas propio: 51 patrones en 19 categorías (fraude, phishing, extorsión, sextorsión, secuestro virtual, acoso, inducción a la autolesión…), en español, inglés y portugués, con 11 reglas de combinación.
+- Diccionario de amenazas propio: 72 patrones en 25 categorías (fraude, phishing, extorsión, sextorsión, secuestro virtual, suplantación de familiares, acoso, grooming, inducción a la autolesión…), en español, inglés y portugués, con 26 reglas de combinación. Está construido sobre los avisos publicados por **INCIBE**, el instituto nacional de ciberseguridad de España — campañas reales, fechadas y documentadas, no ejemplos inventados.
 - OCR de capturas de pantalla (WhatsApp, Telegram, SMS, Messenger) con preprocesamiento de imagen.
 - Detección de deepfake en videollamada (heurística biométrica: parpadeo, estabilidad facial, sincronía labial real entre audio y movimiento de boca).
 - Funciona sin pagar y sin crear cuenta — la detección local no necesita red, cuenta ni clave de API.
 - App de escritorio (Windows, vía Electron) con ícono flotante siempre visible.
 - App Android (APK directo, no requiere Play Store).
-- 180 pruebas automatizadas en 15 archivos, todas en verde, cubriendo desde los patrones de detección hasta la lógica de reintentos de red.
+- 198 pruebas automatizadas en 16 archivos, todas en verde, cubriendo desde los patrones de detección hasta la lógica de reintentos de red.
 
 ## 3. ¿Qué es heurística/beta y qué es producción real? (para no prometer de más)
 
@@ -31,7 +31,7 @@ Ser honesto acá genera más confianza que sobrevender:
 - Sin ninguna clave de IA en la nube configurada (que es como corre hoy la demo), el diccionario de amenazas es la capa que forma la opinión. Funciona y es instantáneo, pero reconoce guiones conocidos; el fraseo completamente nuevo es donde la IA en la nube aporta, y activarla es agregar una clave gratuita de Groq.
 - Captura de pantalla y overlay siempre-encima en Android todavía no existen — son plugins nativos por construir (ver roadmap).
 - No hay verificación por consenso de múltiples IAs de visión en la nube todavía (tiene costo real de API).
-- No hay una tasa de acierto medida sobre un conjunto grande y representativo. Hay 180 tests con casos reales, que es otra cosa: demuestran que casos concretos se detectan, no cuánto acierta en promedio sobre el mundo.
+- No hay una tasa de acierto medida sobre un conjunto grande y representativo. Hay 198 tests con casos reales, que es otra cosa: demuestran que casos concretos se detectan, no cuánto acierta en promedio sobre el mundo.
 
 ## 4. ¿Cómo funciona técnicamente? (resumen de 30 segundos)
 
@@ -159,6 +159,9 @@ Por tres motivos, y ninguno es que el modelo sea malo. Primero, **el momento**: 
 **"¿Por qué no usar solo un modelo de lenguaje y olvidarse de las reglas?"**
 Porque cuando probamos con material real, la IA falló justo en los casos que más importaban — devolvió "seguro" sobre una extorsión explícita. Las reglas son la red de seguridad: son instantáneas, funcionan sin red, y su comportamiento es **auditable** — se puede señalar exactamente qué disparó una alerta. La IA aporta lo que las reglas no pueden: fraseo nuevo que nadie escribió todavía. Cada capa cubre la debilidad de la otra; por eso están las dos.
 
+**"¿De dónde salen los patrones? ¿Los inventaste vos?"**
+Al principio salían del material real que iba fallando en pruebas. Eso tiene un sesgo obvio: solo reconoce las estafas que a uno se le ocurrió probar. Por eso el diccionario se amplió con los **avisos publicados por INCIBE**, el instituto nacional de ciberseguridad de España, y con los casos de su línea de ayuda 017 — campañas fechadas y documentadas, con los ganchos textuales que se usaron contra personas reales. Cuatro familias enteras eran invisibles antes de leer esos avisos: el familiar en apuros ("se me rompió el móvil, este es mi nuevo número"), las tasas de aduana por un paquete retenido, el Bizum inverso en plataformas de compraventa, y el soporte falso que pide instalar AnyDesk. Ninguna de las cuatro tiene una sola palabra peligrosa, y por eso ninguna se detectaba.
+
 **"¿Funciona en otros idiomas o solo en español?"**
 El diccionario cubre español, inglés y portugués hoy. El reconocimiento de voz suma francés, italiano y alemán. Agregar un idioma al diccionario es agregar patrones a un archivo — la arquitectura ya lo contempla, no hay que rehacer nada. Además el texto se normaliza antes de analizarse (acentos, mayúsculas, espacios), porque tanto la transcripción de voz como el OCR escriben de forma inconsistente, y sería absurdo dejar pasar una amenaza por una tilde faltante.
 
@@ -166,4 +169,4 @@ El diccionario cubre español, inglés y portugués hoy. El reconocimiento de vo
 Hoy, realistamente, lo instala un familiar: el hijo o el nieto que ya está preocupado. Por eso el modo familiar está en el roadmap — que la alerta le llegue también a esa persona de confianza. Y por eso funciona sin crear cuenta: cada paso de registro es gente que se pierde en el camino.
 
 **"¿Cómo sé que de verdad funciona y no es una demo armada?"**
-Las pruebas están escritas con las transcripciones y capturas reales que fallaron, palabra por palabra, y están en el repositorio. Se corren con un comando y son 180. Lo que no voy a decir es que tenga una tasa de acierto medida sobre un conjunto grande y representativo — para eso hace falta un corpus etiquetado que hoy no tenemos, y sería inventar una cifra.
+Las pruebas están escritas con las transcripciones y capturas reales que fallaron, palabra por palabra, y están en el repositorio. Se corren con un comando y son 198. Lo que no voy a decir es que tenga una tasa de acierto medida sobre un conjunto grande y representativo — para eso hace falta un corpus etiquetado que hoy no tenemos, y sería inventar una cifra.
