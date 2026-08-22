@@ -128,16 +128,34 @@ export async function probeDevice(): Promise<CapabilityProbe> {
 /**
  * Modulo WASM minimo que solo valida si el runtime entiende una instruccion
  * SIMD (v128). Es la forma estandar de detectarlo: si el modulo compila, hay
- * SIMD; si lanza, no la hay.
+ * SIMD; si no, no la hay.
+ *
+ * Los bytes son la secuencia canonica y NO se escriben a mano: la primera
+ * version de esta funcion llevaba un modulo mal formado —el cuerpo declaraba 8
+ * bytes y solo habia 7— asi que WebAssembly.validate devolvia false SIEMPRE.
+ * El efecto no era un aviso, era mucho peor: con webgpu tambien en false, todo
+ * dispositivo sin WebGPU caia al tier `low` y analizaba a 2 fps pudiendo con
+ * mucho mas. Lo cazo el banco de humo en Chromium; ningun test unitario podia,
+ * porque todos le pasan la medicion ya hecha a pickTier.
+ *
+ * Desglose, por si alguien tiene que volver a tocarlos:
+ *   00 61 73 6d 01 00 00 00   magic + version
+ *   01 05 01 60 00 01 7b      seccion de tipos: () -> (v128)
+ *   03 02 01 00               seccion de funciones: 1 funcion, tipo 0
+ *   0a 0a 01 08 00            seccion de codigo: cuerpo de 8 bytes, 0 locales
+ *      41 00                  i32.const 0
+ *      fd 0f                  i8x16.splat   <- la instruccion SIMD
+ *      fd 62                  i8x16.popcnt  <- y otra
+ *      0b                     end
  */
-function detectWasmSimd(): boolean {
+export function detectWasmSimd(): boolean {
   try {
     return WebAssembly.validate(
       new Uint8Array([
         0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00,
         0x01, 0x05, 0x01, 0x60, 0x00, 0x01, 0x7b,
         0x03, 0x02, 0x01, 0x00,
-        0x0a, 0x0a, 0x01, 0x08, 0x00, 0x41, 0x00, 0xfd, 0x0f, 0x26, 0x0b,
+        0x0a, 0x0a, 0x01, 0x08, 0x00, 0x41, 0x00, 0xfd, 0x0f, 0xfd, 0x62, 0x0b,
       ]),
     );
   } catch {

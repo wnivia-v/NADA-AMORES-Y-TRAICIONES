@@ -33,3 +33,13 @@ android/app/src/main/assets/capacitor.config.json
 server/dist/
 server/.env
 server/.env.local
+
+# Recursos de MediaPipe (runtime WASM + modelo), preparados por el prebuild.
+# No se versionan: son ~37 MB cuya fuente de verdad son el paquete instalado y
+# la URL oficial del modelo. Se regeneran con `npm run mediapipe:assets`.
+public/mediapipe/
+
+# Worker de vision compilado (scripts/build-vision-worker.mjs). Generado en
+# predev/prebuild; el codigo fuente es src/workers/vision.worker.ts.
+public/vision-worker.js
+public/vision-worker.js.map

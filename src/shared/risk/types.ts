@@ -25,7 +25,16 @@ export type SignalType =
   /** El mensaje intento manipular al analizador. Empuja, no decide. */
   | 'injection-attempt'
   /** Biometria facial del escudo de video (Fase 4). */
-  | 'deepfake';
+  | 'deepfake'
+  /**
+   * Imagen congelada o video en bucle (Fase 4).
+   *
+   * Separada de 'deepfake' a proposito: mide otra cosa por otro camino. La
+   * biometria mira la cara, esta mira el tiempo — y contra una grabacion
+   * reproducida en bucle, la biometria no ve nada raro porque el clip ES una
+   * cara real. Siendo tipos distintos, pueden corroborarse entre ellas.
+   */
+  | 'video-loop';
 
 /**
  * La forma que pide el brief: { tipo, valor, confianza, timestamp }.

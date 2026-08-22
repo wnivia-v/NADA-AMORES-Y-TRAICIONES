@@ -2,6 +2,7 @@ import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 import path from 'path';
+import fs from 'node:fs';
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), 'VITE_');
@@ -18,7 +19,6 @@ export default defineConfig(({ mode }) => {
           manualChunks: {
             'transformers': ['@huggingface/transformers'],
             'firebase': ['firebase/app', 'firebase/ai', 'firebase/app-check'],
-            'mediapipe': ['@mediapipe/tasks-vision'],
           },
         },
       },
@@ -60,6 +60,36 @@ export default defineConfig(({ mode }) => {
           return html.replace('%NADA_API_ORIGIN%', apiOrigin);
         },
       },
+      // MediaPipe carga su runtime con un import() en tiempo de ejecucion. En la
+      // build eso es una peticion estatica normal y funciona, pero el servidor
+      // de desarrollo lo ve como un modulo del grafo y se niega a servirlo:
+      // "This file is in /public ... should not be imported from source code".
+      // O sea que el detector facial funcionaba compilado y no funcionaba
+      // programando, que es la peor forma de romperse.
+      //
+      // Este middleware devuelve esos archivos tal cual, antes de que el
+      // pipeline de transformacion los toque.
+      {
+        name: 'nada-mediapipe-runtime',
+        configureServer(server) {
+          server.middlewares.use((req, res, next) => {
+            const url = (req.url ?? '').split('?')[0] ?? '';
+            if (!url.startsWith('/mediapipe/')) return next();
+
+            const file = path.resolve(__dirname, 'public', url.replace(/^\//, ''));
+            if (!file.startsWith(path.resolve(__dirname, 'public/mediapipe'))) return next();
+            if (!fs.existsSync(file)) return next();
+
+            res.setHeader(
+              'Content-Type',
+              file.endsWith('.wasm') ? 'application/wasm'
+                : file.endsWith('.js') ? 'text/javascript'
+                : 'application/octet-stream',
+            );
+            fs.createReadStream(file).pipe(res);
+          });
+        },
+      },
       react(),
       VitePWA({
         registerType: 'autoUpdate',
@@ -87,8 +117,25 @@ export default defineConfig(({ mode }) => {
           // which is exactly wrong for people on poor connections. It is cached
           // on first use instead, so the app installs light and still works
           // offline afterwards.
-          globIgnores: ['**/*.wasm'],
+          // Al runtime de MediaPipe se le aplica la misma regla que al de onnx,
+          // y por el mismo motivo: son tres variantes del cargador (~320 KB
+          // cada una) de las que cada dispositivo usa exactamente UNA, segun
+          // tenga SIMD o hilos. Precachearlas las tres obligaria a todo el
+          // mundo a bajarse un mega de mas durante la instalacion, dos tercios
+          // del cual no va a ejecutar nunca.
+          globIgnores: ['**/*.wasm', 'mediapipe/**'],
           runtimeCaching: [
+            {
+              // Runtime de MediaPipe servido desde nuestro origen. CacheFirst
+              // es lo que hace que el detector facial arranque sin conexion.
+              urlPattern: /\/mediapipe\/.*/,
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'nada-mediapipe-runtime',
+                expiration: { maxEntries: 6, maxAgeSeconds: 60 * 60 * 24 * 90 },
+                cacheableResponse: { statuses: [0, 200] },
+              },
+            },
             {
               // onnxruntime binaries served from our own origin
               urlPattern: /\.wasm$/,

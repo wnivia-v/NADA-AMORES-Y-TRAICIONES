@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-import { pickTier, withDelegateFallback, TIER_BUDGETS } from '@/shared/vision/deviceTier';
+import { pickTier, withDelegateFallback, detectWasmSimd, TIER_BUDGETS } from '@/shared/vision/deviceTier';
 import { FrameBudget } from '@/shared/vision/frameBudget';
 import { frameSignature, hammingDistance, LoopDetector, HASH_GRID } from '@/shared/vision/loopDetection';
 import {
@@ -55,6 +55,14 @@ describe('tiers de dispositivo', () => {
   it('ante la duda degrada', () => {
     // Un navegador que no expone nada no puede tratarse como potente.
     expect(pickTier({}).id).toBe('low');
+  });
+
+  it('la sonda de SIMD detecta el SIMD que este runtime tiene', () => {
+    // Cualquier motor capaz de correr estos tests admite SIMD desde hace años.
+    // Un false aqui no significa "no hay SIMD": significa que el modulo de
+    // sonda esta mal formado y validate() falla por eso — que es exactamente lo
+    // que pasaba antes, y dejaba a todo dispositivo sin WebGPU clavado a 2 fps.
+    expect(detectWasmSimd()).toBe(true);
   });
 
   it('sin WebGPU el delegado cae a CPU (WASM+SIMD)', () => {

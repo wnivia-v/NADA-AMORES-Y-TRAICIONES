@@ -121,7 +121,16 @@ npx tsc -p tsconfig.server.json      # typecheck backend + modulo compartido
 npx tsc -p tsconfig.electron.json    # compila electron/*.cts -> *.cjs (emite, sin --noEmit)
 npx vitest run                       # tests
 npx vite build                       # build web/PWA
+node bench/chromium-smoke.mjs        # escudo de video en un Chromium real
 ```
+
+El ultimo necesita `npm run dev` levantado. Es el unico que ejecuta MediaPipe de
+verdad: los tests unitarios cubren la matematica, pero no pueden decir nada de
+si el worker arranca.
+
+No encadenes estas comprobaciones con `&&` bajo `set -e`: bash no aborta ante un
+fallo dentro de una lista condicional, asi que un typecheck en rojo pasa
+desapercibido y el commit sale igual. Ya paso una vez.
 
 ## Coste: NADA funciona sin pagar nada
 
@@ -198,7 +207,7 @@ Honestidad sobre lo que funciona hoy:
 | AWS Bedrock | **No funciona sin trabajo extra.** Sigue necesitando un proxy propio, que ahora llama el servidor y no el navegador. |
 | Deteccion local (regex) | **Medido**: 75.0% acierto exacto, 82.4% recall, 0% falsas alarmas, 0 fallos graves sobre los 44 casos del corpus. Era 34.1% / 35.3% / 0% / 14 antes de la Fase 3. |
 | OCR en produccion | Sin verificar en runtime. Tesseract carga su worker desde `cdn.jsdelivr.net`; la CSP ya lo permite, pero no se ha ejecutado un OCR real en el build empaquetado. |
-| Escudo de video (deepfake) | Implementado: captura la videollamada via `getDisplayMedia`, biometria facial (EAR/jitter) + sincronia labial real (correlacion boca-audio, sin placeholder). Es heuristica, no un clasificador entrenado contra deepfakes reales, y sin pista de audio la sincronia labial queda explicitamente sin medir en vez de asumir que esta bien. Activacion manual (requiere permiso del navegador), no arranca solo con el resto de la proteccion. |
+| Escudo de video (deepfake) | Implementado y **fuera del hilo de UI**: MediaPipe corre en un Web Worker, con tiers de dispositivo, presupuesto de frames y deteccion de bucle. Biometria facial (EAR/jitter) + sincronia labial real (correlacion boca-audio, sin placeholder). Es heuristica, no un clasificador entrenado contra deepfakes reales, y sin pista de audio la sincronia labial queda explicitamente sin medir en vez de asumir que esta bien. Activacion manual (requiere permiso del navegador), no arranca solo con el resto de la proteccion. **Verificado en Chromium** salvo la parte que necesita una cara real — ver abajo. |
 
 Dos advertencias que importan antes de publicar:
 
@@ -221,6 +230,14 @@ src/
 ├── shared/risk/        # Motor de fusion — contrato de señal y ventana deslizante
 │   ├── fusionEngine    # acumulacion noisy-OR, corroboracion, motor por carril
 │   └── config          # ventana, pesos, umbrales y la lista cerrada de amenazas
+├── shared/vision/      # Vision on-device — hilo principal Y worker, nunca servidor
+│   ├── faceSignals     # EAR, MAR, jitter, pose; el cerebro, sin navegador
+│   ├── deviceTier      # medida de capacidad -> presupuesto (fps, rPPG, delegado)
+│   ├── frameBudget     # ritmo sostenido y degradacion termica por tiempo de trabajo
+│   ├── loopDetection   # firma perceptual: grabacion en bucle e imagen congelada
+│   ├── challenge       # reto activo — lo unico que una grabacion no puede hacer
+│   └── protocol        # que cruza entre hilos: frames para alla, numeros para aca
+├── shared/policy/      # Jurisdiction pack (§4.4), por defecto el mas estricto
 ├── shared/llm/         # Limite con el LLM — lo importan cliente Y servidor
 │   ├── envelope        # system/user separados; el texto nunca se concatena
 │   ├── normalize       # NFKC, invisibles, homoglifos, tope de longitud
@@ -239,8 +256,10 @@ src/
 │   ├── notificationService # PWA + Electron notifications
 │   ├── ocrService      # Tesseract.js OCR
 │   ├── speechService   # Web Speech API
-│   ├── visionService   # MediaPipe deepfake detection
+│   ├── visionService   # cliente del worker: captura, audio y contrapresion
 │   └── safeBrowsingService # Google Safe Browsing
+├── workers/
+│   └── vision.worker   # MediaPipe fuera del hilo de UI (clasico, compilado aparte)
 ├── store/              # Zustand store con persist
 ├── tests/              # Vitest: patrones, fusion, scamDB, scoping, store, OCR
 │   └── fixtures/       # scam-corpus.json — corpus etiquetado de referencia
@@ -565,6 +584,94 @@ Responde a la mitad de los casos y declina el resto. Eso es deliberado: cuando e
 Con 33 casos esto es una señal, no una prueba. La forma de subir el techo es agrandar el corpus con estafas reales.
 
 Regla del proyecto: ningun cambio en patrones, pesos o corpus sin un antes/despues medido, y todo falso negativo real se añade como caso permanente.
+
+## Escudo de video: el worker, y lo que el navegador enseño
+
+MediaPipe corria en el hilo de la interfaz, llamado desde `requestAnimationFrame`
+con **todos** los frames, con `delegate: 'GPU'` fijo en el codigo. En un portatil
+no se nota. En un movil de gama media la interfaz deja de responder mientras la
+inferencia ocupa el hilo, el telefono se calienta y el sistema estrangula el
+proceso — justo durante la videollamada que se queria vigilar.
+
+Ahora la inferencia vive en `src/workers/vision.worker.ts` y el hilo principal
+solo se queda con lo que no puede soltar: capturar el `ImageBitmap` del `<video>`
+y muestrear la energia de audio (la Web Audio API no existe dentro de un worker,
+asi que cada frame viaja con la energia del instante en que se capturo). Los
+frames se **transfieren**, no se copian: el hilo principal pierde la referencia al
+mandarlos, lo que convierte el §4.1 en algo que se comprueba leyendo el codigo.
+
+El ritmo lo decide el presupuesto (`targetFps` del tier), no la pantalla, y hay
+un solo frame en vuelo cada vez: analizar lo que pasa AHORA importa mas que
+analizarlo todo.
+
+### Tres cosas que solo se ven en un navegador
+
+`bench/chromium-smoke.mjs` levanta Chromium de verdad y le da de comer un
+`<video>` sintetico hecho con `canvas.captureStream(0)`. Encontro tres fallos que
+ningun test unitario podia encontrar:
+
+1. **La sonda de SIMD estaba rota.** El modulo WASM de deteccion estaba mal
+   formado —el cuerpo declaraba 8 bytes y solo habia 7— asi que
+   `WebAssembly.validate` devolvia `false` siempre. Sin WebGPU, eso clavaba a
+   **todo** dispositivo al tier `low` (2 fps) pudiendo con mucho mas. Los tests
+   no podian verlo porque todos le pasan la medicion ya hecha a `pickTier`.
+2. **MediaPipe no funciona en un worker de tipo module.** Su cargador de WASM usa
+   `importScripts` (o una etiqueta `<script>`), y en un worker de tipo module no
+   existe ninguna de las dos: falla con `ModuleFactory not set.`.
+3. **Vite sirve TODOS los workers como modulos ES en desarrollo.**
+   `worker.format: 'iife'` solo se aplica al construir. O sea que el escudo
+   funcionaba compilado y se rompia programando, que es la peor forma de
+   romperse. Por eso el worker se compila aparte con esbuild
+   (`scripts/build-vision-worker.mjs`) y se sirve desde `public/`: dev y
+   produccion cargan **el mismo artefacto**.
+
+Resultado del banco, con delegado CPU (XNNPACK) porque el Chromium del entorno no
+da WebGPU — que es justamente el camino de reserva que antes no existia:
+
+| Medida | Valor |
+|--------|-------|
+| Arranque del worker | 945 ms |
+| Analisis por frame | 10 ms mediana, 12 ms p95 |
+| Escena que cambia, 60 frames | 0 hallazgos de bucle (0 falsos positivos) |
+| Video en bucle de 4 s | detectado, periodo estimado **4.0 s** |
+| Imagen congelada | detectada |
+
+### Lo que sigue sin estar verificado
+
+Los frames sinteticos son patrones abstractos, no caras: **MediaPipe no detecto
+ninguna cara**, asi que el camino biometrico —EAR, parpadeo, sincronia labial,
+pose— no se ha ejercitado con una cara real. Eso necesita una webcam y una
+persona. Lo que si esta verificado es todo lo que hay debajo: que el worker
+arranca, que el modelo carga, que los frames cruzan, que el tiempo se mide y que
+la deteccion de bucle funciona sobre video real.
+
+Y la extraccion de pose (`eulerFromMatrix`) esta probada contra matrices de
+rotacion construidas a mano, o sea que la matematica es correcta. Lo que no se
+puede comprobar sin camara es si el SIGNO coincide con la orientacion que entrega
+MediaPipe con un feed espejado. Hay que calibrarlo delante de una webcam antes de
+dar el reto activo por bueno.
+
+### MediaPipe se sirve desde casa
+
+El runtime WASM y el modelo venian de `cdn.jsdelivr.net` (con `@latest`) y de
+`storage.googleapis.com`. Ahora los dos salen del propio origen, preparados por
+`npm run mediapipe:assets`. Arregla tres cosas a la vez:
+
+- El JS sale del bundle y el WASM salia del CDN sin fijar version. Son dos
+  mitades del mismo binario: el CDN podia publicar una version nueva y dejar de
+  encajar sin que nadie desplegara nada.
+- MediaPipe ya no necesita que la CSP permita ejecutar **script** de un dominio
+  de terceros. Ojo: `cdn.jsdelivr.net` **sigue** en `script-src`, porque
+  Tesseract (el OCR) carga de ahi su worker y su core WASM. Se intento quitarlo
+  y habria roto el OCR en silencio; se restauro. Para cerrar ese agujero del
+  todo hay que traerse tambien los recursos de Tesseract, que es trabajo aparte
+  y sin hacer.
+- Es una PWA que dice funcionar sin conexion, y el detector facial no arrancaba
+  sin internet.
+
+Cuesta ~37 MB en `dist/`, de los que cada navegador descarga la variante que le
+toca (~15 MB, una vez, y despues cacheada por el service worker). No se
+versionan: se regeneran desde `node_modules` y desde la URL oficial del modelo.
 
 ## Licencia
 

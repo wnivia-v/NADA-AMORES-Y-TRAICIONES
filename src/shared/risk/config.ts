@@ -37,6 +37,11 @@ export const DEFAULT_SOURCE_WEIGHTS: Record<SignalType, number> = {
   'local-patterns': 0.9,
   'llm-risk': 0.85,
   deepfake: 0.8,
+  // Algo por debajo de la biometria. La deteccion de bucle es determinista
+  // —o los frames repiten o no repiten— pero tiene un falso positivo real y
+  // conocido: un plano muy estatico, con la persona quieta y el fondo fijo,
+  // produce firmas casi identicas sin que nadie este engañando a nadie.
+  'video-loop': 0.75,
   // Deliberadamente bajo. Un intento de manipular al analizador es indicio de
   // intencion, no prueba de estafa: empuja la puntuacion sin llegar a sostenerla.
   'injection-attempt': 0.5,
