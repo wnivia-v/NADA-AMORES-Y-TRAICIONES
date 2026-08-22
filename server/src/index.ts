@@ -9,6 +9,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { ALLOWED_ORIGINS, PORT, configuredUpstreams } from './config';
 import { handleAnalyze, handleHealth, type HandlerResponse } from './handler';
+import { handlePolicy } from './policy';
 
 /** Tope de cuerpo. Corta la lectura en cuanto se pasa, sin acumular en memoria. */
 const MAX_BODY_BYTES = 64 * 1024;
@@ -70,6 +71,13 @@ const server = createServer((req, res) => {
 
   if (req.method === 'GET' && url.pathname === '/health') {
     send(res, origin, handleHealth());
+    return;
+  }
+
+  if (req.method === 'GET' && url.pathname === '/v1/policy') {
+    // Sin autenticacion: el aviso de privacidad hay que poder enseñarlo antes
+    // de pedirle nada a nadie, incluida una cuenta.
+    send(res, origin, handlePolicy(url.searchParams.get('region')));
     return;
   }
 

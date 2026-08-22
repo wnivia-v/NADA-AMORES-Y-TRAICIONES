@@ -752,6 +752,85 @@ distinto, y esta documentado en vez de perseguido: perseguir a mano cada hueco
 que aparece es precisamente el trabajo que la Fase 5 existe para hacer con
 medicion y aprobacion humana.
 
+## Consentimiento y jurisdiction pack (§4.4, Modo B)
+
+El pack ya no es una costura vacia: el backend lo sirve en `GET /v1/policy` y la
+app lo carga antes de enseñar nada que dependa de el.
+
+### Usar NADA y contribuir a NADA son decisiones distintas
+
+Es la idea que sostiene todo lo demas. Hay **dos ambitos separados**:
+
+- **Proteccion** — lo que hace falta para que la app funcione. Nada sale del
+  dispositivo por este ambito.
+- **Reportes** — lo unico que permite que un texto salga. Viene **apagado** y
+  hay que encenderlo a mano.
+
+Juntarlos en un solo boton los debilitaria los dos. Legalmente, un
+consentimiento que condiciona el servicio a aceptar un tratamiento que el
+servicio no necesita no es libre, y uno que no es libre no vale: proteger a
+alguien de una estafa no requiere que sus conversaciones salgan del movil. Y en
+la practica, "acepta todo o vete" consigue que la gente acepte sin leer o se
+vaya.
+
+Retirar es igual de facil que conceder, y es **parcial**: dejar de contribuir
+reportes no obliga a nadie a dejar de usar la proteccion.
+
+La frase que mas importa esta en la pantalla y no detras de un enlace: *"incluye
+el texto analizado, que puede contener mensajes escritos por otras personas"*.
+Quien enciende los reportes esta entregando conversaciones de terceros que no
+han consentido nada. Eso no se arregla con codigo; si se puede no esconder.
+
+### Un fallo de red no puede borrar datos
+
+La decision menos obvia y la que mas importa. El pack estricto por defecto dice
+"cero retencion", y esta bien que lo diga mientras no se sepa donde esta el
+usuario. Pero aplicar esa regla cuando el backend simplemente no contesta
+significaria **borrarle el historial a alguien por un fallo de red**.
+
+Asi que el estricto de reserva gobierna el **consentimiento** —donde equivocarse
+hacia la prudencia solo molesta— y **no gobierna el borrado**, donde equivocarse
+es irreversible. La retencion solo se aplica desde un pack que alguien sirvio de
+verdad (fresco o cacheado). Por el mismo motivo, una alerta con fecha ilegible
+se conserva en vez de borrarse.
+
+### La tabla es una tabla
+
+`server/src/policy.ts` es una fila por region y nada mas que la capa fina —
+consentimiento, edad, retencion, aviso, canal de derechos, autoridad. Añadir un
+pais es añadir una fila. Es lo contrario de lo que §4.4 prohibe.
+
+Tres cuidados dentro de esa tabla:
+
+1. **`minimumAge: 18` no sale de ninguna ley.** Es una decision de producto:
+   esto acompaña a alguien en apps de citas. Las leyes de proteccion de datos
+   fijan otra cosa distinta —la edad a la que alguien puede consentir el
+   tratamiento de sus datos, que en varios paises es menor— y mezclar las dos
+   seria un error facil de cometer y dificil de detectar. Un test comprueba que
+   la edad es la misma en todas las filas, precisamente para que nadie la
+   convierta en una variable legal por descuido.
+2. **La autoridad de control solo se nombra donde no hay duda.** España, AEPD.
+   Para el resto de la UE se remite a la autoridad nacional sin inventarse cual:
+   son 27, y un nombre equivocado en un aviso legal es peor que no dar ninguno.
+3. **El correo de derechos y la URL del aviso salen del ENTORNO**
+   (`RIGHTS_CONTACT_EMAIL`, `PRIVACY_NOTICE_URL`). Son configuracion de
+   despliegue: quien opera el servicio sabe su direccion, el repositorio no. Sin
+   configurar se sirven como `null` y la app lo enseña como lo que es.
+
+**Antes de publicar, esta tabla necesita revision legal.** El mecanismo esta
+probado; los valores son de partida.
+
+### Estado
+
+| | |
+|---|---|
+| `GET /v1/policy?region=es` | Funciona. Verificado contra el servidor en marcha. |
+| Region desconocida | Cae al estricto (retencion 0), nunca al permisivo. |
+| Pantalla de consentimiento | Bloquea hasta responder; reportes apagados por defecto. |
+| Retirar / borrar | En Ajustes > Privacidad. Borrado local real e inmediato. |
+| Borrado del lado del servidor | **No existe**: no hay cuentas ni datos que borrar todavia. |
+| Envio de reportes | **Sigue sin existir.** La puerta (`mayShareReports`) ya esta puesta y cerrada. |
+
 ## Licencia
 
 Equipo Antigravity.

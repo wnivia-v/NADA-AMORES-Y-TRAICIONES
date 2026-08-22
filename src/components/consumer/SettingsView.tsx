@@ -4,6 +4,7 @@ import { translations } from '@/utils/translations';
 import { getProvidersStatus, getProviderConfig, saveProviderConfig } from '@/services/aiProviders';
 import type { ProviderStrategy, ProviderId, ProviderCost } from '@/services/aiProviders';
 import { Palette, Globe, Code, Brain, Zap, Shield, Layers, Laptop, Cloud, CreditCard } from 'lucide-react';
+import { PrivacyPanel } from './PrivacyPanel';
 
 const STRATEGY_INFO: Record<ProviderStrategy, { icon: typeof Zap; label: string; desc: string }> = {
   fallback: { icon: Shield, label: 'Fallback', desc: 'Intenta el siguiente si falla' },
@@ -234,6 +235,9 @@ export function SettingsView() {
           </button>
         </div>
       </div>
+
+      {/* Privacidad: retirar el consentimiento y borrar lo guardado. */}
+      <PrivacyPanel />
 
       {/* About */}
       <div className="card p-4 text-center">

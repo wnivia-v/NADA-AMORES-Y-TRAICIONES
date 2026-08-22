@@ -168,3 +168,49 @@ describe('useNadaStore metrics', () => {
     expect(alerts[0]?.description).toBe('alerta 104');
   });
 });
+
+describe('retencion del historial (§4.4)', () => {
+  beforeEach(() => {
+    useNadaStore.setState({ alerts: [], logs: [] });
+  });
+
+  const alerta = (timestamp: string) => ({
+    id: `a-${timestamp}`,
+    timestamp,
+    verdict: 'PELIGROSO' as const,
+    riskScore: 80,
+    description: 'prueba',
+    detectedTactic: null,
+    app: 'test',
+  });
+
+  const dias = (n: number) => Date.now() - n * 24 * 60 * 60 * 1000;
+
+  it('borra lo anterior al corte y conserva lo demas', () => {
+    useNadaStore.setState({
+      alerts: [
+        alerta(new Date(dias(1)).toISOString()),
+        alerta(new Date(dias(100)).toISOString()),
+        alerta(new Date(dias(200)).toISOString()),
+      ],
+    });
+
+    const removed = useNadaStore.getState().pruneAlertsBefore(dias(90));
+    expect(removed).toBe(2);
+    expect(useNadaStore.getState().alerts).toHaveLength(1);
+  });
+
+  it('ante una fecha ilegible CONSERVA en vez de borrar', () => {
+    // Perder el historial de alguien por un formato raro seria peor que
+    // guardarlo de mas unos dias. El borrado es irreversible; guardar no.
+    useNadaStore.setState({ alerts: [alerta('no-es-una-fecha')] });
+    expect(useNadaStore.getState().pruneAlertsBefore(Date.now())).toBe(0);
+    expect(useNadaStore.getState().alerts).toHaveLength(1);
+  });
+
+  it('sin nada que borrar no toca el estado ni escribe en el registro', () => {
+    useNadaStore.setState({ alerts: [alerta(new Date().toISOString())], logs: [] });
+    expect(useNadaStore.getState().pruneAlertsBefore(dias(90))).toBe(0);
+    expect(useNadaStore.getState().logs).toHaveLength(0);
+  });
+});

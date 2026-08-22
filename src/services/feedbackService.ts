@@ -140,6 +140,30 @@ class FeedbackService {
     });
   }
 
+  /**
+   * Borra los reportes anteriores al corte. Aplica la retencion del pack.
+   *
+   * Devuelve cuantos se fueron, para poder decirlo en el registro en vez de
+   * borrar en silencio.
+   */
+  async pruneBefore(cutoff: number): Promise<number> {
+    const db = await this.open();
+    if (!db) return 0;
+
+    const viejos = (await this.all()).filter((r) => r.queuedAt < cutoff);
+    if (viejos.length === 0) return 0;
+
+    return new Promise<number>((resolve) => {
+      try {
+        const store = db.transaction(STORE_NAME, 'readwrite').objectStore(STORE_NAME);
+        for (const report of viejos) store.delete(report.id);
+        resolve(viejos.length);
+      } catch {
+        resolve(0);
+      }
+    });
+  }
+
   /** Vacia la cola. Para el borrado por peticion del usuario (ARCO/DSR). */
   async clear(): Promise<void> {
     const db = await this.open();

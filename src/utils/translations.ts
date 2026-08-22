@@ -94,6 +94,30 @@ export interface TranslationSet {
   feedbackSend: string;
   feedbackSaved: string;
   feedbackFailed: string;
+  // Consentimiento (§4.4)
+  consentTitle: string;
+  consentIntro: string;
+  consentProtectionTitle: string;
+  consentProtectionBody: string;
+  consentReportsTitle: string;
+  consentReportsBody: string;
+  consentThirdParty: string;
+  consentAge: string;
+  consentPrivacyNotice: string;
+  consentAuthority: string;
+  consentContinue: string;
+  consentChangeLater: string;
+  // Ajustes de privacidad
+  privacyTitle: string;
+  privacyReportsOn: string;
+  privacyReportsOff: string;
+  privacyStopSharing: string;
+  privacyDeleteLocal: string;
+  privacyDeleted: string;
+  privacyRights: string;
+  privacyRegion: string;
+  privacyRetention: string;
+  privacyRetentionNone: string;
 }
 
 const es: TranslationSet = {
@@ -179,6 +203,28 @@ const es: TranslationSet = {
   // Dice donde queda, no "gracias por enviarlo": hoy no se envia a ningun sitio.
   feedbackSaved: 'Guardado en este dispositivo. Gracias.',
   feedbackFailed: 'No se pudo guardar en este dispositivo.',
+  consentTitle: 'Antes de empezar',
+  consentIntro: 'NADA te avisa de señales de riesgo en tus conversaciones. No dice quien es un estafador: enseña indicadores y tu decides.',
+  consentProtectionTitle: 'Analisis en tu dispositivo',
+  consentProtectionBody: 'El analisis de camara y voz ocurre en tu movil y no sale de el. Ningun frame de video ni audio se envia ni se guarda, nunca.',
+  consentReportsTitle: 'Ayudar a mejorar la deteccion (opcional)',
+  consentReportsBody: 'Cuando marques que nos hemos equivocado, enviarnos ese caso para corregirlo. Puedes usar la app sin activarlo.',
+  consentThirdParty: 'Incluye el texto analizado, que puede contener mensajes escritos por otras personas.',
+  consentAge: 'Declaro que tengo al menos {age} años.',
+  consentPrivacyNotice: 'Aviso de privacidad',
+  consentAuthority: 'Autoridad de control: {authority}',
+  consentContinue: 'Continuar',
+  consentChangeLater: 'Puedes cambiarlo cuando quieras en Ajustes.',
+  privacyTitle: 'Privacidad y datos',
+  privacyReportsOn: 'Envio de reportes activado',
+  privacyReportsOff: 'Envio de reportes desactivado',
+  privacyStopSharing: 'Dejar de enviar reportes',
+  privacyDeleteLocal: 'Borrar mis datos de este dispositivo',
+  privacyDeleted: 'Borrado.',
+  privacyRights: 'Ejercer tus derechos',
+  privacyRegion: 'Region aplicada',
+  privacyRetention: 'Historial conservado: {days} dias',
+  privacyRetentionNone: 'El historial no se conserva entre sesiones',
 };
 
 const en: TranslationSet = {
@@ -263,6 +309,28 @@ const en: TranslationSet = {
   feedbackSend: 'Send',
   feedbackSaved: 'Saved on this device. Thank you.',
   feedbackFailed: 'Could not save on this device.',
+  consentTitle: 'Before we start',
+  consentIntro: 'NADA flags risk signals in your conversations. It never says who is a scammer: it shows indicators and you decide.',
+  consentProtectionTitle: 'Analysis on your device',
+  consentProtectionBody: 'Camera and voice analysis happen on your phone and stay there. No video frame or audio is ever sent or stored.',
+  consentReportsTitle: 'Help improve detection (optional)',
+  consentReportsBody: 'When you mark that we got it wrong, send us that case so we can fix it. You can use the app without this.',
+  consentThirdParty: 'This includes the analysed text, which may contain messages written by other people.',
+  consentAge: 'I declare that I am at least {age} years old.',
+  consentPrivacyNotice: 'Privacy notice',
+  consentAuthority: 'Supervisory authority: {authority}',
+  consentContinue: 'Continue',
+  consentChangeLater: 'You can change this any time in Settings.',
+  privacyTitle: 'Privacy and data',
+  privacyReportsOn: 'Report sharing is on',
+  privacyReportsOff: 'Report sharing is off',
+  privacyStopSharing: 'Stop sharing reports',
+  privacyDeleteLocal: 'Delete my data from this device',
+  privacyDeleted: 'Deleted.',
+  privacyRights: 'Exercise your rights',
+  privacyRegion: 'Applied region',
+  privacyRetention: 'History kept for {days} days',
+  privacyRetentionNone: 'History is not kept between sessions',
 };
 
 export const translations: Record<'es' | 'en', TranslationSet> = { es, en };

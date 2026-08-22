@@ -141,6 +141,8 @@ interface NadaActions {
   clearLogs: () => void;
   addAlert: (alert: Omit<AlertEntry, 'id' | 'timestamp'>) => void;
   clearAlerts: () => void;
+  /** Aplica la retencion del jurisdiction pack al historial. Devuelve cuantas se fueron. */
+  pruneAlertsBefore: (cutoff: number) => number;
   updateShieldStatus: (shield: ShieldId, status: Partial<ShieldStatus>) => void;
   resetSession: () => void;
   recordDailyScan: (isThreat: boolean) => void;
@@ -282,6 +284,25 @@ export const useNadaStore = create<NadaState & NadaActions>()(
       clearAlerts: () => {
         set({ alerts: [] });
         get().addLog('HISTORIAL: Alertas limpiadas.', 'system');
+      },
+
+      pruneAlertsBefore: (cutoff) => {
+        const before = get().alerts;
+        // El timestamp de una alerta es una cadena ISO; una que no se pueda
+        // interpretar se CONSERVA. Ante la duda no se borra: perder el
+        // historial de alguien por un formato raro seria peor que guardarlo de
+        // mas unos dias.
+        const kept = before.filter((a) => {
+          const at = Date.parse(a.timestamp);
+          return !Number.isFinite(at) || at >= cutoff;
+        });
+
+        const removed = before.length - kept.length;
+        if (removed > 0) {
+          set({ alerts: kept });
+          get().addLog(`RETENCION: ${removed} alerta(s) fuera del periodo de conservacion.`, 'system');
+        }
+        return removed;
       },
 
       updateShieldStatus: (shield, status) => {
