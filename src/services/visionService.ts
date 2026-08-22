@@ -1,109 +1,163 @@
 // =============================================================================
-// Vision Service — TensorFlow.js Biometric Deepfake Detection
-// EAR (Eye Aspect Ratio), blink tracking, real lip-sync (mouth movement vs
-// audio energy), jitter analysis
+// Vision Service — cliente del worker de vision
+//
+// Este archivo era el detector entero: MediaPipe, la matematica de landmarks,
+// el AudioContext y el estado de la sesion, todo ejecutandose en el hilo de la
+// interfaz. Ahora es solo la mitad que TIENE que quedarse en el hilo principal,
+// y no es poca cosa saber cual es:
+//
+//   - Captura del frame. Un ImageBitmap solo se puede sacar de un <video>, y un
+//     <video> solo existe en el hilo principal.
+//   - Muestreo de audio. La Web Audio API no existe dentro de un worker. Cada
+//     frame viaja con la energia de audio del instante en que se capturo, para
+//     que las dos mitades de la sincronia labial sigan emparejadas.
+//   - Medida del dispositivo y eleccion de tier.
+//
+// Todo lo demas —la inferencia, los landmarks, la firma perceptual— vive en
+// src/workers/vision.worker.ts.
+//
+// Los frames se TRANSFIEREN, no se copian: al mandarlos, este hilo pierde la
+// referencia. Es la propiedad que hace de §4.1 algo comprobable leyendo el
+// codigo, y no una promesa.
 // =============================================================================
 
-import { rms, correlate, lipSyncScoreFromCorrelation } from '@/utils/lipSync';
+import { rms } from '@/utils/lipSync';
+import { probeDevice, pickTier, withDelegateFallback, TIER_BUDGETS, type TierBudget } from '@/shared/vision/deviceTier';
+import type { WorkerRequest, WorkerResponse } from '@/shared/vision/protocol';
+import type { FaceFrameResult } from '@/shared/vision/faceSignals';
+import type { LoopFinding } from '@/shared/vision/loopDetection';
 
-interface BiometricSignals {
-  earLeft: number;
-  earRight: number;
-  blinkRate: number; // blinks per minute
-  lipSyncScore: number; // 0-1 (1 = perfect sync)
-  lipSyncMeasured: boolean; // false when there was no audio track to compare against
-  jitterScore: number; // 0-1 (1 = very jittery, likely deepfake)
-  headPoseStable: boolean;
+export interface VisionFrameOutcome {
+  face: FaceFrameResult | null;
+  loop: LoopFinding | null;
+  /** Cuanto tardo el analisis dentro del worker. Gobierna la degradacion. */
+  durationMs: number;
 }
 
-interface DeepfakeResult {
-  isLikelyDeepfake: boolean;
-  confidence: number; // 0-100
-  signals: BiometricSignals;
-  explanation: string;
-}
+/**
+ * Ruta del worker ya compilado. Absoluta desde la raiz del sitio: `public/` se
+ * sirve tal cual, tanto en desarrollo como en la build.
+ */
+const VISION_WORKER_URL = '/vision-worker.js';
 
-// Mouth landmark indices (MediaPipe FaceLandmarker 478-point mesh):
-// inner lip top/bottom + outer corners, used for Mouth Aspect Ratio (MAR).
-const MOUTH_TOP = 13;
-const MOUTH_BOTTOM = 14;
-const MOUTH_LEFT = 61;
-const MOUTH_RIGHT = 291;
-
-// Rolling window of mouth/audio samples kept for correlation, roughly
-// matching the 3s window used elsewhere for the deepfake heuristics.
-const SYNC_SAMPLE_LIMIT = 90;
-
-// A real person blinks roughly 15-20 times/minute (~1 every 3-4s). blinkRate
-// is a 60s rolling window measured from the moment analysis starts, so for
-// the first stretch of ANY session — including a genuine, live human face —
-// there simply hasn't been enough time to accumulate a normal number of
-// blinks yet. Scoring that as "suspiciously low blink rate" was a systematic
-// false-positive on real people at the start of every single session, which
-// is exactly when a demo or a first-time user is watching closely.
-const BLINK_WARMUP_MS = 20_000;
+/** Cuanto se espera a que el worker arranque antes de darlo por fallido. */
+const INIT_TIMEOUT_MS = 20_000;
 
 class VisionService {
-  private landmarker: any = null;
-  private blinkHistory: number[] = [];
-  private frameCount = 0;
-  private lastLandmarks: any = null;
-  private sessionStartedAt: number | null = null;
+  private worker: Worker | null = null;
+  private budget: TierBudget = TIER_BUDGETS.low;
+  private ready = false;
 
-  // Lip-sync: audio graph attached separately from the video stream, since
-  // the caller may be capturing a call window (getDisplayMedia) or its own
-  // mic (getUserMedia) — either way we just need an audio track to sample.
+  /**
+   * Solo un frame en vuelo cada vez.
+   *
+   * Sin esto, el worker se convierte en una cola: el hilo principal puede
+   * mandar frames mas rapido de lo que el worker los procesa, y entonces lo que
+   * se analiza es cada vez mas viejo mientras la memoria crece. Un frame en
+   * vuelo significa que el analisis siempre va sobre lo que esta pasando AHORA,
+   * que es el unico momento que le importa a quien esta en la llamada.
+   */
+  private inFlight = false;
+  private nextFrameId = 1;
+  /**
+   * Por que fallo el ultimo arranque.
+   *
+   * Iba a un console.warn y ahi se quedaba: el escudo decia "no se pudo iniciar
+   * el detector facial" sin poder decir por que, ni al usuario ni al log de la
+   * app. Ahora el motivo se guarda y se puede enseñar.
+   */
+  private lastError: string | null = null;
+  private onOutcome: ((outcome: VisionFrameOutcome) => void) | null = null;
+
+  // El grafo de audio se queda aqui por obligacion: AudioContext no existe
+  // dentro de un worker.
   private audioCtx: AudioContext | null = null;
   private audioSource: MediaStreamAudioSourceNode | null = null;
   private analyser: AnalyserNode | null = null;
   private audioByteBuffer: Uint8Array<ArrayBuffer> | null = null;
-  private marHistory: number[] = [];
-  private energyHistory: number[] = [];
+
+  /** El presupuesto elegido para este dispositivo. */
+  tier(): TierBudget {
+    return this.budget;
+  }
+
+  isReady(): boolean {
+    return this.ready;
+  }
+
+  /** Motivo del ultimo fallo de arranque, si lo hubo. */
+  error(): string | null {
+    return this.lastError;
+  }
+
+  /**
+   * Hay un frame esperando respuesta del worker.
+   *
+   * Lo consulta el bucle ANTES de gastar un hueco del presupuesto: si el worker
+   * sigue ocupado, ese frame no se descarta por ritmo sino por contrapresion, y
+   * contarlo como analizado falsearia la medida de degradacion.
+   */
+  isBusy(): boolean {
+    return this.inFlight;
+  }
 
   async init(): Promise<boolean> {
+    if (this.ready) return true;
+    this.lastError = null;
+
     try {
-      const { FaceLandmarker, FilesetResolver } = await import('@mediapipe/tasks-vision');
-      const filesetResolver = await FilesetResolver.forVisionTasks(
-        'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm',
-      );
-      this.landmarker = await FaceLandmarker.createFromOptions(filesetResolver, {
-        baseOptions: {
-          modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',
-          delegate: 'GPU',
-        },
-        runningMode: 'VIDEO',
-        numFaces: 1,
-        outputFacialTransformationMatrixes: true,
-      });
-      return true;
+      const probe = await probeDevice();
+      this.budget = withDelegateFallback(pickTier(probe), probe.webgpu ?? false);
+
+      // Se carga desde public/, compilado aparte por
+      // scripts/build-vision-worker.mjs, y NO por el pipeline de workers de
+      // Vite. Tiene que ser un worker clasico —MediaPipe necesita
+      // importScripts— y Vite solo sabe darlos al construir: en desarrollo
+      // sirve todos los workers como modulos ES. Compilarlo aparte hace que
+      // dev y produccion carguen el mismo artefacto.
+      this.worker = new Worker(VISION_WORKER_URL);
+      this.worker.addEventListener('message', this.handleMessage);
+      this.worker.addEventListener('error', this.handleWorkerError);
+
+      const ok = await this.awaitReady();
+      this.ready = ok;
+      if (!ok) this.teardownWorker();
+      return ok;
     } catch (e) {
+      this.lastError = e instanceof Error ? e.message : String(e);
       console.warn('[NADA] Vision init failed:', e);
+      this.teardownWorker();
       return false;
     }
   }
 
+  /** Se avisa por aqui de cada frame analizado. */
+  setOnOutcome(cb: ((outcome: VisionFrameOutcome) => void) | null): void {
+    this.onOutcome = cb;
+  }
+
   /**
-   * Connects an audio track (from the same call/camera stream) so lip-sync
-   * can be measured against real audio energy instead of a fixed placeholder.
-   * Safe to call with a stream that has no audio track — lip-sync then stays
-   * explicitly "not measured" instead of guessing.
+   * Conecta una pista de audio del mismo stream para poder medir la sincronia
+   * labial contra energia real. Es seguro llamarlo con un stream sin audio: en
+   * ese caso la sincronia se queda explicitamente "sin medir" en vez de
+   * adivinarse.
    */
-  attachAudio(stream: MediaStream) {
+  attachAudio(stream: MediaStream): void {
     this.detachAudio();
 
     const [track] = stream.getAudioTracks();
     if (!track) return;
 
     try {
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       this.audioCtx = new AudioCtx();
       this.audioSource = this.audioCtx.createMediaStreamSource(new MediaStream([track]));
       this.analyser = this.audioCtx.createAnalyser();
       this.analyser.fftSize = 512;
       this.audioSource.connect(this.analyser);
-      // Explicit ArrayBuffer backing: TS 5.7+ types getByteTimeDomainData as
-      // wanting Uint8Array<ArrayBuffer>, which `new Uint8Array(n)` alone
-      // no longer satisfies (it infers ArrayBufferLike).
+      // Backing ArrayBuffer explicito: TS 5.7+ tipa getByteTimeDomainData
+      // esperando Uint8Array<ArrayBuffer>, que `new Uint8Array(n)` por si solo
+      // ya no satisface (infiere ArrayBufferLike).
       this.audioByteBuffer = new Uint8Array(new ArrayBuffer(this.analyser.frequencyBinCount));
     } catch (e) {
       console.warn('[NADA] Lip-sync audio attach failed:', e);
@@ -111,124 +165,131 @@ class VisionService {
     }
   }
 
-  detachAudio() {
+  detachAudio(): void {
     this.audioSource?.disconnect();
     if (this.audioCtx && this.audioCtx.state !== 'closed') {
-      this.audioCtx.close().catch(() => { });
+      this.audioCtx.close().catch(() => {});
     }
     this.audioCtx = null;
     this.audioSource = null;
     this.analyser = null;
     this.audioByteBuffer = null;
-    this.marHistory = [];
-    this.energyHistory = [];
   }
 
-  analyzeFrame(videoElement: HTMLVideoElement, timestampMs: number): DeepfakeResult | null {
-    if (!this.landmarker) return null;
+  /**
+   * Captura un frame y lo manda a analizar.
+   *
+   * Devuelve false cuando no toca —worker sin arrancar, o uno en vuelo— para
+   * que quien llama no cuente ese frame como analizado. Es sincrona en lo que
+   * importa: marca `inFlight` antes de ceder el control, asi que dos llamadas
+   * seguidas en el mismo tick no pueden colarse las dos.
+   */
+  analyseFrame(video: HTMLVideoElement, timestampMs: number): boolean {
+    if (!this.ready || !this.worker || this.inFlight) return false;
+    if (!video.videoWidth || !video.videoHeight) return false;
 
-    try {
-      const results = this.landmarker.detectForVideo(videoElement, timestampMs);
-      if (!results.faceLandmarks || results.faceLandmarks.length === 0) {
-        return null;
-      }
+    this.inFlight = true;
+    const frameId = this.nextFrameId++;
+    const audioEnergy = this.sampleAudioEnergy();
+    const { width, height } = this.scaledSize(video.videoWidth, video.videoHeight);
 
-      const landmarks = results.faceLandmarks[0];
-      this.frameCount++;
-      if (this.sessionStartedAt === null) this.sessionStartedAt = Date.now();
+    createImageBitmap(video, { resizeWidth: width, resizeHeight: height, resizeQuality: 'medium' })
+      .then((bitmap) => {
+        if (!this.worker) {
+          bitmap.close();
+          this.inFlight = false;
+          return;
+        }
+        const message: WorkerRequest = { type: 'frame', frameId, bitmap, timestampMs, audioEnergy };
+        this.worker.postMessage(message, [bitmap]);
+      })
+      .catch(() => {
+        // Capturar puede fallar si el track se corta justo ahora. Se libera el
+        // hueco: si no, un fallo de captura congelaria el analisis entero.
+        this.inFlight = false;
+      });
 
-      // Calculate EAR (Eye Aspect Ratio)
-      const earLeft = this.calculateEAR(landmarks, 'left');
-      const earRight = this.calculateEAR(landmarks, 'right');
-      const avgEar = (earLeft + earRight) / 2;
+    return true;
+  }
 
-      // Blink detection (EAR < 0.2 = closed)
-      if (avgEar < 0.2) {
-        this.blinkHistory.push(Date.now());
-      }
+  /** Limpia el estado acumulado sin tirar el worker (nueva sesion, misma pagina). */
+  resetSession(): void {
+    this.worker?.postMessage({ type: 'reset' } satisfies WorkerRequest);
+    this.inFlight = false;
+  }
 
-      // Blink rate (last 60 seconds)
-      const oneMinuteAgo = Date.now() - 60000;
-      this.blinkHistory = this.blinkHistory.filter((t) => t > oneMinuteAgo);
-      const blinkRate = this.blinkHistory.length;
+  destroy(): void {
+    // terminate() se lleva por delante el contexto completo del worker: modelo,
+    // heap de WASM y contexto de GPU. No hace falta despedirse antes.
+    this.teardownWorker();
+    this.detachAudio();
+  }
 
-      // Jitter analysis (landmark position variance)
-      const jitterScore = this.calculateJitter(landmarks);
+  /**
+   * Un error sin capturar dentro del worker.
+   *
+   * Sin esta escucha, el worker puede morirse y desde aqui solo se ve silencio:
+   * el arranque agota su plazo, o peor, una sesion en marcha deja de recibir
+   * resultados y el escudo se queda diciendo "analizando" para siempre. Se
+   * libera el hueco en vuelo para que el bucle no se atasque, y se guarda el
+   * motivo para poder contarlo.
+   */
+  private handleWorkerError = (event: ErrorEvent): void => {
+    this.lastError = event.message || 'error desconocido en el worker de vision';
+    this.inFlight = false;
+    console.warn('[NADA] Vision worker error:', event.message, event.filename, event.lineno);
+  };
 
-      // Real lip-sync: correlate mouth aspect ratio against audio energy
-      const mar = this.calculateMAR(landmarks);
-      const { score: lipSyncScore, measured: lipSyncMeasured } = this.updateLipSync(mar);
+  private handleMessage = (event: MessageEvent<WorkerResponse>): void => {
+    const message = event.data;
+    if (message.type !== 'result') return;
 
-      // Head pose stability
-      const headPoseStable = jitterScore < 0.3;
+    this.inFlight = false;
+    this.onOutcome?.({ face: message.face, loop: message.loop, durationMs: message.durationMs });
+  };
 
-      const signals: BiometricSignals = {
-        earLeft,
-        earRight,
-        blinkRate,
-        lipSyncScore,
-        lipSyncMeasured,
-        jitterScore,
-        headPoseStable,
+  private awaitReady(): Promise<boolean> {
+    const worker = this.worker;
+    if (!worker) return Promise.resolve(false);
+
+    return new Promise<boolean>((resolve) => {
+      const finish = (ok: boolean) => {
+        clearTimeout(timer);
+        worker.removeEventListener('message', listener);
+        resolve(ok);
       };
 
-      // Deepfake heuristics
-      const isLikelyDeepfake = this.evaluateDeepfake(signals);
-      const confidence = this.calculateConfidence(signals);
-
-      this.lastLandmarks = landmarks;
-
-      const lipSyncNote = lipSyncMeasured
-        ? `, sincronia labial ${lipSyncScore < 0.55 ? 'desincronizada' : 'normal'}`
-        : ', sincronia labial sin verificar (sin audio)';
-      // Only mention blink rate when it actually counted toward the verdict —
-      // during warm-up it is measured but ignored, and naming it in the
-      // explanation would misattribute a jitter/lip-sync-only detection to a
-      // signal that had zero weight in it.
-      const blinkNote = this.blinkRateReady() ? `parpadeo ${blinkRate < 5 ? 'muy bajo' : 'irregular'}, ` : '';
-
-      return {
-        isLikelyDeepfake,
-        confidence,
-        signals,
-        explanation: isLikelyDeepfake
-          ? `Anomalias biometricas: ${blinkNote}jitter ${jitterScore > 0.5 ? 'alto' : 'medio'}${lipSyncNote}`
-          : `Patrones biometricos normales${lipSyncNote}.`,
+      const listener = (event: MessageEvent<WorkerResponse>) => {
+        if (event.data.type === 'ready') finish(true);
+        if (event.data.type === 'init-failed') {
+          this.lastError = event.data.reason;
+          console.warn('[NADA] Vision worker init failed:', event.data.reason);
+          finish(false);
+        }
       };
-    } catch {
-      return null;
-    }
+
+      // Sin plazo, un worker que no responde deja el escudo diciendo
+      // "inicializando" para siempre, que es la peor forma de fallar: parece
+      // que protege.
+      const timer = setTimeout(() => {
+        this.lastError = `el worker no respondio en ${INIT_TIMEOUT_MS} ms`;
+        finish(false);
+      }, INIT_TIMEOUT_MS);
+      worker.addEventListener('message', listener);
+      worker.postMessage({ type: 'init', budget: this.budget } satisfies WorkerRequest);
+    });
   }
 
-  private calculateEAR(landmarks: any[], side: 'left' | 'right'): number {
-    // Simplified EAR using landmark indices
-    const indices = side === 'left' ? [33, 160, 158, 133, 153, 144] : [362, 385, 387, 263, 373, 380];
-    try {
-      const p = indices.map((i) => landmarks[i]);
-      if (p.some((pt) => !pt)) return 0.3;
-      const vertical1 = Math.abs(p[1].y - p[5].y);
-      const vertical2 = Math.abs(p[2].y - p[4].y);
-      const horizontal = Math.abs(p[0].x - p[3].x);
-      return (vertical1 + vertical2) / (2 * horizontal + 0.001);
-    } catch {
-      return 0.3;
-    }
-  }
-
-  /** Mouth Aspect Ratio: vertical mouth opening relative to mouth width. */
-  private calculateMAR(landmarks: any[]): number {
-    try {
-      const top = landmarks[MOUTH_TOP];
-      const bottom = landmarks[MOUTH_BOTTOM];
-      const left = landmarks[MOUTH_LEFT];
-      const right = landmarks[MOUTH_RIGHT];
-      if (!top || !bottom || !left || !right) return 0;
-      const vertical = Math.abs(top.y - bottom.y);
-      const horizontal = Math.abs(left.x - right.x) + 0.001;
-      return vertical / horizontal;
-    } catch {
-      return 0;
-    }
+  private teardownWorker(): void {
+    // Ojo: no se limpia lastError. Quien desmonta el worker suele ser
+    // justamente el fallo que se quiere poder contar despues.
+    this.worker?.removeEventListener('message', this.handleMessage);
+    this.worker?.removeEventListener('error', this.handleWorkerError);
+    this.worker?.terminate();
+    this.worker = null;
+    this.ready = false;
+    this.inFlight = false;
+    this.onOutcome = null;
   }
 
   private sampleAudioEnergy(): number | null {
@@ -237,72 +298,16 @@ class VisionService {
     return rms(this.audioByteBuffer);
   }
 
-  /**
-   * Feeds one mouth/audio sample pair into the rolling window and returns the
-   * current lip-sync estimate. Returns unmeasured when there is no audio
-   * track attached — this is the case that used to silently default to 0.9.
-   */
-  private updateLipSync(mar: number): { score: number; measured: boolean } {
-    const energy = this.sampleAudioEnergy();
-    if (energy === null) return { score: 0.75, measured: false };
+  /** Reduce el lado mayor a maxFrameSize conservando la proporcion. */
+  private scaledSize(width: number, height: number): { width: number; height: number } {
+    const longest = Math.max(width, height);
+    if (longest <= this.budget.maxFrameSize) return { width, height };
 
-    this.marHistory.push(mar);
-    this.energyHistory.push(energy);
-    if (this.marHistory.length > SYNC_SAMPLE_LIMIT) this.marHistory.shift();
-    if (this.energyHistory.length > SYNC_SAMPLE_LIMIT) this.energyHistory.shift();
-
-    const corr = correlate(this.marHistory, this.energyHistory);
-    return lipSyncScoreFromCorrelation(corr);
-  }
-
-  private calculateJitter(landmarks: any[]): number {
-    if (!this.lastLandmarks) return 0;
-    let totalDiff = 0;
-    const samplePoints = [1, 4, 6, 10, 152, 234, 454]; // Key face points
-    for (const idx of samplePoints) {
-      const curr = landmarks[idx];
-      const prev = this.lastLandmarks[idx];
-      if (curr && prev) {
-        totalDiff += Math.abs(curr.x - prev.x) + Math.abs(curr.y - prev.y);
-      }
-    }
-    return Math.min(1, totalDiff / samplePoints.length * 50);
-  }
-
-  /** True once enough time has passed for a real blink RATE (not just a raw count) to be meaningful. */
-  private blinkRateReady(): boolean {
-    return this.sessionStartedAt !== null && Date.now() - this.sessionStartedAt >= BLINK_WARMUP_MS;
-  }
-
-  private evaluateDeepfake(signals: BiometricSignals): boolean {
-    let score = 0;
-    if (this.blinkRateReady() && (signals.blinkRate < 5 || signals.blinkRate > 40)) score += 2;
-    if (signals.jitterScore > 0.5) score += 2;
-    // Only counts as evidence when we actually had audio to compare against —
-    // an unmeasured lip-sync must never push the verdict toward "deepfake".
-    if (signals.lipSyncMeasured && signals.lipSyncScore < 0.55) score += 2;
-    if (!signals.headPoseStable) score += 1;
-    return score >= 4;
-  }
-
-  private calculateConfidence(signals: BiometricSignals): number {
-    let confidence = 0;
-    if (this.blinkRateReady()) {
-      if (signals.blinkRate < 5) confidence += 25;
-      if (signals.blinkRate > 40) confidence += 20;
-    }
-    if (signals.jitterScore > 0.5) confidence += 30;
-    if (signals.lipSyncMeasured && signals.lipSyncScore < 0.55) confidence += 25;
-    return Math.min(100, confidence);
-  }
-
-  destroy() {
-    this.landmarker?.close();
-    this.landmarker = null;
-    this.blinkHistory = [];
-    this.lastLandmarks = null;
-    this.sessionStartedAt = null;
-    this.detachAudio();
+    const factor = this.budget.maxFrameSize / longest;
+    return {
+      width: Math.max(1, Math.round(width * factor)),
+      height: Math.max(1, Math.round(height * factor)),
+    };
   }
 }
 

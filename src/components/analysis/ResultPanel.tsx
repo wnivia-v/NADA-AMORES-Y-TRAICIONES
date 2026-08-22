@@ -3,6 +3,7 @@ import { useState } from 'react';
 import type { ScamAnalysis } from '@/store/useNadaStore';
 import { useNadaStore } from '@/store/useNadaStore';
 import { translations } from '@/utils/translations';
+import { FeedbackPrompt } from './FeedbackPrompt';
 
 interface ResultPanelProps {
   result: ScamAnalysis;
@@ -159,6 +160,10 @@ export function ResultPanel({ result }: ResultPanelProps) {
           )}
         </div>
       )}
+
+      {/* ¿Acerto? — la unica via por la que un error del sistema puede llegar
+          a arreglarse. Se calla sola cuando no hay nada que juzgar. */}
+      <FeedbackPrompt result={result} />
 
       {/* Source badge */}
       <div className="flex items-center justify-between pt-2 border-t" style={{ borderColor: 'var(--border)' }}>

@@ -2,9 +2,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Controllable AI provider: resolves after a delay so we can interleave calls.
 let aiDelayMs = 60;
-let aiResult: unknown = {
-  verdict: 'SEGURO',
-  riskScore: 10,
+const aiResult: unknown = {
+  type: 'llm-risk',
+  value: 10,
+  confidence: 0.9,
+  timestamp: Date.now(),
   tactics: [],
   explanation: 'ok',
   recommendations: [],
@@ -35,7 +37,7 @@ import {
   isAnalysisAborted,
   AnalysisAbortedError,
 } from '@/services/geminiService';
-import { riskScorer } from '@/utils/riskScorer';
+import { clearAllLanes } from '@/shared/risk';
 
 const tick = (ms = 5) => new Promise((r) => setTimeout(r, ms));
 
@@ -51,7 +53,7 @@ const tick = (ms = 5) => new Promise((r) => setTimeout(r, ms));
 describe('analysis scoping', () => {
   beforeEach(() => {
     aiDelayMs = 60;
-    riskScorer.clear();
+    clearAllLanes();
     (['ui', 'clipboard', 'screen', 'voice'] as const).forEach(cancelAnalysis);
   });
 

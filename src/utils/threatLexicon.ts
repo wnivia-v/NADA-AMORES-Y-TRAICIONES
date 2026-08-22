@@ -60,13 +60,57 @@ export type ThreatCategory =
   | 'urgencia-presion'
   | 'retencion-llamada'
   | 'empleo-inversion-falsa'
+  | 'enlace-sospechoso'
+  // ── Familias documentadas por INCIBE ──────────────────────────────────────
+  // La capa regex fallaba 11 de 11 casos INCIBE del corpus: puntuaban entre 0 y
+  // 29 sobre un umbral de 70. El lexico estaba escrito para amenazas entre
+  // personas (violencia, acoso, sextorsion) y apenas cubria la suplantacion
+  // institucional, que es la mitad del fraude real que se denuncia en España.
+  //
+  // Este bloque es la UNION de dos trabajos paralelos sobre el mismo material:
+  // el de esta rama y el que entro en main por separado. Se conservan los dos
+  // enteros — cada categoria cubre un gancho distinto, y descartar cualquiera
+  // de las dos listas seria perder deteccion a cambio de nada.
+  | 'dominio-senuelo'
+  | 'evento-financiero-falso'
+  | 'plazo-administrativo'
+  | 'contacto-numero-nuevo'
+  | 'pago-anticipado'
+  | 'cambio-cuenta-pago'
+  | 'salida-de-plataforma'
+  | 'verificacion-documental'
+  // Las que llegaron por main.
   | 'paqueteria-aduana'
   | 'acceso-remoto'
-  | 'pago-inverso'
-  | 'enlace-sospechoso';
+  | 'pago-inverso';
 
 /** Languages the lexicon carries entries for. Extend by tagging new entries. */
 export type LexiconLang = 'es' | 'en' | 'pt';
+
+/**
+ * Region del hispanohablante, o '*' para lo que vale en todas partes.
+ *
+ * El español no es uno. "Coger", "plata", "chamba", "guita", "lana" o "pana"
+ * significan cosas distintas —o nada— segun donde se lea, y un patron escrito
+ * en peninsular aplicado a un mensaje rioplatense es una fuente de falsos
+ * positivos y de amenazas no vistas a partes iguales.
+ *
+ * Casi todo el lexico es '*' a proposito: marcar una entrada con region la hace
+ * INVISIBLE fuera de ella, y esconder una amenaza real por haberla etiquetado
+ * de mas es peor que un falso positivo. Solo se regionaliza lo que de verdad
+ * cambia de sentido al cruzar la frontera.
+ */
+export type Region = '*' | 'es' | 'mx' | 'ar' | 'co' | 'cl' | 'pe' | 've';
+
+/**
+ * Que clase de expresion es.
+ *
+ * El lexico solo tenia amenazas, y eso es la mitad del problema: sin la otra
+ * mitad, el sistema no tiene forma de saber que "te voy a matar, qué tarde
+ * llegas" entre amigos no es lo mismo que dicho por un desconocido. Un
+ * amortiguador no borra la coincidencia — la explica, y resta.
+ */
+export type LexiconKind = 'amenaza' | 'modismo' | 'broma';
 
 export interface LexiconEntry {
   id: string;
@@ -74,15 +118,49 @@ export interface LexiconEntry {
   /** Contribution to the raw score when matched. */
   weight: number;
   langs: readonly LexiconLang[];
+  /** Donde aplica. Ausente = en todas partes. */
+  regions?: readonly Region[];
   regex: RegExp;
   /** Scale the weight by how many distinct times it matches (abuse escalates). */
   repeatable?: boolean;
   repeatCap?: number;
   /** Human-readable name shown to the user. */
   label: string;
+  /** De donde sale la entrada. Obligatorio en lo derivado de fuente externa. */
+  source?: string;
 }
 
+/** Fuente de las entradas derivadas de campañas documentadas. */
+const SRC_INCIBE = 'INCIBE — avisos de ciudadania (incibe.es/ciudadania/avisos)';
+
 const E = (e: LexiconEntry) => e;
+
+/**
+ * Amortiguadores: expresiones que hacen que una coincidencia deje de significar
+ * lo que parecia.
+ *
+ * `reduces` nombra las categorias que desactiva. Un amortiguador NO baja la
+ * puntuacion por su cuenta: retira el peso de las coincidencias que explica, y
+ * solo esas. Asi "te mato si no traes el pan" pierde la amenaza de violencia
+ * sin tocar nada mas de lo que hubiera en el mensaje.
+ *
+ * ADVERTENCIA DE PROCEDENCIA: a diferencia de las entradas de amenaza, esto no
+ * sale de ninguna fuente documentada. INCIBE publica fraudes, no modismos. Son
+ * pocos, conservadores y deliberadamente los mas incontrovertibles; cada region
+ * necesita revision de alguien que hable asi a diario antes de ampliarla. Un
+ * amortiguador de mas es una amenaza real silenciada, que es el peor error que
+ * puede cometer este producto.
+ */
+export interface DampenerEntry {
+  id: string;
+  regex: RegExp;
+  reduces: readonly ThreatCategory[];
+  kind: Exclude<LexiconKind, 'amenaza'>;
+  regions?: readonly Region[];
+  label: string;
+}
+
+const D = (d: DampenerEntry) => d;
 
 export const LEXICON: readonly LexiconEntry[] = [
   // ── Financial fraud ────────────────────────────────────────────────────────
@@ -94,7 +172,16 @@ export const LEXICON: readonly LexiconEntry[] = [
   E({
     id: 'fin-send-money', category: 'fraude-financiero', weight: 25, langs: ['es'],
     label: 'Solicitud de dinero',
-    regex: /env[ií]\w*\s*(dinero|plata|pago|transferencia|lana)|(dinero|plata|lana|guita)\s+(necesit|urgente|env[ií]|mand[aá]|pas[aá])|(pas[aá]\w*|mand[aá]\w*|d[aá]\w*)\s+(la\s+)?(plata|lana|guita|dinero)/,
+    // La ultima alternativa cubre la peticion con CANTIDAD en vez de con la
+    // palabra "dinero": "mandame 300 euros", "que me mandes 500€". Faltaba, y
+    // el hueco era grande — pedir una cifra concreta es mas comun que pedir
+    // "dinero" a secas, y es justo lo que hace el guion del fraude del hijo.
+    //
+    // Los verbos van enumerados y NO con \w*: eso excluye la primera persona
+    // ("te mando 300 euros", "te devuelvo 20 euros"), que es alguien mandando
+    // dinero, no pidiendolo. Y el lookahead final evita que "20 euros" case
+    // dentro de "20 europeos" o "3 eurodiputados".
+    regex: /env[ií]\w*\s*(dinero|plata|pago|transferencia|lana)|(dinero|plata|lana|guita)\s+(necesit|urgente|env[ií]|mand[aá]|pas[aá])|(pas[aá]\w*|mand[aá]\w*|d[aá]\w*)\s+(la\s+)?(plata|lana|guita|dinero)|(mandame|mandes|manda|enviame|envies|envia|pasame|pases|pasa|ingresame|ingreses|ingresa|transfiereme|transfieras|transfiere)\s+(unos?\s+)?\d{1,6}\s*(€|euros?|eur|dolares|usd|pavos|pesos|soles|lucas)(?![a-z])/,
   }),
   E({
     id: 'fin-send-money-en', category: 'fraude-financiero', weight: 25, langs: ['en'],
@@ -172,7 +259,12 @@ export const LEXICON: readonly LexiconEntry[] = [
   E({
     id: 'fam-broken-phone', category: 'suplantacion-familiar', weight: 24, langs: ['es'],
     label: 'Excusa del telefono roto',
-    regex: /(se\s+me\s+(ha\s+)?(roto|rompio|ca[ií]do)|se\s+(ha\s+)?(roto|estropeado|da[nñ]ado)|perd[ií])\s+(el\s+|mi\s+)?(m[oó]vil|movil|tel[eé]fono|telefono|celular)|(m[oó]vil|movil|tel[eé]fono|telefono|celular)\s+(se\s+me\s+)?(rompio|no\s+funciona|est[aá]\s+roto)/,
+    // Absorbe lo que cubria `fam-telefono-perdido`, que se elimino por
+    // duplicada: el robo del movil. Las dos entradas describian el mismo hecho
+    // sin exigir ninguna termino familiar, asi que sobre "se me rompio el movil,
+    // te escribo desde el de un amigo" —un mensaje corriente— disparaban las dos
+    // y sumaban 46. Una sola entrada, un solo peso.
+    regex: /(se\s+me\s+(ha\s+)?(roto|rompio|ca[ií]do|estropeo|perdio)|se\s+(ha\s+)?(roto|estropeado|da[nñ]ado)|perd[ií]|me\s+(han\s+)?robaron?)\s+(el\s+|mi\s+)?(m[oó]vil|movil|tel[eé]fono|telefono|celular)|(m[oó]vil|movil|tel[eé]fono|telefono|celular)\s+(se\s+me\s+)?(rompio|no\s+funciona|est[aá]\s+roto)/,
   }),
   E({
     id: 'fam-new-number-en', category: 'suplantacion-familiar', weight: 26, langs: ['en'],
@@ -324,7 +416,11 @@ export const LEXICON: readonly LexiconEntry[] = [
   E({
     id: 'ext-sextortion', category: 'sextorsion', weight: 32, langs: ['es'],
     label: 'Sextorsion',
-    regex: /(publicar[eé]|publicare|difundir[eé]|difundire|enviar[eé]|enviare|mandar[eé]|subir[eé])\s*.{0,40}?(fotos|videos?|v[ií]deos?|[ií]ntim|desnud)/,
+    // Presente y futuro. La amenaza se dice casi siempre en presente ("o
+    // publico tus fotos") porque suena mas inminente, y esa forma no coincidia.
+    // El posesivo de segunda persona evita el falso positivo obvio: "publico
+    // mis fotos de las vacaciones" no encaja, "publico tus fotos" si.
+    regex: /(publico|publicar[eé]?|publicare|difundo|difundir[eé]?|difundire|env[ií]o|enviar[eé]?|enviare|mando|mandar[eé]?|subo|subir[eé]?|filtro|comparto|ense[nñ]o)\s*(las?\s*|los?\s*)?(tus|sus)?\s*(fotos|videos?|v[ií]deos?|im[aá]genes|desnudos?)|(publico|difundo|mando|env[ií]o|subo|filtro|comparto)\s*.{0,30}?(fotos|videos?|v[ií]deos?|im[aá]genes)\s*(tuyas?|suyas?|[ií]ntimas?|privadas?)/,
   }),
   E({
     id: 'ext-sextortion-en', category: 'sextorsion', weight: 32, langs: ['en'],
@@ -357,7 +453,7 @@ export const LEXICON: readonly LexiconEntry[] = [
   E({
     id: 'vio-physical-presence', category: 'amenaza-violencia', weight: 32, langs: ['es'],
     label: 'Amenaza de presencia fisica',
-    regex: /(estamos|estaremos|vamos|iremos|llegamos|pasamos|nos\s+presentamos)\s+(a|en|por)\s*(su|tu)\s*(domicilio|casa|direcci[oó]n|direccion|trabajo)/,
+    regex: /(estoy|estare|estar[eé]|voy|ire|ir[eé]|llego|llegare|llegar[eé]|paso|pasare|pasar[eé]|me\s+presento|aparezco|estamos|estaremos|vamos|iremos|llegamos|pasamos|nos\s+presentamos)\s+(a|en|por)\s*(su|tu)\s*(domicilio|casa|direcci[oó]n|direccion|trabajo|portal|curro)/,
   }),
   E({
     id: 'vio-death', category: 'amenaza-violencia', weight: 35, langs: ['es'],
@@ -546,6 +642,196 @@ export const LEXICON: readonly LexiconEntry[] = [
     label: 'Dominio sospechoso',
     regex: /\.(ru|cn|tk|xyz|top|buzz)\//,
   }),
+
+  // ===========================================================================
+  // Suplantacion institucional y smishing
+  //
+  // Derivado de las familias que INCIBE publica en sus avisos de ciudadania:
+  // suplantacion de entidades bancarias, Seguridad Social (TGSS), Agencia
+  // Tributaria (AEAT), AEMET, DGT y empresas de paqueteria.
+  //
+  // Ninguna de estas entradas alerta sola, y es intencionado: "Correos" o "mi
+  // banco" aparecen en conversaciones normales todos los dias. Lo que delata al
+  // fraude es la FORMA — entidad + suceso inventado + prisa + enlace — y eso lo
+  // puntuan los COMBOS de mas abajo, no las palabras sueltas.
+  // ===========================================================================
+  E({
+    id: 'inst-entidad-es', category: 'suplantacion-entidad', weight: 10, langs: ['es'],
+    label: 'Mensaje en nombre de una entidad o administracion',
+    source: SRC_INCIBE,
+    regex: /\b(bbva|santander|caixa\s*bank|caixabank|la\s*caixa|kutxa|bankinter|unicaja|sabadell|ing\s*direct|correos|seur|mrw|dhl|dgt|aeat|agencia\s*tributaria|seguridad\s*social|tgss|aemet|ministerio\s*de\s*sanidad|hacienda)\b/,
+  }),
+  E({
+    id: 'inst-evento-financiero', category: 'evento-financiero-falso', weight: 16, langs: ['es'],
+    label: 'Cargo o movimiento que no reconoces',
+    source: SRC_INCIBE,
+    regex: /((cargo|compra|movimiento|adeudo|transferencia)\s+(de\s+|por\s+)?(importe\s+)?[\d.,]+\s*(eur|euros|€)|si\s*no\s*(ha\s*sido\s*usted|reconoce|lo\s*reconoce)|acceso\s*no\s*autorizado|(cargo|compra)\s*(pre-?aprobad|acept)|movimiento\s*sospechoso)/,
+  }),
+  E({
+    id: 'inst-plazo-admin', category: 'plazo-administrativo', weight: 12, langs: ['es'],
+    label: 'Plazo administrativo que vence',
+    source: SRC_INCIBE,
+    regex: /(a\s*partir\s*del?\s*\d|ultimo\s*dia\s*para|antes\s*del?\s*\d{1,2}[/\-\s]|no\s*(podra|podras|puedes|puede)\s*(utilizar|usar|acceder)|requiere\s*renovacion|renovacion\s*obligatoria|pendiente\s*de\s*(pago|regularizar)|sin\s*recargo)/,
+  }),
+  E({
+    id: 'inst-activacion', category: 'phishing-credenciales', weight: 14, langs: ['es'],
+    label: 'Te piden activar o verificar en un enlace',
+    source: SRC_INCIBE,
+    regex: /((activa|active|activar|verifica|verifique|verificar|confirme|confirma|valide|valida|validar)\s*(ahora|aqui|inmediatamente|sus?\s*datos|tu\s*cuenta|su\s*cuenta|tu\s*registro|su\s*registro|tu\s*identidad|su\s*identidad|en\s*el\s*siguiente)|nuevo\s*sistema\s*de\s*seguridad|complete\s*el\s*proceso|tramite\s*de\s*seguridad)/,
+  }),
+
+  // ── Dominio señuelo ────────────────────────────────────────────────────────
+  // La señal mas solida de toda esta familia, y la que menos depende del idioma:
+  // el enlace. Una marca conocida pegada con guion a una palabra de seguridad, o
+  // colgada de un TLD barato, no es un dominio corporativo. En los once casos
+  // INCIBE del corpus aparece en once.
+  E({
+    id: 'dom-tld-barato', category: 'dominio-senuelo', weight: 26, langs: ['es', 'en', 'pt'],
+    label: 'Enlace en un dominio de los que se usan para fraude',
+    source: SRC_INCIBE,
+    regex: /https?:\/\/[^\s]*\.(top|xyz|tk|buzz|cn|gq|ml|cf|ga|icu|click|rest|monster|sbs|cfd)\b/,
+  }),
+  E({
+    id: 'dom-marca-senuelo', category: 'dominio-senuelo', weight: 22, langs: ['es', 'en', 'pt'],
+    label: 'Enlace que imita el dominio de una entidad',
+    source: SRC_INCIBE,
+    regex: /https?:\/\/[^\s]*\b(bbva|santander|caixa|kutxa|bankinter|sabadell|unicaja|correos|seur|dgt|aeat|sanidad|hacienda|paypal|amazon|netflix|whatsapp)[-.][^\s]*\.(?!es\/|com\/|es$|com$)[a-z]{2,}/,
+  }),
+
+  // ── Familiar en apuros ─────────────────────────────────────────────────────
+  // "¿Has recibido un mensaje desde un numero desconocido que dice ser tu hijo?"
+  // La estructura documentada: numero nuevo + perdida del telefono + peticion de
+  // dinero + prisa. Cada pieza por separado es una conversacion familiar normal.
+  E({
+    id: 'fam-numero-nuevo', category: 'contacto-numero-nuevo', weight: 18, langs: ['es'],
+    label: 'Dice escribirte desde un numero nuevo (sin nombrar familia)',
+    source: SRC_INCIBE,
+    // EXCLUYE los mensajes con termino familiar, y esa exclusion es el arreglo
+    // de un falso positivo real.
+    //
+    // Esta entrada y `fam-new-number` se escribieron por separado, en dos ramas
+    // paralelas, y describen el mismo hecho por caminos distintos: aquella pide
+    // familiar + numero nuevo, esta solo el numero nuevo. Al juntarlas, las dos
+    // acertaban sobre "Mama, este es mi nuevo numero del trabajo, guardalo" y
+    // sumaban 53 puntos a un mensaje perfectamente normal. Exactamente el
+    // Problema A, producido por una fusion.
+    //
+    // Se hacen mutuamente excluyentes: con familia delante manda la otra (mas
+    // especifica y con mas peso), sin familia manda esta. No se pierde
+    // cobertura —el caso sin familia lo cubre solo esta— y ningun mensaje suma
+    // las dos.
+    regex: new RegExp(
+      '^(?=[\\s\\S]*((este\\s*es\\s*)?mi\\s*(nuevo|otro)\\s*(numero|telefono|movil|celular|whatsapp)'
+      + '|cambie\\s*de\\s*(numero|telefono|movil|celular|linea)'
+      + '|escribo\\s*desde\\s*otro\\s*(numero|telefono|movil)'
+      + '|guarda\\s*este\\s*numero|borra\\s*el\\s*(numero\\s*)?(viejo|anterior)))'
+      + '(?![\\s\\S]*\\b(mama|papa|madre|padre|hij[oa]|abuel[oa]|ti[oa]|herman[oa]|nieto|nieta)\\b)',
+    ),
+  }),
+
+  // ── Pago por adelantado ────────────────────────────────────────────────────
+  // La forma que comparten la falsa oferta de empleo, el prestamo preaprobado y
+  // el premio con gastos de gestion: para cobrar, primero paga tu.
+  E({
+    id: 'anticipo-fianza', category: 'pago-anticipado', weight: 24, langs: ['es'],
+    label: 'Te piden pagar por adelantado para cobrar despues',
+    source: SRC_INCIBE,
+    regex: /((fianza|deposito|senal|reserva\s*de\s*plaza|comision\s*de\s*gestion|gastos\s*de\s*(gestion|envio|tramitacion|aduana)|anticipo)[^.]{0,60}(envi|abon|ingres|transferi|pag))|((envi|abon|ingres|transferi|pag)[^.]{0,40}(fianza|deposito|comision\s*de\s*gestion|gastos\s*de\s*(gestion|envio)))|(por\s*adelantado[^.]{0,40}(liberar|desbloquear|recibir|cobrar))|(se\s*(te\s*)?devuelve\s*(el|al)\s*primer\s*dia)/,
+  }),
+  E({
+    id: 'anticipo-preaprobado', category: 'pago-anticipado', weight: 16, langs: ['es'],
+    label: 'Prestamo o premio ya concedido que no pediste',
+    source: SRC_INCIBE,
+    regex: /(prestamo[^.]{0,30}(pre-?aprobad|concedid)|credito\s*pre-?aprobad|ha\s*sido\s*seleccionad|le\s*ha\s*tocado|resultado\s*ganador)/,
+  }),
+
+  // ── Fraude del cambio de cuenta ────────────────────────────────────────────
+  E({
+    id: 'cuenta-cambio', category: 'cambio-cuenta-pago', weight: 26, langs: ['es'],
+    label: 'Aviso de cambio de cuenta bancaria para los pagos',
+    source: SRC_INCIBE,
+    regex: /((hemos\s*)?cambiado\s*(nuestra|de)\s*cuenta\s*(bancaria)?|nueva\s*cuenta\s*bancaria|actualice\s*sus\s*(registros|datos\s*de\s*pago)|los\s*pagos\s*deben\s*realizarse\s*a\s*la\s*nueva|a\s*partir\s*de\s*hoy\s*todos\s*los\s*pagos)/,
+  }),
+
+  // ── Verificacion documental ────────────────────────────────────────────────
+  E({
+    id: 'doc-selfie-dni', category: 'verificacion-documental', weight: 28, langs: ['es'],
+    label: 'Te piden foto del DNI o de la tarjeta',
+    source: SRC_INCIBE,
+    regex: /((selfie|foto|fotografia|imagen)[^.]{0,50}(dni|nie|pasaporte|cedula|ine|carnet|tarjeta)|(dni|pasaporte|cedula|tarjeta)[^.]{0,30}(por\s*ambos\s*lados|ambas\s*caras)|sosteniendo\s*(tu|su)\s*(dni|cedula|pasaporte|ine))/,
+  }),
+
+  // ── Estafa romantica: salida de plataforma ─────────────────────────────────
+  // INCIBE lo recomienda al reves y por eso sirve como señal: aconseja seguir
+  // dentro de la app de contactos y desconfiar de quien empuja a salir de ella.
+  // El estafador necesita sacarte fuera, donde no hay moderacion ni denuncias.
+  E({
+    id: 'rom-salida-plataforma', category: 'salida-de-plataforma', weight: 14, langs: ['es'],
+    label: 'Insiste en seguir la conversacion fuera de la aplicacion',
+    source: SRC_INCIBE,
+    regex: /((sigamos|seguimos|hablamos|continuemos|mejor)\s*(hablando\s*)?(por|en)\s*(whatsapp|telegram|wasap|wasa|hangouts|signal|correo|email)|(pasame|dame|mandame)\s*tu\s*(whatsapp|telegram|numero|correo)|(salgamos|salir)\s*de\s*(aqui|esta\s*app|la\s*aplicacion)|no\s*me\s*gusta\s*esta\s*app)/,
+  }),
+  E({
+    id: 'rom-futuro-idealizado', category: 'estafa-romantica', weight: 10, langs: ['es'],
+    label: 'Promesas de futuro muy pronto',
+    source: SRC_INCIBE,
+    regex: /(nunca\s*(habia\s*)?(senti|conocido)[^.]{0,40}(asi|como\s*tu)|eres\s*(el|la)\s*(amor\s*de\s*mi\s*vida|mujer|hombre)\s*(de\s*mi\s*vida)|casarme\s*contigo|pasar\s*el\s*resto\s*de\s*mi\s*vida|estamos\s*destinados|alma\s*gemela)/,
+  }),
+
+  // ── Sextorsion con plazo y criptomoneda ────────────────────────────────────
+  // INCIBE describe el guion: acceso falso al dispositivo, plazo de 48-50 horas
+  // y pago en bitcoin. Los atacantes no tienen material; el plazo es la palanca.
+  E({
+    id: 'sex-plazo-horas', category: 'sextorsion', weight: 20, langs: ['es'],
+    label: 'Plazo de horas para pagar',
+    source: SRC_INCIBE,
+    regex: /(tienes?\s*(un\s*plazo\s*de\s*)?\d{1,3}\s*horas|dispones\s*de\s*\d{1,3}\s*horas|en\s*las\s*proximas\s*\d{1,3}\s*horas|plazo\s*de\s*\d{1,3}\s*horas)/,
+  }),
+  E({
+    id: 'sex-acceso-dispositivo', category: 'sextorsion', weight: 22, langs: ['es'],
+    label: 'Dice tener acceso a tu dispositivo o camara',
+    source: SRC_INCIBE,
+    regex: /(he\s*(instalado|infectado)[^.]{0,40}(virus|troyano|software|programa|spyware)|tengo\s*acceso\s*(a\s*)?(tu|su)\s*(dispositivo|ordenador|movil|camara|webcam)|grabado[^.]{0,30}(camara|webcam|pantalla)|controlo\s*(tu|su)\s*(camara|webcam|dispositivo))/,
+  }),
+
+  E({
+    id: 'empleo-oferta-formal', category: 'empleo-inversion-falsa', weight: 12, langs: ['es'],
+    label: 'Oferta de trabajo no solicitada',
+    source: SRC_INCIBE,
+    regex: /(oferta\s*de\s*(trabajo|empleo)|necesitamos\s*(personal|gente|socorristas|comerciales|repartidores)|buscamos\s*(personal|candidatos)|puesto\s*vacante|contrato\s*inmediato|sueldo\s*de?\s*[\d.,]+\s*(eur|euros|€|\/mes|al\s*mes))/,
+  }),
+  E({
+    id: 'fin-iban-en-mensaje', category: 'fraude-financiero', weight: 10, langs: ['es', 'en', 'pt'],
+    label: 'Numero de cuenta dentro del mensaje',
+    source: SRC_INCIBE,
+    // Peso bajo a proposito: una factura legitima tambien lleva IBAN. Lo que lo
+    // convierte en señal es aparecer JUNTO a un aviso de cambio de cuenta, y de
+    // eso se encarga el COMBO, no esta entrada.
+    regex: /\b[a-z]{2}\d{2}[\s]?(\d{4}[\s]?){4,5}\d{0,4}\b/,
+  }),
+
+  E({
+    id: 'fin-transfer-account', category: 'fraude-financiero', weight: 24, langs: ['es'],
+    label: 'Peticion de transferencia a una cuenta',
+    // "transferir" faltaba en español aunque si estaba en el patron portugues,
+    // asi que "transfiere 5000 a mi cuenta" puntuaba solo por la urgencia.
+    // Exige destino o importe: "te transfiero lo de la cena" no encaja.
+    regex: /(transfier\w*|transferi\w*|ingres[ae]\w*|abon[ae]\w*|hazme\s*un\s*(bizum|pago|ingreso)|mand[aá]\w*\s*(un\s*)?bizum|realice\s*(el\s*)?(pago|ingreso))[^.]{0,40}(a\s*(mi|esta|la\s*siguiente|dicha)\s*cuenta|por\s*bizum|a\s*este\s*(numero|iban)|[\d.,]{3,})/,
+  }),
+
+  E({
+    id: 'vio-beating', category: 'amenaza-violencia', weight: 32, langs: ['es'],
+    label: 'Amenaza de agresion fisica',
+    // El lexico solo tenia amenazas de muerte. Una paliza anunciada no es un
+    // aviso menor — es la amenaza mas frecuente en violencia de pareja, que es
+    // justo la mitad del nombre de este producto.
+    regex: /te\s*(reviento|parto\s*(la\s*)?(cara|boca|piernas)|rompo\s*(la\s*)?(cara|boca)|muelo\s*a\s*palos|doy\s*una\s*paliza|saco\s*los\s*dientes|abro\s*la\s*cabeza|desfiguro|reviento\s*a\s*(hostias|golpes))|te\s*(voy|vamos)\s*a\s*(reventar|partir|romper|dar\s*una\s*paliza|moler)/,
+  }),
+  E({
+    id: 'vio-know-where', category: 'amenaza-violencia', weight: 30, langs: ['es'],
+    label: 'Dice saber donde vives o donde estas',
+    regex: /((se|sabe|se\s*muy\s*bien)\s*d[oó]nde\s*(vives|trabajas|estas)|te\s*(tengo|tenemos)\s*localizad|te\s*estoy\s*(viendo|siguiendo)|se\s*por\s*d[oó]nde\s*(pasas|andas))/,
+  }),
 ];
 
 // =============================================================================
@@ -632,6 +918,105 @@ export const COMBOS: readonly ComboRule[] = [
     requires: ['extorsion', 'canal-pago-irrastreable'],
     bonus: 30,
     label: 'Amenaza acompanada de exigencia de pago',
+  },
+
+  // ── Formas documentadas por INCIBE ─────────────────────────────────────────
+  //
+  // UNION de dos trabajos paralelos sobre el mismo material: el de esta rama y
+  // el que entro en main por separado. Se conservan los dos porque cubren
+  // ganchos distintos, pero conviene saber que hay solapamiento conceptual —
+  // "familiar-apuros" y "family-impersonation-money" describen la misma estafa
+  // por caminos distintos. Dos reglas que disparan a la vez suman sus dos
+  // bonus, asi que esto NO se da por bueno sin medir: bench/measure-regex.ts
+  // manda, y lo que importa es que las falsas alarmas sigan en cero.
+
+  {
+    id: 'smishing-institucional',
+    requires: ['suplantacion-entidad', 'dominio-senuelo'],
+    bonus: 34,
+    label: 'Mensaje en nombre de una entidad con un enlace que no es suyo',
+  },
+  {
+    id: 'smishing-cargo-falso',
+    requires: ['evento-financiero-falso', 'phishing-credenciales'],
+    bonus: 30,
+    label: 'Cargo inventado que te empuja a verificar en un enlace',
+  },
+  {
+    id: 'smishing-plazo-enlace',
+    requires: ['plazo-administrativo', 'dominio-senuelo'],
+    bonus: 28,
+    label: 'Plazo que vence y un enlace para evitarlo',
+  },
+  {
+    id: 'familiar-apuros',
+    requires: ['contacto-numero-nuevo', 'fraude-financiero'],
+    bonus: 38,
+    label: 'Numero nuevo que dice ser de la familia y pide dinero',
+  },
+  {
+    id: 'familiar-apuros-urgente',
+    requires: ['contacto-numero-nuevo', 'urgencia-presion'],
+    bonus: 22,
+    label: 'Numero nuevo que dice ser de la familia y mete prisa',
+  },
+  {
+    id: 'empleo-con-anticipo',
+    requires: ['empleo-inversion-falsa', 'pago-anticipado'],
+    bonus: 34,
+    label: 'Oferta de trabajo que te pide dinero por adelantado',
+  },
+  {
+    id: 'anticipo-con-urgencia',
+    requires: ['pago-anticipado', 'urgencia-presion'],
+    bonus: 20,
+    label: 'Pago por adelantado con prisa',
+  },
+  {
+    id: 'sextorsion-con-plazo',
+    requires: ['sextorsion', 'canal-pago-irrastreable'],
+    bonus: 32,
+    label: 'Chantaje sexual con pago irrastreable',
+  },
+  {
+    id: 'romance-fuera-de-plataforma',
+    requires: ['salida-de-plataforma', 'estafa-romantica'],
+    bonus: 22,
+    label: 'Vinculo emocional rapido y prisa por salir de la aplicacion',
+  },
+  {
+    id: 'romance-salida-dinero',
+    requires: ['salida-de-plataforma', 'fraude-financiero'],
+    bonus: 30,
+    label: 'Te saca de la aplicacion y te pide dinero',
+  },
+  {
+    id: 'verificacion-con-enlace',
+    requires: ['verificacion-documental', 'phishing-credenciales'],
+    bonus: 26,
+    label: 'Te pide documentos de identidad a traves de un enlace',
+  },
+  {
+    id: 'cambio-cuenta-con-urgencia',
+    requires: ['cambio-cuenta-pago', 'urgencia-presion'],
+    bonus: 26,
+    label: 'Cambio de cuenta bancaria con prisa',
+  },
+  {
+    id: 'cambio-cuenta-con-iban',
+    requires: ['cambio-cuenta-pago', 'fraude-financiero'],
+    bonus: 30,
+    label: 'Aviso de cambio de cuenta con un numero de cuenta nuevo',
+  },
+  {
+    id: 'sextorsion-con-pago',
+    requires: ['sextorsion', 'fraude-financiero'],
+    bonus: 28,
+    label: 'Chantaje sexual con exigencia de pago',
+    // La forma definitoria de la sextorsion: la amenaza y el cobro. Solo existia
+    // el combo con canal irrastreable (bitcoin, tarjetas regalo), asi que un
+    // chantaje cobrado por transferencia corriente se quedaba a tres puntos del
+    // umbral. El canal no es lo que define el delito.
   },
 
   // ── Families documented by INCIBE ──────────────────────────────────────────
@@ -731,3 +1116,97 @@ export const COMBOS: readonly ComboRule[] = [
     label: 'Chantaje con difundir material privado',
   },
 ];
+
+
+// =============================================================================
+// Amortiguadores
+//
+// Lo que faltaba para que el contexto pueda desmentir a la palabra. Sin esto,
+// "te mato, que llegas tardisimo" entre dos amigas puntua igual que una amenaza
+// de un desconocido, porque el lexico solo sabia sumar.
+//
+// PROCEDENCIA: esto NO viene de INCIBE ni de ninguna otra fuente documentada —
+// INCIBE publica fraudes, no modismos. Son pocos, conservadores y de los mas
+// incontrovertibles que hay. Cada region necesita que los revise alguien que
+// hable asi a diario antes de ampliar la lista, porque un amortiguador de mas
+// silencia una amenaza real, que es el peor error posible aqui.
+// =============================================================================
+
+export const DAMPENERS: readonly DampenerEntry[] = [
+  D({
+    id: 'damp-hiperbole-cariño', kind: 'modismo',
+    label: 'Hiperbole afectiva, no amenaza',
+    reduces: ['amenaza-violencia'],
+    // "me matas", "te mato" con complemento domestico o afectivo alrededor.
+    regex: /((me|te)\s*mat(o|as|a)\s*(de\s*risa|de\s*amor|a\s*disgustos|con\s*lo\s*que\s*dices)|me\s*estas\s*matando\s*(de\s*risa|con)|te\s*mato\s*si\s*no\s*(traes|vienes|me\s*cuentas|me\s*llamas))/,
+  }),
+  D({
+    id: 'damp-broma-explicita', kind: 'broma',
+    label: 'Marcado como broma en el propio mensaje',
+    reduces: ['amenaza-violencia', 'acoso-insulto'],
+    regex: /(es\s*broma|era\s*broma|jaja|jeje|jiji|xd|\blol\b|entre\s*bromas|no\s*va\s*en\s*serio|es\s*coña|es\s*cachondeo)/,
+  }),
+  D({
+    id: 'damp-insulto-complice', kind: 'modismo',
+    label: 'Insulto usado como trato de confianza',
+    reduces: ['acoso-insulto'],
+    regions: ['es'],
+    // En peninsular "cabron"/"hijo de puta" funcionan como vocativo de aprecio
+    // cuando van con saludo o felicitacion. Fuera de España no se comportan asi,
+    // de ahi la marca de region.
+    regex: /((que|q)\s*(cabron|crack|maquina|figura|fiera)\b|cabron[a]?\s*(que\s*)?(tal|como\s*estas|cuanto\s*tiempo)|hijo\s*de\s*puta\s*(que\s*)?(crack|grande|maquina))/,
+  }),
+  D({
+    id: 'damp-reenvio-consulta', kind: 'modismo',
+    label: 'Reenvia un mensaje para preguntar si es estafa',
+    reduces: [
+      'suplantacion-entidad', 'evento-financiero-falso', 'plazo-administrativo',
+      'phishing-credenciales', 'dominio-senuelo', 'pago-anticipado',
+    ],
+    // Este es el falso positivo mas comun del producto: alguien pega la estafa
+    // que ha recibido para preguntar. El texto ES una estafa; lo que cambia es
+    // quien lo manda y para que.
+    regex: /((me\s*(ha\s*)?(ha\s*)?lleg(ado|o)|he\s*recibido|acabo\s*de\s*recibir|mira\s*lo\s*que\s*me)[^.]{0,60}(esto?|este\s*mensaje|este\s*sms)?[^.]{0,40}(es\s*(una\s*)?estafa|sera\s*estafa|es\s*fiable|es\s*verdad|es\s*real|tu\s*que\s*crees)|¿?(esto|este\s*mensaje|este\s*sms)\s*es\s*(una\s*)?(estafa|timo|phishing|fraude)\??)/,
+  }),
+];
+
+// =============================================================================
+// Huella del lexico
+//
+// Un reporte de un falso positivo sin saber contra QUE version del lexico se
+// produjo no sirve de mucho: llegaria una queja sobre una entrada que ya se
+// corrigio hace tres versiones y no habria forma de distinguirla de una queja
+// actual.
+//
+// Se calcula, no se mantiene a mano. Una constante que hay que acordarse de
+// subir cada vez que se toca una entrada acaba mintiendo — y miente en
+// silencio, que es lo peor que puede hacer un numero de version. Aqui la huella
+// sale de las propias entradas: si cambia una regex, cambia la huella, sin que
+// nadie tenga que hacer nada.
+// =============================================================================
+
+/**
+ * FNV-1a de 32 bits. Ni criptografico ni falta que hace: lo unico que se le
+ * pide es cambiar cuando cambie la entrada, y eso lo cumple de sobra.
+ */
+function fnv1a(text: string): string {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < text.length; i += 1) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash.toString(16).padStart(8, '0');
+}
+
+/**
+ * Identifica el vocabulario vigente: entradas, combinaciones y amortiguadores.
+ *
+ * Los tres cuentan porque los tres cambian el veredicto. Un amortiguador nuevo
+ * puede convertir un falso positivo en un acierto sin que ninguna entrada se
+ * haya tocado.
+ */
+export const LEXICON_VERSION: string = fnv1a([
+  ...LEXICON.map((e) => `${e.id}|${e.weight}|${e.regex.source}`),
+  ...COMBOS.map((c) => `combo:${c.label}|${c.bonus}|${[...c.requires].sort().join(',')}`),
+  ...DAMPENERS.map((d) => `damp:${d.id}|${d.regex.source}|${[...d.reduces].sort().join(',')}`),
+].sort().join('\n'));

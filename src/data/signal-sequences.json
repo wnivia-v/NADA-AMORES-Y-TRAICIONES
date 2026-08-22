@@ -1,0 +1,322 @@
+{
+  "note": "Secuencias temporales de señales etiquetadas para medir el motor de fusion. A diferencia de scam-corpus.json, que son mensajes sueltos, aqui lo que se mide es la ACUMULACION: que pasa cuando varias señales llegan separadas en el tiempo. Cada caso declara si debe alertar y por que. 'shouldAlert' es la etiqueta que importa — la banda se comprueba solo cuando esta declarada.",
+  "sequences": [
+    {
+      "id": "seq-001",
+      "note": "Amenaza de muerte con la direccion de la victima. Uno de los dos fallos reales que motivaron el suelo local: la media lo hundia a 0/100. Debe alertar sola, sin esperar corroboracion.",
+      "category": "amenaza-violencia",
+      "shouldAlert": true,
+      "expectedBand": "PELIGROSO",
+      "evaluateAtMs": 500,
+      "signals": [
+        {
+          "atMs": 0,
+          "type": "explicit-threat",
+          "value": 85,
+          "confidence": 1
+        },
+        {
+          "atMs": 0,
+          "type": "local-patterns",
+          "value": 80,
+          "confidence": 1
+        }
+      ]
+    },
+    {
+      "id": "seq-002",
+      "note": "Acusacion falsa haciendose pasar por la policia. El otro fallo real. Categoria tasada: alerta sola.",
+      "category": "acusacion-falsa",
+      "shouldAlert": true,
+      "expectedBand": "PELIGROSO",
+      "evaluateAtMs": 500,
+      "signals": [
+        {
+          "atMs": 0,
+          "type": "explicit-threat",
+          "value": 82,
+          "confidence": 1
+        }
+      ]
+    },
+    {
+      "id": "seq-003",
+      "note": "Sextorsion detectada en un fragmento de voz. Categoria tasada aunque la confianza del fragmento sea media.",
+      "category": "sextorsion",
+      "shouldAlert": true,
+      "evaluateAtMs": 1000,
+      "signals": [
+        {
+          "atMs": 0,
+          "type": "explicit-threat",
+          "value": 78,
+          "confidence": 0.75
+        }
+      ]
+    },
+    {
+      "id": "seq-004",
+      "note": "PRECISION. Un unico patron regex de gravedad media y nada mas. Es el caso que genera falsos positivos: puede ser una estafa o puede ser alguien reenviando una para preguntar. Sin corroboracion no se alarma al usuario, aunque el riesgo se muestre.",
+      "shouldAlert": false,
+      "evaluateAtMs": 1000,
+      "signals": [
+        {
+          "atMs": 0,
+          "type": "local-patterns",
+          "value": 55,
+          "confidence": 1
+        }
+      ]
+    },
+    {
+      "id": "seq-005",
+      "note": "Dos fuentes independientes coincidiendo con intensidad media: patrones y LLM. Esto es corroboracion y si debe alertar.",
+      "shouldAlert": true,
+      "evaluateAtMs": 10000,
+      "signals": [
+        {
+          "atMs": 0,
+          "type": "local-patterns",
+          "value": 45,
+          "confidence": 1
+        },
+        {
+          "atMs": 9000,
+          "type": "llm-risk",
+          "value": 60,
+          "confidence": 0.8
+        }
+      ]
+    },
+    {
+      "id": "seq-006",
+      "note": "PRECISION. Conversacion corriente. El LLM ve algo levemente raro y nada mas lo respalda.",
+      "shouldAlert": false,
+      "expectedBand": "SEGURO",
+      "evaluateAtMs": 2000,
+      "signals": [
+        {
+          "atMs": 0,
+          "type": "llm-risk",
+          "value": 15,
+          "confidence": 0.7
+        }
+      ]
+    },
+    {
+      "id": "seq-007",
+      "note": "PRECISION. Charla larga y normal: varias señales debiles a lo largo de la ventana. La acumulacion no debe convertir ruido en alarma.",
+      "shouldAlert": false,
+      "evaluateAtMs": 25000,
+      "signals": [
+        {
+          "atMs": 0,
+          "type": "llm-risk",
+          "value": 12,
+          "confidence": 0.5
+        },
+        {
+          "atMs": 6000,
+          "type": "llm-risk",
+          "value": 8,
+          "confidence": 0.5
+        },
+        {
+          "atMs": 12000,
+          "type": "local-patterns",
+          "value": 10,
+          "confidence": 1
+        },
+        {
+          "atMs": 18000,
+          "type": "llm-risk",
+          "value": 14,
+          "confidence": 0.4
+        },
+        {
+          "atMs": 24000,
+          "type": "llm-risk",
+          "value": 10,
+          "confidence": 0.5
+        }
+      ]
+    },
+    {
+      "id": "seq-008",
+      "note": "Un intento de inyeccion, solo. Revela intencion pero no prueba estafa: empuja la puntuacion sin alertar.",
+      "shouldAlert": false,
+      "evaluateAtMs": 1000,
+      "signals": [
+        {
+          "atMs": 0,
+          "type": "injection-attempt",
+          "value": 35,
+          "confidence": 1
+        }
+      ]
+    },
+    {
+      "id": "seq-009",
+      "note": "Intento de inyeccion MAS contenido que el LLM ve sospechoso. Quien manipula al analizador y ademas escribe algo sospechoso ya son dos cosas.",
+      "shouldAlert": true,
+      "evaluateAtMs": 3000,
+      "signals": [
+        {
+          "atMs": 0,
+          "type": "injection-attempt",
+          "value": 35,
+          "confidence": 1
+        },
+        {
+          "atMs": 2000,
+          "type": "llm-risk",
+          "value": 55,
+          "confidence": 0.7
+        }
+      ]
+    },
+    {
+      "id": "seq-010",
+      "note": "El MISMO detector disparando tres veces. Es un detector insistiendo, no tres fuentes coincidiendo: no cuenta como corroboracion.",
+      "shouldAlert": false,
+      "evaluateAtMs": 12000,
+      "signals": [
+        {
+          "atMs": 0,
+          "type": "local-patterns",
+          "value": 48,
+          "confidence": 1
+        },
+        {
+          "atMs": 5000,
+          "type": "local-patterns",
+          "value": 44,
+          "confidence": 1
+        },
+        {
+          "atMs": 11000,
+          "type": "local-patterns",
+          "value": 50,
+          "confidence": 1
+        }
+      ]
+    },
+    {
+      "id": "seq-011",
+      "note": "Dos señales fuertes pero separadas por mas de la ventana. La primera ya no existe cuando llega la segunda, asi que no hay corroboracion posible.",
+      "shouldAlert": false,
+      "evaluateAtMs": 41000,
+      "signals": [
+        {
+          "atMs": 0,
+          "type": "local-patterns",
+          "value": 60,
+          "confidence": 1
+        },
+        {
+          "atMs": 40000,
+          "type": "llm-risk",
+          "value": 50,
+          "confidence": 0.7
+        }
+      ]
+    },
+    {
+      "id": "seq-012",
+      "note": "URL maliciosa confirmada por Safe Browsing mas presion del texto. Dos fuentes, uno de ellos casi un hecho.",
+      "shouldAlert": true,
+      "expectedBand": "PELIGROSO",
+      "evaluateAtMs": 4000,
+      "signals": [
+        {
+          "atMs": 0,
+          "type": "unsafe-urls",
+          "value": 80,
+          "confidence": 1
+        },
+        {
+          "atMs": 3000,
+          "type": "llm-risk",
+          "value": 65,
+          "confidence": 0.85
+        }
+      ]
+    },
+    {
+      "id": "seq-013",
+      "note": "PRECISION. Una sola URL marcada, sin nada mas. Safe Browsing tambien tiene falsos positivos, y un enlace acortado en una conversacion normal es corriente.",
+      "shouldAlert": false,
+      "evaluateAtMs": 1000,
+      "signals": [
+        {
+          "atMs": 0,
+          "type": "unsafe-urls",
+          "value": 40,
+          "confidence": 1
+        }
+      ]
+    },
+    {
+      "id": "seq-014",
+      "note": "Videollamada: biometria facial inconsistente mas peticion de dinero por voz. Prepara la Fase 4; el motor ya debe manejarlo.",
+      "shouldAlert": true,
+      "evaluateAtMs": 14000,
+      "signals": [
+        {
+          "atMs": 0,
+          "type": "deepfake",
+          "value": 62,
+          "confidence": 0.7
+        },
+        {
+          "atMs": 13000,
+          "type": "local-patterns",
+          "value": 58,
+          "confidence": 1
+        }
+      ]
+    },
+    {
+      "id": "seq-015",
+      "note": "PRECISION. Solo biometria dudosa. Una webcam mala, mala luz o una conexion con saltos producen esto constantemente; acusar de deepfake por ello seria intolerable.",
+      "shouldAlert": false,
+      "evaluateAtMs": 2000,
+      "signals": [
+        {
+          "atMs": 0,
+          "type": "deepfake",
+          "value": 55,
+          "confidence": 0.6
+        }
+      ]
+    },
+    {
+      "id": "seq-016",
+      "note": "Ventana vacia. Nada que fusionar.",
+      "shouldAlert": false,
+      "expectedBand": "SEGURO",
+      "evaluateAtMs": 0,
+      "signals": []
+    },
+    {
+      "id": "seq-017",
+      "note": "RECENCIA. Dos fuentes independientes separadas casi por la ventana entera: un patron leve al empezar la llamada y el LLM 28 s despues. La pregunta de producto es si algo de hace 28 s todavia corrobora. Aqui se decide que si — es lo que significa tener una ventana de 30 s; si no contara, la ventana seria en realidad mas corta de lo declarado.",
+      "shouldAlert": true,
+      "evaluateAtMs": 28500,
+      "signals": [
+        {
+          "atMs": 0,
+          "type": "local-patterns",
+          "value": 40,
+          "confidence": 1
+        },
+        {
+          "atMs": 28000,
+          "type": "llm-risk",
+          "value": 45,
+          "confidence": 0.7
+        }
+      ]
+    }
+  ]
+}

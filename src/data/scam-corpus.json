@@ -55,7 +55,6 @@
       "text": "Urgente: la reunion se movio a las 9am. Confirmame que puedes llegar.",
       "note": "Urgency without any financial or data request."
     },
-
     {
       "id": "sosp-001",
       "label": "SOSPECHOSO",
@@ -99,7 +98,6 @@
       "category": "dominio-sospechoso",
       "text": "Tu paquete esta retenido en aduana. Paga la tasa aqui para liberarlo: http://envios-correo.top/pago"
     },
-
     {
       "id": "pelig-001",
       "label": "PELIGROSO",
@@ -161,7 +159,6 @@
       "category": "amenaza-legal",
       "text": "Ultima notificacion antes de la demanda judicial. Si no paga la deuda en las proximas 2 horas procederemos con el embargo de sus bienes y la carcel."
     },
-
     {
       "id": "edge-001",
       "label": "PELIGROSO",
@@ -218,7 +215,6 @@
       "text": "ATENCION CLIENTE BANCO NACIONAL. Hemos detectado un acceso no autorizado a su cuenta desde un dispositivo desconocido. Por su seguridad su cuenta ha sido restringida temporalmente. Para restablecer el acceso completo debe verificar su identidad en el siguiente enlace dentro de las proximas 4 horas o su cuenta sera cerrada permanentemente y sus fondos transferidos a una cuenta de retencion. Ingrese sus datos completos incluyendo numero de tarjeta, clave y codigo de seguridad. No comparta este mensaje con terceros.",
       "note": "Long text as it would arrive from OCR of a screenshot. Tests that scoring works on realistic OCR-length input."
     },
-
     {
       "id": "incibe-001",
       "label": "PELIGROSO",
@@ -295,6 +291,48 @@
       "category": "fraude-facturacion",
       "text": "Estimado proveedor, le informamos que hemos cambiado nuestra cuenta bancaria. A partir de hoy todos los pagos deben realizarse a la nueva cuenta: ES91 2100 0418 4502 0005 1332. Rogamos actualice sus registros.",
       "note": "REAL: based on INCIBE case (July 2026). BEC fraud where attacker intercepts email and changes payment account. Classic invoice fraud targeting businesses."
+    },
+    {
+      "id": "amount-001",
+      "label": "PELIGROSO",
+      "category": "fraude-financiero",
+      "text": "Mama soy yo, se me rompio el movil y escribo desde este numero. Mandame 300 euros a esta cuenta que es urgente, luego te lo explico.",
+      "note": "Peticion con CANTIDAD en vez de con la palabra 'dinero'. El escaner lo dejaba en 32/100 (SEGURO) porque fin-send-money solo cubria 'envia dinero'. Encontrado al probar el boton de feedback, no por el corpus: ningun caso de los 44 pedia una cifra concreta."
+    },
+    {
+      "id": "amount-002",
+      "label": "SOSPECHOSO",
+      "category": "fraude-financiero",
+      "text": "Necesito que me mandes 500€ hoy mismo, no puedo hablar ahora, te lo devuelvo el viernes sin falta.",
+      "note": "Misma familia, forma subjuntiva ('que me mandes') y simbolo de moneda pegado a la cifra."
+    },
+    {
+      "id": "safe-amount-001",
+      "label": "SEGURO",
+      "category": "conversacion-normal",
+      "text": "Tranquila que te mando los 300 euros de la fianza manana por la manana, ya lo tengo preparado.",
+      "note": "El control del arreglo anterior: alguien que MANDA dinero, no que lo pide. Si esta entrada alarma, el patron esta cogiendo la primera persona y hay que estrecharlo."
+    },
+    {
+      "id": "safe-amount-002",
+      "label": "SEGURO",
+      "category": "conversacion-normal",
+      "text": "El presupuesto del taller son 300 euros, me pareceo caro pero es lo que hay. Gane 500 euros extra este mes asi que lo cubro.",
+      "note": "Cifras en euros en contexto perfectamente normal. Es el falso positivo obvio de cualquier patron que mire cantidades."
+    },
+    {
+      "id": "fp-campo-001",
+      "label": "SEGURO",
+      "category": "conversacion-normal",
+      "text": "Oye mandame 20 euros para la cena de manana que voy justo, ya te los devuelvo",
+      "note": "Guarda el limite por abajo de la extension de fin-send-money a cantidades. La entrada SI dispara aqui (30/100), pero se queda en SEGURO porque una sola señal no alarma. Si alguien sube ese peso o añade otra entrada que coincida, este caso lo dira."
+    },
+    {
+      "id": "fp-campo-002",
+      "label": "SEGURO",
+      "category": "conversacion-normal",
+      "text": "pasame 15 euros de la apuesta que perdiste jajaja",
+      "note": "Mismo guardian: cantidad de dos cifras con un motivo cotidiano. 30/100, banda SEGURO. La regla de corroboracion es lo que lo mantiene ahi."
     }
   ]
 }

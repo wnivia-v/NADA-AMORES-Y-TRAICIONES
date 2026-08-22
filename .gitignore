@@ -27,3 +27,19 @@ android/**/*.jks
 # Regenerate with `npm run android:sync` before opening in Android Studio.
 android/app/src/main/assets/public/
 android/app/src/main/assets/capacitor.config.json
+
+# Backend: build y secretos. server/.env guarda las claves de API — que no se
+# suba nunca es justamente el motivo de que exista el servidor.
+server/dist/
+server/.env
+server/.env.local
+
+# Recursos de MediaPipe (runtime WASM + modelo), preparados por el prebuild.
+# No se versionan: son ~37 MB cuya fuente de verdad son el paquete instalado y
+# la URL oficial del modelo. Se regeneran con `npm run mediapipe:assets`.
+public/mediapipe/
+
+# Worker de vision compilado (scripts/build-vision-worker.mjs). Generado en
+# predev/prebuild; el codigo fuente es src/workers/vision.worker.ts.
+public/vision-worker.js
+public/vision-worker.js.map

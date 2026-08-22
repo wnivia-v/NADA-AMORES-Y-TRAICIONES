@@ -41,8 +41,24 @@ jobs:
       - name: Generate app icon
         run: npm run icon
 
+      # El cliente de Prisma es codigo GENERADO: vive en node_modules y no se
+      # versiona. Sin este paso, `tx` y `row` en server/src/store/prisma.ts
+      # quedan como `any` implicito y el typecheck falla — que es justo lo que
+      # paso, y solo aqui: en local pasaba porque el cliente ya estaba generado.
+      - name: Generate Prisma client
+        run: npx prisma generate
+
       - name: Typecheck (app)
         run: npx tsc --noEmit
+
+      # El backend NO se comprobaba en CI, y ya me mordio dos veces en local.
+      # Un typecheck que no cubre la mitad del codigo da una confianza que no
+      # corresponde.
+      - name: Typecheck (backend + modulo compartido)
+        run: npx tsc -p tsconfig.server.json
+
+      - name: Lint
+        run: npm run lint
 
       # Emits electron/*.cjs. Not --noEmit: package.json points "main" at
       # electron/main.cjs, so those files have to exist.
@@ -52,8 +68,16 @@ jobs:
       - name: Tests
         run: npx vitest run
 
+      # `npm run build` y no `npx vite build`: el primero ejecuta el prebuild,
+      # que prepara el runtime de MediaPipe y compila el worker de vision. Con
+      # `vite build` a secas la CI salia verde con un bundle SIN escudo de
+      # video — verde no significaba desplegable.
       - name: Build (web / PWA)
-        run: npx vite build
+        run: npm run build
 
-      - name: Confirm the no-key build produced a bundle
-        run: test -f dist/index.html
+      - name: Confirm the no-key build produced a usable bundle
+        run: |
+          test -f dist/index.html
+          test -f dist/vision-worker.js
+          test -f dist/mediapipe/face_landmarker.task
+          test -f dist/mediapipe/wasm/vision_wasm_internal.wasm

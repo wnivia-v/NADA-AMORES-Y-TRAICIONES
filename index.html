@@ -11,7 +11,7 @@
       style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
       font-src 'self' https://fonts.gstatic.com;
       img-src 'self' data: blob: https:;
-      connect-src 'self' https://api.anthropic.com https://api.groq.com https://safebrowsing.googleapis.com https://firebaseinstallations.googleapis.com https://*.googleapis.com https://*.firebaseio.com https://*.cloudfunctions.net https://cdn.jsdelivr.net https://storage.googleapis.com https://huggingface.co https://*.hf.co wss://*.firebaseio.com;
+      connect-src 'self' %NADA_API_ORIGIN% https://safebrowsing.googleapis.com https://firebaseinstallations.googleapis.com https://*.googleapis.com https://*.firebaseio.com https://*.cloudfunctions.net https://cdn.jsdelivr.net https://huggingface.co https://*.hf.co wss://*.firebaseio.com;
       worker-src 'self' blob:;
       media-src 'self' blob: mediastream:;
       object-src 'none';

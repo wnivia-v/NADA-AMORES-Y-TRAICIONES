@@ -7,14 +7,9 @@
 // =============================================================================
 
 import type { RateLimits } from './rateLimiter';
+import type { AnalysisRequest, ProviderSignal } from '@/shared/llm/types';
 
-export interface AIAnalysisResult {
-  verdict: 'SEGURO' | 'SOSPECHOSO' | 'PELIGROSO';
-  riskScore: number;
-  tactics: string[];
-  explanation: string;
-  recommendations: string[];
-}
+export type { AnalysisRequest, ProviderSignal };
 
 export interface AIProviderConfig {
   enabled: boolean;
@@ -39,7 +34,15 @@ export interface AIProvider {
   /** Published quota for the free tier, used to avoid 429s. Omit if unlimited. */
   limits?: RateLimits;
   isAvailable(): boolean;
-  analyze(text: string, prompt: string, signal?: AbortSignal): Promise<AIAnalysisResult | null>;
+  /**
+   * Analiza una peticion ya endurecida y empaquetada.
+   *
+   * Recibe un AnalysisRequest, no un par (texto, prompt): asi no queda ningun
+   * sitio donde concatenar el mensaje del usuario dentro de las instrucciones.
+   * Devuelve una señal sin veredicto — la banda de riesgo la decide el codigo,
+   * no el modelo.
+   */
+  analyze(request: AnalysisRequest, signal?: AbortSignal): Promise<ProviderSignal | null>;
 }
 
 export interface ProviderOrchestrationConfig {
