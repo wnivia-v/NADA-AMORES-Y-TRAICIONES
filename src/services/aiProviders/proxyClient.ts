@@ -12,7 +12,14 @@
 // secreta. Meterlo en el proxy no ganaria nada.
 // =============================================================================
 
-import type { AnalysisRequest, HardeningReport, ProviderSignal } from '@/shared/llm/types';
+import type {
+  AnalysisRequest,
+  HardeningReport,
+  ProviderAnswer,
+  ProviderSignal,
+  SignalRejection,
+} from '@/shared/llm/types';
+import { answered, noAnswer } from '@/shared/llm/types';
 
 /** URL del backend. Sin ella, los proveedores remotos quedan no disponibles. */
 export function proxyBaseUrl(): string {
@@ -32,17 +39,18 @@ export interface ProxyResponse {
 /**
  * Pide un analisis al backend.
  *
- * Devuelve null ante cualquier fallo de transporte. Un error de red no puede
- * convertirse en "no hay riesgo": el orquestador lo trata como proveedor que no
- * contesto y sigue con los demas, o cae al camino local.
+ * Nunca convierte un fallo en "no hay riesgo": devuelve una respuesta SIN señal
+ * y con el motivo puesto. El orquestador lo trata como proveedor que no
+ * contesto y sigue con los demas, o cae al camino local — pero ahora el motivo
+ * sobrevive hasta la vista tecnica en vez de morir en un console.warn.
  */
 export async function analyzeViaProxy(
   provider: 'groq' | 'claude' | 'bedrock',
   request: AnalysisRequest,
   signal?: AbortSignal,
-): Promise<ProviderSignal | null> {
+): Promise<ProviderAnswer> {
   const base = proxyBaseUrl();
-  if (!base) return null;
+  if (!base) return noAnswer({ transport: 'not-configured', detail: 'sin VITE_NADA_API_URL' });
 
   try {
     const response = await fetch(`${base}/v1/analyze`, {
@@ -53,20 +61,26 @@ export async function analyzeViaProxy(
     });
 
     if (!response.ok) {
-      console.warn(`[NADA][proxy] ${provider}: HTTP ${response.status}`);
-      return null;
+      return noAnswer({ transport: 'http-error', detail: `HTTP ${response.status}` });
     }
 
     const data = (await response.json()) as ProxyResponse;
+
+    // Que el modelo devuelva algo fuera de esquema es informacion util: si pasa
+    // a menudo, o el prompt se rompio o alguien lo esta empujando. Por eso sube
+    // en vez de quedarse en la consola.
     if (data.rejection) {
-      // Que el modelo devuelva algo fuera de esquema es informacion util: si
-      // pasa a menudo, o el prompt se rompio o alguien lo esta empujando.
-      console.warn(`[NADA][proxy] ${provider}: respuesta descartada (${data.rejection})`);
+      return noAnswer({ rejection: data.rejection as SignalRejection });
     }
-    return data.signal ?? null;
+    if (!data.signal) {
+      return noAnswer({ transport: 'http-error', detail: 'respuesta sin señal' });
+    }
+    return answered(data.signal);
   } catch (error) {
-    if (signal?.aborted) return null;
-    console.warn(`[NADA][proxy] ${provider}: fallo de red`, error);
-    return null;
+    if (signal?.aborted) return noAnswer({ transport: 'network', detail: 'cancelado' });
+    return noAnswer({
+      transport: 'network',
+      detail: error instanceof Error ? error.name : 'fallo de red',
+    });
   }
 }

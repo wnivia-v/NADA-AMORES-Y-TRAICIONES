@@ -368,7 +368,7 @@ async function runTextAnalysis(
   // Step 3: AI Provider orchestration (local, Gemini, y los remotos via proxy)
   const request = prepare(text, 'text');
   recordInjectionAttempts(request, scope);
-  const { result: aiResult, providerId } = await orchestrateAnalysis(request, signal);
+  const { result: aiResult, providerId, deliberation } = await orchestrateAnalysis(request, signal);
 
   if (signal.aborted) throw new AnalysisAbortedError(scope);
 
@@ -393,7 +393,7 @@ async function runTextAnalysis(
     // caught offline and instantly, even if the AI is unreachable then.
     learnFromThreat(normalizeForMatching(text), result.verdict);
 
-    return withDraft(result, {
+    return withDraft({ ...result, deliberation }, {
       surface,
       text,
       trace: traceOf(fusion, localResult, request, aiResult.value),
@@ -409,7 +409,10 @@ async function runTextAnalysis(
     scamDatabase.store(text, fallback.verdict, fallback.riskScore, fallback.tactics, 'local').catch(() => {});
   }
 
-  return withDraft(fallback, {
+  // El acta viaja tambien cuando no contesto nadie. Es el unico sitio donde se
+  // puede ver que el veredicto salio del motor local porque las IAs estaban
+  // caidas, apagadas o sin configurar — y no porque coincidieran.
+  return withDraft({ ...fallback, deliberation }, {
     surface,
     text,
     trace: traceOf(fallbackFusion, localResult, request, null),

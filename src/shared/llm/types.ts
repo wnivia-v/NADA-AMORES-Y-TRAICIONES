@@ -74,3 +74,47 @@ export interface SignalParseResult {
   signal: ProviderSignal | null;
   rejection?: SignalRejection;
 }
+
+/** Fallo que ocurrio antes de que el modelo llegara a opinar, o al volver. */
+export type TransportFailure =
+  /** No hay proxy, clave ni proyecto: el proveedor no llego a intentarlo. */
+  | 'not-configured'
+  /** El modelo no se pudo construir (SDK, permisos, App Check). */
+  | 'model-init'
+  /** Contesto la red, pero con un codigo de error. */
+  | 'http-error'
+  /** No contesto nadie: DNS, corte, CORS. */
+  | 'network';
+
+/**
+ * Lo que devuelve un proveedor cuando se le pregunta.
+ *
+ * No es `ProviderSignal | null` porque "no hay señal" esconde motivos que no se
+ * parecen en nada: un modelo que devuelve prosa en vez de JSON esta roto o le
+ * han torcido el prompt, uno que da 502 esta caido, y uno sin configurar ni
+ * siquiera lo intento. Colapsar los tres en `null` es barato para el codigo que
+ * decide —le da igual, sigue con el siguiente— pero deja a quien mira la vista
+ * tecnica sin nada que leer, justo cuando lo que necesita saber es CUAL de las
+ * IAs dejo de funcionar y por que.
+ */
+export interface ProviderAnswer {
+  signal: ProviderSignal | null;
+  /** El modelo contesto, pero su carga util no paso el esquema. */
+  rejection?: SignalRejection;
+  /** No se llego a tener carga util que validar. */
+  transport?: TransportFailure;
+  /** Detalle corto para la vista tecnica. Sin texto del usuario dentro. */
+  detail?: string;
+}
+
+/** Atajo para el caso normal: hay señal. */
+export function answered(signal: ProviderSignal): ProviderAnswer {
+  return { signal };
+}
+
+/** Atajo para el caso que hasta ahora se perdia: no hay señal, y este es el motivo. */
+export function noAnswer(
+  cause: { rejection?: SignalRejection; transport?: TransportFailure; detail?: string },
+): ProviderAnswer {
+  return { signal: null, ...cause };
+}

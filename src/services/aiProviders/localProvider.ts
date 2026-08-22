@@ -28,7 +28,8 @@
 // =============================================================================
 
 import type { AIProvider } from './types';
-import type { AnalysisRequest, ProviderSignal } from '@/shared/llm/types';
+import type { AnalysisRequest, ProviderAnswer } from '@/shared/llm/types';
+import { answered, noAnswer } from '@/shared/llm/types';
 import corpus from '@/data/scam-corpus.json';
 
 /**
@@ -251,19 +252,21 @@ export const localProvider: AIProvider = {
    * siguiendo instrucciones. Que sea inmune a la inyeccion de prompt por
    * construccion es justamente lo que lo hace el suelo del sistema.
    */
-  async analyze(request: AnalysisRequest, signal?: AbortSignal): Promise<ProviderSignal | null> {
-    if (signal?.aborted) return null;
+  async analyze(request: AnalysisRequest, signal?: AbortSignal): Promise<ProviderAnswer> {
+    if (signal?.aborted) return noAnswer({ transport: 'network', detail: 'cancelado' });
 
     const embed = await getEmbedder();
-    if (!embed) return null;
-    if (signal?.aborted) return null;
+    if (!embed) {
+      return noAnswer({ transport: 'model-init', detail: unavailableReason ?? 'sin modelo de embeddings' });
+    }
+    if (signal?.aborted) return noAnswer({ transport: 'network', detail: 'cancelado' });
 
     try {
       const vectors = await getCorpusVectors(embed);
-      if (signal?.aborted) return null;
+      if (signal?.aborted) return noAnswer({ transport: 'network', detail: 'cancelado' });
 
       const queryVector = await embed(request.text);
-      if (signal?.aborted) return null;
+      if (signal?.aborted) return noAnswer({ transport: 'network', detail: 'cancelado' });
 
       const scored: Neighbour[] = CASES.map((c, i) => ({
         case: c,
@@ -272,9 +275,15 @@ export const localProvider: AIProvider = {
 
       scored.sort((a, b) => b.similarity - a.similarity);
       const classification = classifyFromNeighbours(scored);
-      if (!classification) return null;
 
-      return {
+      // Abstenerse NO es lo mismo que fallar, y la vista tecnica tiene que
+      // poder distinguirlo: este proveedor calla cuando el vecino mas parecido
+      // no se parece lo suficiente. Es la respuesta correcta, no una averia.
+      if (!classification) {
+        return noAnswer({ detail: 'sin vecino bastante parecido en el corpus' });
+      }
+
+      return answered({
         type: 'llm-risk',
         value: classification.riskScore,
         confidence: classification.confidence,
@@ -282,11 +291,13 @@ export const localProvider: AIProvider = {
         tactics: classification.tactics,
         explanation: classification.explanation,
         recommendations: classification.recommendations,
-      };
+      });
     } catch (e) {
-      if (signal?.aborted) return null;
-      console.warn('[NADA][local] Analysis error:', e);
-      return null;
+      if (signal?.aborted) return noAnswer({ transport: 'network', detail: 'cancelado' });
+      return noAnswer({
+        transport: 'model-init',
+        detail: e instanceof Error ? e.name : 'error de clasificacion',
+      });
     }
   },
 };

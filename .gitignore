@@ -43,3 +43,7 @@ public/mediapipe/
 # predev/prebuild; el codigo fuente es src/workers/vision.worker.ts.
 public/vision-worker.js
 public/vision-worker.js.map
+
+# Vista previa del terminal de deliberacion: se regenera con `npm run preview:deliberacion`
+bench/deliberation-preview.*.html
+bench/.preview.css

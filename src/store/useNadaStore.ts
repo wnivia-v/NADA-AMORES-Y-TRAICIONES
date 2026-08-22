@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
+import type { Deliberation } from '@/shared/llm/deliberation';
 
 // =============================================================================
 // Tipos del Store
@@ -58,6 +59,14 @@ export interface ScamAnalysis {
   alert?: boolean;
   /** Dos o mas fuentes independientes sostienen el resultado. */
   corroborated?: boolean;
+  /**
+   * Que dijo cada IA y por que gano una. Solo se pinta en modo tecnico.
+   *
+   * Opcional por dos motivos distintos: zustand persiste analisis de versiones
+   * que no lo traian, y un analisis que no llego a consultar a ninguna IA
+   * —porque lo resolvio la base de estafas conocidas— no tiene acta que enseñar.
+   */
+  deliberation?: Deliberation;
   /**
    * Identificador de este analisis, para poder opinar sobre el.
    *

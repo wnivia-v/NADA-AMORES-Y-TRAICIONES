@@ -10,7 +10,7 @@
 // =============================================================================
 
 import type { AIProvider } from './types';
-import type { AnalysisRequest, ProviderSignal } from '@/shared/llm/types';
+import type { AnalysisRequest, ProviderAnswer } from '@/shared/llm/types';
 import { analyzeViaProxy, hasProxy } from './proxyClient';
 
 export const bedrockProvider: AIProvider = {
@@ -22,7 +22,7 @@ export const bedrockProvider: AIProvider = {
     return hasProxy();
   },
 
-  analyze(request: AnalysisRequest, signal?: AbortSignal): Promise<ProviderSignal | null> {
+  analyze(request: AnalysisRequest, signal?: AbortSignal): Promise<ProviderAnswer> {
     return analyzeViaProxy('bedrock', request, signal);
   },
 };

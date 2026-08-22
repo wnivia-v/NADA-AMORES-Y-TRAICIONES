@@ -9,7 +9,7 @@ export {
   saveProviderConfig,
   getProviderConfig,
 } from './orchestrator';
-export type { ProviderStatus } from './orchestrator';
+export type { ProviderStatus, OrchestrationResult } from './orchestrator';
 export { localProvider } from './localProvider';
 export { geminiProvider } from './geminiProvider';
 export { groqProvider } from './groqProvider';
@@ -27,3 +27,10 @@ export type {
   ProviderCost,
 } from './types';
 export { DEFAULT_PROVIDER_CONFIG } from './types';
+export type {
+  Deliberation,
+  DecisionReason,
+  ProviderRun,
+  ProviderOutcome,
+  Suspicion,
+} from '@/shared/llm/deliberation';

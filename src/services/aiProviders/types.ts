@@ -7,9 +7,9 @@
 // =============================================================================
 
 import type { RateLimits } from './rateLimiter';
-import type { AnalysisRequest, ProviderSignal } from '@/shared/llm/types';
+import type { AnalysisRequest, ProviderAnswer, ProviderSignal } from '@/shared/llm/types';
 
-export type { AnalysisRequest, ProviderSignal };
+export type { AnalysisRequest, ProviderAnswer, ProviderSignal };
 
 export interface AIProviderConfig {
   enabled: boolean;
@@ -41,8 +41,14 @@ export interface AIProvider {
    * sitio donde concatenar el mensaje del usuario dentro de las instrucciones.
    * Devuelve una señal sin veredicto — la banda de riesgo la decide el codigo,
    * no el modelo.
+   *
+   * Y cuando no hay señal, devuelve POR QUE no la hay. Un `null` pelado le
+   * bastaba al orquestador, que solo necesita saber si pasa al siguiente, pero
+   * borraba la diferencia entre un modelo caido, uno mal configurado y uno que
+   * contesta fuera de esquema — que es exactamente lo que hay que poder mirar
+   * cuando algo va mal.
    */
-  analyze(request: AnalysisRequest, signal?: AbortSignal): Promise<ProviderSignal | null>;
+  analyze(request: AnalysisRequest, signal?: AbortSignal): Promise<ProviderAnswer>;
 }
 
 export interface ProviderOrchestrationConfig {

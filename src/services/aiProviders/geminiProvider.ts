@@ -14,7 +14,8 @@
 
 import { app, hasValidConfig } from '../firebaseConfig';
 import type { AIProvider } from './types';
-import type { AnalysisRequest, AnalysisTask, ProviderSignal } from '@/shared/llm/types';
+import type { AnalysisRequest, AnalysisTask, ProviderAnswer } from '@/shared/llm/types';
+import { answered, noAnswer } from '@/shared/llm/types';
 import { systemPromptFor, renderUserContent } from '@/shared/llm/envelope';
 import { parseProviderSignal } from '@/shared/llm/signalSchema';
 
@@ -58,25 +59,32 @@ export const geminiProvider: AIProvider = {
     return hasValidConfig && app !== null;
   },
 
-  async analyze(request: AnalysisRequest, signal?: AbortSignal): Promise<ProviderSignal | null> {
-    if (signal?.aborted) return null;
+  async analyze(request: AnalysisRequest, signal?: AbortSignal): Promise<ProviderAnswer> {
+    if (signal?.aborted) return noAnswer({ transport: 'network', detail: 'cancelado' });
 
     const model = await getModel(request.task);
-    if (!model) return null;
+    if (!model) {
+      return noAnswer({
+        transport: hasValidConfig ? 'model-init' : 'not-configured',
+        detail: hasValidConfig ? 'no se pudo construir el modelo' : 'sin proyecto de Firebase',
+      });
+    }
 
     try {
       const result = await model.generateContent(renderUserContent(request));
-      if (signal?.aborted) return null;
+      if (signal?.aborted) return noAnswer({ transport: 'network', detail: 'cancelado' });
 
       // Validacion cerrada: si la respuesta no encaja en el esquema, no hay
       // señal. Antes se rellenaba con verdict 'SEGURO' y riskScore 0.
       const { signal: parsed, rejection } = parseProviderSignal(result.response.text());
-      if (rejection) console.warn(`[NADA][Gemini] respuesta descartada (${rejection})`);
-      return parsed;
+      if (parsed) return answered(parsed);
+      return noAnswer({ rejection: rejection ?? 'not-object' });
     } catch (e) {
-      if (signal?.aborted) return null;
-      console.warn('[NADA][Gemini] Analysis error:', e);
-      return null;
+      if (signal?.aborted) return noAnswer({ transport: 'network', detail: 'cancelado' });
+      return noAnswer({
+        transport: 'http-error',
+        detail: e instanceof Error ? e.name : 'error del SDK',
+      });
     }
   },
 };

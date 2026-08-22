@@ -4,8 +4,15 @@
 // Picks the best AI response based on configured strategy
 // =============================================================================
 
-import type { AIProvider, ProviderOrchestrationConfig, ProviderId } from './types';
+import type {
+  AIProvider,
+  ProviderOrchestrationConfig,
+  ProviderId,
+  ProviderStrategy,
+} from './types';
 import type { AnalysisRequest, ProviderSignal } from '@/shared/llm/types';
+import type { Deliberation, DecisionReason, ProviderRun } from '@/shared/llm/deliberation';
+import { findSuspicions } from '@/shared/llm/deliberation';
 import { riskBand } from '@/shared/llm/signalSchema';
 import { DEFAULT_PROVIDER_CONFIG } from './types';
 import { getRateLimiter } from './rateLimiter';
@@ -103,148 +110,300 @@ function getActiveProviders(): AIProvider[] {
 // Provider invocation
 // =============================================================================
 
-type ProviderSuccess = { result: ProviderSignal; providerId: ProviderId };
-type ProviderOutcome = ProviderSuccess | null;
-
 /**
  * Single place where a provider is actually called.
  *
  * Owns quota accounting and the per-provider timeout so every strategy behaves
  * identically. Never throws: a failing provider must not abort a strategy that
  * still has other providers to try.
+ *
+ * Devuelve un ProviderRun y no una señal suelta porque el acta necesita el
+ * reloj y el motivo, no solo el resultado. Medir aqui —y no en cada estrategia—
+ * es lo que hace que "gano por rapida" se pueda comprobar en vez de creer.
  */
 async function callProvider(
   provider: AIProvider,
   request: AnalysisRequest,
   signal?: AbortSignal,
-): Promise<ProviderOutcome> {
-  if (signal?.aborted) return null;
+): Promise<ProviderRun> {
+  const base = { id: provider.id, name: provider.name };
+
+  if (signal?.aborted) {
+    return { ...base, outcome: 'not-reached', ms: null, signal: null, detail: 'analisis cancelado' };
+  }
 
   // Claim the request before spending it. Between getActiveProviders() and here
   // a parallel strategy may have consumed the last slot.
-  if (!spendQuota(provider)) return null;
+  if (!spendQuota(provider)) {
+    return { ...base, outcome: 'no-quota', ms: null, signal: null, detail: 'tier gratuito agotado' };
+  }
 
   const { timeoutMs } = getConfig();
   const timeoutController = new AbortController();
-  const timeout = setTimeout(() => timeoutController.abort(), timeoutMs);
+  let timedOut = false;
+  const timeout = setTimeout(() => {
+    timedOut = true;
+    timeoutController.abort();
+  }, timeoutMs);
   const combinedSignal = signal
     ? combineAbortSignals(signal, timeoutController.signal)
     : timeoutController.signal;
 
+  const started = now();
   try {
-    const result = await provider.analyze(request, combinedSignal);
-    return result ? { result, providerId: provider.id } : null;
-  } catch {
-    return null;
+    const answer = await provider.analyze(request, combinedSignal);
+    const ms = Math.round(now() - started);
+
+    if (answer.signal) return { ...base, outcome: 'answered', ms, signal: answer.signal };
+    if (timedOut) {
+      return { ...base, outcome: 'timeout', ms, signal: null, detail: `sin respuesta en ${timeoutMs} ms` };
+    }
+    if (answer.rejection) {
+      return { ...base, outcome: 'rejected', ms, signal: null, rejection: answer.rejection, detail: answer.detail };
+    }
+    if (answer.transport) {
+      return { ...base, outcome: 'failed', ms, signal: null, transport: answer.transport, detail: answer.detail };
+    }
+    // Sin señal, sin rechazo y sin fallo: se abstuvo a proposito.
+    return { ...base, outcome: 'abstained', ms, signal: null, detail: answer.detail };
+  } catch (e) {
+    const ms = Math.round(now() - started);
+    if (timedOut) {
+      return { ...base, outcome: 'timeout', ms, signal: null, detail: `sin respuesta en ${timeoutMs} ms` };
+    }
+    return {
+      ...base,
+      outcome: 'failed',
+      ms,
+      signal: null,
+      detail: e instanceof Error ? e.name : 'excepcion sin tipo',
+    };
   } finally {
     clearTimeout(timeout);
   }
 }
 
-/** Calls every provider in parallel and keeps only the successful answers. */
-async function callAll(
+/** Reloj monotono cuando lo hay: Date.now() salta si el sistema ajusta la hora. */
+function now(): number {
+  return typeof performance !== 'undefined' && typeof performance.now === 'function'
+    ? performance.now()
+    : Date.now();
+}
+
+/** Los que contestaron con señal valida, en el orden en que se lanzaron. */
+function answeredRuns(runs: ProviderRun[]): ProviderRun[] {
+  return runs.filter((r) => r.outcome === 'answered' && r.signal);
+}
+
+/** Calls every provider in parallel and keeps every run, contestara o no. */
+function callAll(
   providers: AIProvider[],
   request: AnalysisRequest,
   signal?: AbortSignal,
-): Promise<ProviderSuccess[]> {
-  const settled = await Promise.allSettled(
-    providers.map((p) => callProvider(p, request, signal)),
-  );
+): Promise<ProviderRun[]> {
+  return Promise.all(providers.map((p) => callProvider(p, request, signal)));
+}
 
-  return settled
-    .filter((r): r is PromiseFulfilledResult<ProviderSuccess> => r.status === 'fulfilled' && r.value !== null)
-    .map((r) => r.value);
+/**
+ * Los que ni se llamaron, para que el acta los enseñe igual.
+ *
+ * Un panel que solo muestra a quien participo no deja ver la razon mas comun de
+ * que "solo opinara una IA": que las otras estaban apagadas o sin configurar.
+ */
+function idleRuns(active: AIProvider[]): ProviderRun[] {
+  const config = getConfig();
+  const activeIds = new Set(active.map((p) => p.id));
+  const out: ProviderRun[] = [];
+
+  for (const [id, provider] of Object.entries(PROVIDERS) as Array<[ProviderId, AIProvider]>) {
+    if (activeIds.has(id)) continue;
+    const enabled = config.providers[id]?.enabled ?? false;
+    const base = { id, name: provider.name, ms: null, signal: null };
+
+    if (!enabled) {
+      out.push({ ...base, outcome: 'disabled', detail: 'apagado en ajustes' });
+    } else if (!provider.isAvailable()) {
+      out.push({ ...base, outcome: 'unavailable', detail: 'habilitado pero sin configurar' });
+    } else {
+      out.push({ ...base, outcome: 'no-quota', detail: 'tier gratuito agotado' });
+    }
+  }
+  return out;
 }
 
 // =============================================================================
 // Strategies
+//
+// Todas devuelven el acta completa. La estrategia elige al ganador; el acta
+// explica por que, y esa explicacion es una union cerrada y no una frase, para
+// que se pueda comprobar dato a dato.
 // =============================================================================
+
+interface StrategyOutcome {
+  runs: ProviderRun[];
+  winner: ProviderRun | null;
+  reason: DecisionReason;
+}
 
 // Fallback: try providers in priority order, return first success
 async function strategyFallback(
+  providers: AIProvider[],
   request: AnalysisRequest,
   signal?: AbortSignal,
-): Promise<{ result: ProviderSignal | null; providerId: ProviderId | null }> {
-  for (const provider of getActiveProviders()) {
+): Promise<StrategyOutcome> {
+  const runs: ProviderRun[] = [];
+  const skipped: string[] = [];
+
+  for (const provider of providers) {
     if (signal?.aborted) break;
-    const outcome = await callProvider(provider, request, signal);
-    if (outcome) return outcome;
+    const run = await callProvider(provider, request, signal);
+    runs.push(run);
+    if (run.outcome === 'answered') {
+      // Los de detras nunca se llamaron: la cadena se corto aqui, y eso se dice.
+      for (const rest of providers.slice(providers.indexOf(provider) + 1)) {
+        runs.push({
+          id: rest.id,
+          name: rest.name,
+          outcome: 'not-reached',
+          ms: null,
+          signal: null,
+          detail: `la cadena se corto en ${run.name}`,
+        });
+      }
+      return { runs, winner: run, reason: { kind: 'first-available', skipped } };
+    }
+    skipped.push(provider.id);
   }
 
-  return { result: null, providerId: null };
+  return { runs, winner: null, reason: { kind: 'silence' } };
 }
 
-// Race: fire all providers simultaneously, return fastest valid response
-async function strategyRace(
+/**
+ * Race: gana quien conteste ANTES. De verdad, esta vez.
+ *
+ * Lo que habia aqui hacia Promise.allSettled —esperar a TODOS— y despues
+ * recorria el array devolviendo el primero no nulo. Como el array viene
+ * ordenado por prioridad, el ganador era el de mayor prioridad, no el mas
+ * rapido: la semantica de `fallback` pagando la latencia del proveedor mas
+ * lento. Peor que las dos cosas, y era la estrategia por defecto.
+ *
+ * Ahora la decision se cierra en cuanto una respuesta valida llega. Los demas
+ * quedan en el acta como 'still-running', que no es una averia: es la prueba de
+ * que la carrera existio.
+ */
+function strategyRace(
+  providers: AIProvider[],
   request: AnalysisRequest,
   signal?: AbortSignal,
-): Promise<{ result: ProviderSignal | null; providerId: ProviderId | null }> {
-  const providers = getActiveProviders();
-  if (providers.length === 0) return { result: null, providerId: null };
+): Promise<StrategyOutcome> {
+  return new Promise((resolve) => {
+    const runs = new Map<ProviderId, ProviderRun>();
+    let settled = false;
+    let pending = providers.length;
 
-  const results = await Promise.allSettled(
-    providers.map((p) => callProvider(p, request, signal)),
-  );
+    const finishWithSilence = () => {
+      resolve({
+        runs: providers.map((p) => runs.get(p.id)!).filter(Boolean),
+        winner: null,
+        reason: { kind: 'silence' },
+      });
+    };
 
-  // Return the first non-null result
-  for (const r of results) {
-    if (r.status === 'fulfilled' && r.value) {
-      return r.value;
+    for (const provider of providers) {
+      void callProvider(provider, request, signal).then((run) => {
+        pending -= 1;
+        if (settled) {
+          // Llego tarde: la decision ya estaba tomada. Se guarda igualmente por
+          // si alguien mira el acta despues, pero no cambia el resultado.
+          runs.set(provider.id, run);
+          return;
+        }
+        runs.set(provider.id, run);
+
+        if (run.outcome === 'answered') {
+          settled = true;
+          const stillRunning = providers
+            .filter((p) => !runs.has(p.id))
+            .map((p) => p.id);
+          for (const id of stillRunning) {
+            const late = providers.find((p) => p.id === id)!;
+            runs.set(id, {
+              id,
+              name: late.name,
+              outcome: 'still-running',
+              ms: null,
+              signal: null,
+              detail: `seguia pensando cuando ${run.name} contesto en ${run.ms} ms`,
+            });
+          }
+          resolve({
+            runs: providers.map((p) => runs.get(p.id)!).filter(Boolean),
+            winner: run,
+            reason: { kind: 'fastest', ms: run.ms ?? 0, stillRunning },
+          });
+          return;
+        }
+
+        if (pending === 0) {
+          settled = true;
+          finishWithSilence();
+        }
+      });
     }
-  }
 
-  return { result: null, providerId: null };
+    if (providers.length === 0) {
+      settled = true;
+      finishWithSilence();
+    }
+  });
 }
 
 // Best-result: fire all, wait for all, return the one with highest confidence
 async function strategyBestResult(
+  providers: AIProvider[],
   request: AnalysisRequest,
   signal?: AbortSignal,
-): Promise<{ result: ProviderSignal | null; providerId: ProviderId | null }> {
-  const providers = getActiveProviders();
-  if (providers.length === 0) return { result: null, providerId: null };
-
-  const validResults = await callAll(providers, request, signal);
-  if (validResults.length === 0) return { result: null, providerId: null };
+): Promise<StrategyOutcome> {
+  const runs = await callAll(providers, request, signal);
+  const valid = answeredRuns(runs);
+  if (valid.length === 0) return { runs, winner: null, reason: { kind: 'silence' } };
+  if (valid.length === 1) return { runs, winner: valid[0]!, reason: { kind: 'sole-answer' } };
 
   // Pick the result with highest riskScore (most cautious) — protects the user
   // If all are SEGURO, pick lowest riskScore (most confident it's safe)
-  const allSafe = validResults.every((r) => riskBand(r.result.value) === 'SEGURO');
+  const allSafe = valid.every((r) => riskBand(r.signal!.value) === 'SEGURO');
+  const sorted = [...valid].sort((a, b) =>
+    allSafe ? a.signal!.value - b.signal!.value : b.signal!.value - a.signal!.value,
+  );
 
-  if (allSafe) {
-    // Most confident "safe" = lowest score
-    validResults.sort((a, b) => a.result.value - b.result.value);
-  } else {
-    // Most cautious = highest score (protect the user)
-    validResults.sort((a, b) => b.result.value - a.result.value);
-  }
-
-  return validResults[0] ?? { result: null, providerId: null };
+  return {
+    runs,
+    winner: sorted[0]!,
+    reason: allSafe
+      ? { kind: 'most-confident-safe', among: valid.length }
+      : { kind: 'most-cautious', among: valid.length },
+  };
 }
 
 // Consensus: fire all, if majority agree on verdict, use that; otherwise use most cautious
 async function strategyConsensus(
+  providers: AIProvider[],
   request: AnalysisRequest,
   signal?: AbortSignal,
-): Promise<{ result: ProviderSignal | null; providerId: ProviderId | null }> {
-  const providers = getActiveProviders();
-  if (providers.length === 0) return { result: null, providerId: null };
-  if (providers.length === 1) return strategyFallback(request, signal);
+): Promise<StrategyOutcome> {
+  const runs = await callAll(providers, request, signal);
+  const valid = answeredRuns(runs);
 
-  const validResults = await callAll(providers, request, signal);
+  if (valid.length === 0) return { runs, winner: null, reason: { kind: 'silence' } };
+  if (valid.length === 1) return { runs, winner: valid[0]!, reason: { kind: 'sole-answer' } };
 
-  if (validResults.length === 0) return { result: null, providerId: null };
-  if (validResults.length === 1) return validResults[0] ?? { result: null, providerId: null };
-
-  // Count verdicts
   const verdictCounts: Record<string, number> = {};
-  for (const { result } of validResults) {
-    const band = riskBand(result.value);
+  for (const run of valid) {
+    const band = riskBand(run.signal!.value);
     verdictCounts[band] = (verdictCounts[band] ?? 0) + 1;
   }
 
-  // Check if any verdict reaches consensus threshold
-  const threshold = Math.ceil(validResults.length * getConfig().consensusThreshold);
+  const threshold = Math.ceil(valid.length * getConfig().consensusThreshold);
   let consensusVerdict: string | null = null;
   for (const [verdict, count] of Object.entries(verdictCounts)) {
     if (count >= threshold) {
@@ -254,38 +413,101 @@ async function strategyConsensus(
   }
 
   if (consensusVerdict) {
-    // Return the result from consensus group with median risk score
-    const consensusResults = validResults.filter((r) => riskBand(r.result.value) === consensusVerdict);
-    consensusResults.sort((a, b) => a.result.value - b.result.value);
-    const medianIdx = Math.floor(consensusResults.length / 2);
-    return consensusResults[medianIdx] ?? { result: null, providerId: null };
+    const agreeing = valid.filter((r) => riskBand(r.signal!.value) === consensusVerdict);
+    const dissenting = valid.filter((r) => riskBand(r.signal!.value) !== consensusVerdict);
+    const sorted = [...agreeing].sort((a, b) => a.signal!.value - b.signal!.value);
+    const median = sorted[Math.floor(sorted.length / 2)]!;
+
+    return {
+      runs,
+      winner: median,
+      reason: {
+        kind: 'consensus',
+        band: consensusVerdict,
+        agreeing: agreeing.map((r) => r.id),
+        dissenting: dissenting.map((r) => r.id),
+        threshold,
+      },
+    };
   }
 
   // No consensus: return most cautious (highest risk) to protect user
-  validResults.sort((a, b) => b.result.value - a.result.value);
-  return validResults[0] ?? { result: null, providerId: null };
+  const sorted = [...valid].sort((a, b) => b.signal!.value - a.signal!.value);
+  return {
+    runs,
+    winner: sorted[0]!,
+    reason: {
+      kind: 'no-consensus',
+      bands: [...new Set(valid.map((r) => riskBand(r.signal!.value)))],
+    },
+  };
 }
 
 // =============================================================================
 // Main orchestration entry point
 // =============================================================================
 
+export interface OrchestrationResult {
+  result: ProviderSignal | null;
+  providerId: ProviderId | null;
+  /** El acta. Se levanta siempre; mirarla o no es cosa de quien llama. */
+  deliberation: Deliberation;
+}
+
 export async function orchestrateAnalysis(
   request: AnalysisRequest,
   signal?: AbortSignal,
-): Promise<{ result: ProviderSignal | null; providerId: ProviderId | null }> {
+): Promise<OrchestrationResult> {
   const config = getConfig();
+  const providers = getActiveProviders();
+  const started = now();
 
-  switch (config.strategy) {
+  // Con uno solo no hay nada que carrear ni consensuar, sea cual sea la
+  // estrategia elegida: se le pregunta y ya.
+  const outcome =
+    providers.length === 0
+      ? { runs: [], winner: null, reason: { kind: 'silence' } as DecisionReason }
+      : providers.length === 1
+        ? await strategyFallback(providers, request, signal)
+        : await runStrategy(config.strategy, providers, request, signal);
+
+  const runs = [...outcome.runs, ...idleRuns(providers)];
+  const injectionIds = request.hardening.injectionAttempts.map((a) => a.id);
+
+  return {
+    result: outcome.winner?.signal ?? null,
+    providerId: (outcome.winner?.id as ProviderId | undefined) ?? null,
+    deliberation: {
+      strategy: providers.length === 1 ? 'fallback' : config.strategy,
+      runs,
+      winner: (outcome.winner?.id as ProviderId | undefined) ?? null,
+      reason:
+        providers.length === 1 && outcome.winner
+          ? { kind: 'sole-answer' }
+          : outcome.reason,
+      injectionIds,
+      suspicions: findSuspicions(runs, injectionIds.length > 0),
+      totalMs: Math.round(now() - started),
+    },
+  };
+}
+
+function runStrategy(
+  strategy: ProviderStrategy,
+  providers: AIProvider[],
+  request: AnalysisRequest,
+  signal?: AbortSignal,
+): Promise<StrategyOutcome> {
+  switch (strategy) {
     case 'race':
-      return strategyRace(request, signal);
+      return strategyRace(providers, request, signal);
     case 'best-result':
-      return strategyBestResult(request, signal);
+      return strategyBestResult(providers, request, signal);
     case 'consensus':
-      return strategyConsensus(request, signal);
+      return strategyConsensus(providers, request, signal);
     case 'fallback':
     default:
-      return strategyFallback(request, signal);
+      return strategyFallback(providers, request, signal);
   }
 }
 

@@ -4,13 +4,14 @@ import type { ScamAnalysis } from '@/store/useNadaStore';
 import { useNadaStore } from '@/store/useNadaStore';
 import { translations } from '@/utils/translations';
 import { FeedbackPrompt } from './FeedbackPrompt';
+import { DeliberationTerminal } from './DeliberationTerminal';
 
 interface ResultPanelProps {
   result: ScamAnalysis;
 }
 
 export function ResultPanel({ result }: ResultPanelProps) {
-  const { language } = useNadaStore();
+  const { language, activeTab } = useNadaStore();
   const t = translations[language];
   const [showDetails, setShowDetails] = useState(true);
 
@@ -159,6 +160,13 @@ export function ResultPanel({ result }: ResultPanelProps) {
             </div>
           )}
         </div>
+      )}
+
+      {/* La deliberacion entre modelos. Solo en modo tecnico: a quien esta
+          mirando si le escriben un fraude no le sirve de nada, y a quien tiene
+          que auditar el sistema no le sirve ninguna otra cosa. */}
+      {activeTab === 'debug' && result.deliberation && (
+        <DeliberationTerminal deliberation={result.deliberation} />
       )}
 
       {/* ¿Acerto? — la unica via por la que un error del sistema puede llegar
