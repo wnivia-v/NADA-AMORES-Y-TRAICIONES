@@ -7,7 +7,7 @@ import { isExplicitThreatCategory } from '@/shared/risk/config';
 import type { FusionResult } from '@/shared/risk/types';
 import { orchestrateAnalysis } from './aiProviders';
 import { buildAnalysisRequest } from '@/shared/llm/envelope';
-import { INJECTION_SIGNAL_WEIGHT } from '@/shared/llm/injectionScan';
+import { injectionSignalWeight } from '@/shared/llm/injectionScan';
 import type { AnalysisRequest } from '@/shared/llm/types';
 import type { ScamAnalysis } from '@/store/useNadaStore';
 import { feedbackService } from './feedbackService';
@@ -134,7 +134,7 @@ function recordInjectionAttempts(request: AnalysisRequest, scope: AnalysisScope)
     `[NADA][${scope}] intento de manipulacion del analizador:`,
     attempts.map((a) => a.id).join(', '),
   );
-  getFusionEngine(scope as RiskLane).addSignal('injection-attempt', INJECTION_SIGNAL_WEIGHT);
+  getFusionEngine(scope as RiskLane).addSignal('injection-attempt', injectionSignalWeight(attempts));
 }
 
 // =============================================================================

@@ -30,6 +30,7 @@
     "bench:fusion-sweep": "tsx bench/fusion-sweep.ts",
     "bench:regex": "tsx bench/measure-regex.ts",
     "bench:regions": "tsx bench/lexicon-regions.ts",
+    "bench:redteam": "tsx bench/injection-redteam.ts",
     "bench:vision": "node bench/chromium-smoke.mjs",
     "preview:deliberacion": "tsx bench/deliberation-preview.tsx",
     "backoffice": "tsx bench/backoffice.ts",

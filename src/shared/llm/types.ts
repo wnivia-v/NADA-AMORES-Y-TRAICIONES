@@ -28,6 +28,17 @@ export interface InjectionHit {
   id: string;
   /** Fragmento que disparo la deteccion, recortado. Solo para diagnostico. */
   excerpt: string;
+  /**
+   * En que VISTA del texto aparecio.
+   *
+   * 'plana' es el texto tal cual, ya normalizado. Las demas son el mismo texto
+   * deshecho de un disfraz: leetspeak, letras espaciadas, invertido, base64,
+   * rot13. La distincion no es cosmetica — encontrar "ignora las instrucciones"
+   * despues de decodificar base64 dice mas que encontrarlo escrito, porque
+   * nadie codifica en base64 sin querer. Quien lea el informe tiene que poder
+   * verlo.
+   */
+  via?: 'plana' | 'leet' | 'espaciado' | 'invertido' | 'base64' | 'rot13';
 }
 
 /**

@@ -36,6 +36,24 @@ alarma por sí solo.
 
 ## 1. Inyección de prompt
 
+### El número
+
+| | |
+|---|---|
+| Ataques conocidos detectados | **40 / 40** |
+| Falsas alarmas sobre conversación normal | **0 / 11** |
+| Familias cubiertas | 6 + grupo de control |
+
+`npm run bench:redteam` — corpus en `src/data/injection-attacks.json`, suelo
+fijado en `src/tests/injectionRedteam.test.ts`.
+
+**Este número tiene una trampa y conviene decirla aquí y no en una nota al pie:
+el corpus lo escribió quien escribió los patrones.** Un 100% aquí no es un 100%
+en la calle. Lo que demuestra es que lo conocido está cubierto, que hay dónde
+meter lo que venga, y que si alguien rompe una defensa la CI lo dice. La partida
+empezó en 70% con 18.2% de falsas alarmas; ese es el valor real de tener el
+banco.
+
 La taxonomía de referencia es la de la guía de Cibersecurity.io, en cinco
 familias. Se anota lo que contiene cada una y, con la misma claridad, lo que no.
 
@@ -100,6 +118,31 @@ retira el disfraz, y lo que queda se analiza tal cual.
 
 El troceado y recomposición no tiene dónde ocurrir por lo mismo que 1.2: no hay
 varios turnos que combinar.
+
+**Lectura multi-vista.** Añadir un patrón por disfraz no termina nunca: el
+atacante inventa el siguiente después de leer el tuyo. En vez de multiplicar
+patrones se multiplican las **lecturas** — el mismo texto se deshace de cada
+disfraz conocido y los catorce patrones corren sobre cada resultado:
+
+| Vista | Deshace |
+|---|---|
+| `plana` | El texto ya normalizado |
+| `leet` | `1gn0r4` → `ignora` |
+| `espaciado` | `I g n o r a` → `ignora` |
+| `invertido` | Texto al revés |
+| `base64` | Carga útil codificada |
+| `rot13` | Idem |
+
+Catorce patrones por seis vistas cubren más que ochenta patrones sobre una, y se
+mantienen solos: un disfraz nuevo es una vista nueva, no una revisión de todo lo
+anterior. Esto sale gratis porque `foldForScan` **no toca el texto que se
+analiza** — alimenta únicamente al escáner, así que ahí se puede destrozar el
+texto sin consecuencias.
+
+Y el disfraz **pesa más**: `INJECTION_DISGUISE_BONUS` suma 20 sobre los 35 de
+base. Escribir «ignora las instrucciones» podría ser casualidad con mucha
+imaginación; escribirlo en base64 no lo es. La ofuscación no es cómo se cuela la
+intención — es la prueba de que la hay. Ni aun así alcanza para alarmar sola.
 
 ### 1.4 Manipulación de límites del prompt — la frontera instrucción/dato
 
@@ -260,18 +303,27 @@ Sin esta sección, el resto del documento sería propaganda.
    de esta lista que considero bloqueante para publicar.
 2. **La taxonomía es de segunda mano** (ver §1). Si la guía original detalla
    técnicas que no aparecen aquí, este mapa está incompleto.
-3. **Envenenamiento lento y coordinado.** Los topes frenan la ráfaga desde una
+3. **El 40/40 es sobre corpus propio.** Yo escribí los ataques y yo escribí los
+   patrones, así que mide cobertura de lo previsto, no resistencia a lo
+   imprevisto. La forma de que signifique más es que lo ataque alguien que no
+   sea quien lo defendió.
+4. **La ingeniería social sobre el modelo tiene suelo.** Una expresión regular
+   puede reconocer «ignora tus reglas»; no puede reconocer un párrafo emotivo
+   que nunca nombra una regla. Ahí lo que aguanta no es el escáner sino la
+   contención estructural del §1.6 — y por eso esa sección importa más que
+   todas las demás juntas.
+5. **Envenenamiento lento y coordinado.** Los topes frenan la ráfaga desde una
    cuenta. No hay nada contra muchas cuentas empujando poco durante meses, ni
    detección de coordinación entre cuentas. La medición contra el corpus curado
    sigue siendo la red, pero es una red al final del camino, no una alerta.
-4. **El corpus curado no tiene firma ni registro de cambios.** Se protege con la
+6. **El corpus curado no tiene firma ni registro de cambios.** Se protege con la
    revisión de código, como cualquier otro fichero versionado. Quien pueda
    fusionar en `main` puede editarlo.
-5. **Sin límite de ritmo distribuido.** Los limitadores son en memoria y por
+7. **Sin límite de ritmo distribuido.** Los limitadores son en memoria y por
    proceso: con varias instancias, cada una cuenta la suya.
-6. **El camino biométrico no se ha ejercitado con una cara real.** Los frames
+8. **El camino biométrico no se ha ejercitado con una cara real.** Los frames
    sintéticos son patrones, no caras.
-7. **Sin auditoría externa.** La revisión de seguridad de la PR #1 la hizo otro
+9. **Sin auditoría externa.** La revisión de seguridad de la PR #1 la hizo otro
    agente, no una persona independiente. Encontró tres fallos reales, lo que dice
    tanto de su utilidad como de que hacía falta.
 
@@ -283,9 +335,10 @@ Sin esta sección, el resto del documento sería propaganda.
    `antiPoisoning.test.ts` va a fallar. No lo silencies — pregúntate si ese
    lector recibe algo que venga de reportes. Si no, añádelo a la lista blanca
    **con el motivo escrito**.
-2. **Si tocas el sobre del prompt**, `promptInjection.test.ts` cubre los 9
-   ataques medidos. Que siga verde no basta: si la técnica es nueva, añade el
-   caso antes de arreglarlo.
+2. **Si aparece una técnica nueva**, el sitio es `src/data/injection-attacks.json`
+   — **añade el caso ANTES de arreglarlo**, para que quede medido que evadía. Si
+   además puede confundirse con conversación normal, añade el control junto al
+   ataque: sin grupo de control, «detecta el 100%» se consigue marcándolo todo.
 3. **Si relajas `autoRejectReason`**, estás quitando la única puerta que se
    cierra sola. Esa decisión es de la persona propietaria del proyecto.
 4. **Antes de publicar**, resuelve el punto 1 del §3.
