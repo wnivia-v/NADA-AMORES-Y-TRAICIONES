@@ -241,6 +241,8 @@ export const localProvider: AIProvider = {
   cost: 'free-local',
   // No quota: nothing leaves the machine.
 
+  requires: 'local-model',
+
   isAvailable(): boolean {
     // Availability is optimistic: the model is fetched on first use and cached.
     // We only report false once we know initialisation failed.

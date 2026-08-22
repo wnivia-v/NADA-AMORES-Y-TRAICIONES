@@ -109,6 +109,24 @@ class ProtectionEngine {
   private lastVoiceAlertAt = 0;
   private readonly VOICE_REALERT_MS = 25_000;
 
+  /**
+   * Espera antes de volver a intentar el reconocimiento cuando se cae.
+   *
+   * Antes no habia reintento: bastaban tres fallos de red seguidos —tres a
+   * cinco segundos— para declarar inservible el reconocedor del navegador, y si
+   * el motor local tampoco lograba descargar su modelo, la cadena se agotaba y
+   * el escudo se apagaba. Para siempre, hasta que alguien lo reactivara a mano.
+   *
+   * Pero la causa de esa caida casi nunca es permanente: una red que va y
+   * viene, un cortafuegos, una descarga fallida. Rendirse a los cinco segundos
+   * ante algo que puede arreglarse solo, y encima dejando el escudo apagado sin
+   * que nadie lo note, es lo peor de las dos opciones — quien lo activo cree
+   * que sigue protegido.
+   */
+  private readonly VOICE_RETRY_STEPS_MS = [5_000, 15_000, 30_000, 60_000];
+  private voiceRetryTimer: ReturnType<typeof setTimeout> | null = null;
+  private voiceRetries = 0;
+
   /** Local score at which the offline layer alerts on its own, without the AI. */
   private readonly LOCAL_VOICE_ALERT_MIN = 40;
 
@@ -379,6 +397,16 @@ class ProtectionEngine {
       lang: this.callbacks?.getLanguage() ?? 'es',
 
       onTranscript: (text, isFinal) => {
+        // Llego texto: se recupero de verdad. Se reinicia la escalera de espera
+        // y se retira el aviso, que si no se queda en pantalla contradiciendo a
+        // la transcripcion que corre debajo.
+        if (this.voiceRetries > 0) {
+          this.voiceRetries = 0;
+          this.callbacks?.onVoiceError(null);
+          this.callbacks?.onShieldStatusChange('voice', { active: true, scanning: true });
+          this.log('ESCUDO VOZ: reconocimiento recuperado.', 'success');
+        }
+
         if (isFinal) {
           this.voiceTranscript = `${this.voiceTranscript} ${text}`.trim();
           this.callbacks?.onVoiceTranscript(this.voiceTranscript);
@@ -412,6 +440,12 @@ class ProtectionEngine {
   }
 
   stopVoiceMonitoring() {
+    // Se limpia SIEMPRE, aunque voiceActive ya sea false: puede haber un
+    // reintento en vuelo que volveria a encender el escudo despues de que
+    // alguien lo apagase — el peor momento posible para reaparecer.
+    this.clearVoiceRetry();
+    this.voiceRetries = 0;
+
     if (!this.voiceActive) return;
     this.voiceActive = false;
 
@@ -449,23 +483,66 @@ class ProtectionEngine {
    * arriving here means the shield genuinely cannot listen.
    */
   private handleVoiceError(code: VoiceErrorCode, detail?: string) {
-    this.voiceActive = false;
-    this.callbacks?.onShieldStatusChange('voice', { active: false, scanning: false });
     this.callbacks?.onVoiceSpeechActive(false);
 
     const messages: Record<VoiceErrorCode, string> = {
       'not-allowed': '❌ Permiso de microfono denegado. Habilitalo en los ajustes del navegador o del sistema y volve a activar el escudo.',
       'no-microphone': '❌ No se detecto ningun microfono. Revisa que el dispositivo de entrada correcto este conectado y seleccionado.',
-      'engine-unavailable': '❌ No se pudo iniciar el reconocimiento de voz en este dispositivo.',
-      unknown: '❌ El escudo de voz se detuvo por un error inesperado.',
+      'engine-unavailable': 'No se pudo iniciar el reconocimiento de voz.',
+      unknown: 'El escudo de voz se detuvo por un error inesperado.',
     };
 
     // `detail` carries the last engine's own explanation (blocked network,
     // model download failure). It is the actionable half of the message, so
     // it must not be dropped in favour of the generic text.
     const msg = detail ? `${messages[code]} ${detail}` : messages[code];
-    this.callbacks?.onVoiceError(msg);
-    this.log(`ESCUDO VOZ: Detenido — ${msg}`, 'error');
+
+    // Un microfono denegado o ausente no se arregla esperando: hace falta que
+    // una persona toque algo. Reintentar seria pedir permiso una y otra vez.
+    const permanente = code === 'not-allowed' || code === 'no-microphone';
+
+    if (permanente || !this.voiceActive) {
+      this.voiceActive = false;
+      this.clearVoiceRetry();
+      this.callbacks?.onShieldStatusChange('voice', { active: false, scanning: false });
+      this.callbacks?.onVoiceError(msg);
+      this.log(`ESCUDO VOZ: Detenido — ${msg}`, 'error');
+      return;
+    }
+
+    // Todo lo demas se reintenta solo. El escudo sigue ACTIVO —quien lo puso no
+    // tiene que acordarse de nada— pero no escuchando, y eso se dice con esas
+    // palabras: decir "activo" a secas mientras no se oye nada seria peor que
+    // apagarlo, porque promete una vigilancia que no existe.
+    const espera = this.VOICE_RETRY_STEPS_MS[
+      Math.min(this.voiceRetries, this.VOICE_RETRY_STEPS_MS.length - 1)
+    ]!;
+    this.voiceRetries++;
+
+    const segundos = Math.round(espera / 1000);
+    this.callbacks?.onShieldStatusChange('voice', { active: true, scanning: false });
+    this.callbacks?.onVoiceError(
+      `⚠️ ${msg} Sin escuchar ahora mismo; se reintenta en ${segundos} s (intento ${this.voiceRetries}).`,
+    );
+    this.log(`ESCUDO VOZ: ${msg} Reintento en ${segundos} s.`, 'warning');
+
+    this.clearVoiceRetry();
+    this.voiceRetryTimer = setTimeout(() => {
+      this.voiceRetryTimer = null;
+      if (!this.voiceActive) return;
+      this.log('ESCUDO VOZ: reintentando el reconocimiento...', 'info');
+      // voiceActive sigue en true, asi que startVoiceMonitoring saldria de
+      // inmediato: se baja la bandera justo para esta reentrada.
+      this.voiceActive = false;
+      void this.startVoiceMonitoring();
+    }, espera);
+  }
+
+  private clearVoiceRetry() {
+    if (this.voiceRetryTimer) {
+      clearTimeout(this.voiceRetryTimer);
+      this.voiceRetryTimer = null;
+    }
   }
 
   private maybeAnalyzeVoiceFragment(text: string) {

@@ -26,6 +26,26 @@ export type ProviderId = 'local' | 'gemini' | 'groq' | 'claude' | 'bedrock';
 /** How a provider is paid for. Surfaced in the UI so the cost is never a surprise. */
 export type ProviderCost = 'free-local' | 'free-tier' | 'paid';
 
+/**
+ * Que necesita un proveedor para poder trabajar.
+ *
+ * Existe porque la interfaz decia "Falta configurar la clave" a TODO proveedor
+ * no disponible, y desde que las claves se movieron al servidor eso es falso:
+ * la app ya no tiene donde guardar una clave de Groq ni de Claude. Mandaba a
+ * quien lo leyera a buscar en Ajustes un campo que no existe, mientras lo que
+ * de verdad faltaba —la URL del backend— no se mencionaba en ninguna parte.
+ *
+ * Un mensaje de error que apunta al sitio equivocado cuesta mas tiempo que no
+ * tener mensaje.
+ */
+export type ProviderRequirement =
+  /** El servidor de NADA (VITE_NADA_API_URL). Las claves viven ALLI, no aqui. */
+  | 'backend'
+  /** Un proyecto de Firebase configurado en el cliente. */
+  | 'firebase'
+  /** Un modelo que corre en el dispositivo y no llego a cargar. */
+  | 'local-model';
+
 export interface AIProvider {
   id: ProviderId;
   name: string;
@@ -33,6 +53,8 @@ export interface AIProvider {
   cost: ProviderCost;
   /** Published quota for the free tier, used to avoid 429s. Omit if unlimited. */
   limits?: RateLimits;
+  /** Que le falta cuando isAvailable() es false. Para que la interfaz no invente. */
+  requires: ProviderRequirement;
   isAvailable(): boolean;
   /**
    * Analiza una peticion ya endurecida y empaquetada.

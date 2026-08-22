@@ -8,6 +8,7 @@ import type {
   AIProvider,
   ProviderOrchestrationConfig,
   ProviderId,
+  ProviderRequirement,
   ProviderStrategy,
 } from './types';
 import type { AnalysisRequest, ProviderSignal } from '@/shared/llm/types';
@@ -519,6 +520,8 @@ export interface ProviderStatus {
   cost: AIProvider['cost'];
   /** Remaining free-tier allowance, null when the provider has no quota. */
   quota: { minuteRemaining: number; dayRemaining: number } | null;
+  /** Que le falta, cuando no esta disponible. null si lo esta. */
+  missing: ProviderRequirement | null;
 }
 
 // Get list of all providers with their availability, cost and remaining quota
@@ -528,13 +531,15 @@ export function getProvidersStatus(): ProviderStatus[] {
     const snapshot = provider.limits
       ? getRateLimiter(provider.id, provider.limits).snapshot()
       : null;
+    const disponible = provider.isAvailable();
 
     return {
       id: id as ProviderId,
       name: provider.name,
-      available: provider.isAvailable(),
+      available: disponible,
       enabled: config.providers[id as ProviderId]?.enabled ?? false,
       cost: provider.cost,
+      missing: disponible ? null : provider.requires,
       quota: snapshot
         ? { minuteRemaining: snapshot.minuteRemaining, dayRemaining: snapshot.dayRemaining }
         : null,

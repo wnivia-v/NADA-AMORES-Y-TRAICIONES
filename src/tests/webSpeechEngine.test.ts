@@ -187,4 +187,116 @@ describe('WebSpeechEngine restart policy', () => {
     expect(live).toBe(current);
     expect(h.onFatal).not.toHaveBeenCalled();
   });
+
+  // ── Escalera de espera en silencio ────────────────────────────────────────
+  //
+  // Reportado usando la app: un pitido cada siete segundos con el escudo
+  // puesto. El sonido lo pone Android en cada recognition.start(), y el
+  // navegador cierra la sesion tras unos segundos de silencio, asi que
+  // reabrir a los 250 ms convertia una sala en calma en una alarma de horno.
+  describe('espera creciente cuando no hay nadie hablando', () => {
+    /** Termina una sesion SIN voz y deja pasar `ms`. */
+    function silencio(ms: number) {
+      live?.onaudiostart?.();
+      live?.onend?.();
+      vi.advanceTimersByTime(ms);
+    }
+
+    it('las dos primeras veces reabre rapido: una pausa al respirar no cuenta', async () => {
+      const engine = new WebSpeechEngine();
+      await engine.start('es', handlers());
+      const primero = live;
+
+      silencio(300);
+      expect(live).not.toBe(primero);
+
+      engine.stop();
+    });
+
+    it('en silencio sostenido deja de reabrir cada pocos milisegundos', async () => {
+      const engine = new WebSpeechEngine();
+      await engine.start('es', handlers());
+
+      silencio(300);  // 1a: rapida
+      silencio(300);  // 2a: rapida
+      const antes = live;
+
+      // 3a sesion en silencio: ya no reabre en 300 ms.
+      live?.onaudiostart?.();
+      live?.onend?.();
+      vi.advanceTimersByTime(300);
+      expect(live).toBe(antes);
+
+      // Pero reabre. No se queda muerto, que seria el otro extremo.
+      vi.advanceTimersByTime(2000);
+      expect(live).not.toBe(antes);
+
+      engine.stop();
+    });
+
+    it('una sola palabra devuelve el ritmo rapido', async () => {
+      const engine = new WebSpeechEngine();
+      await engine.start('es', handlers());
+
+      for (let i = 0; i < 5; i++) silencio(9000);
+
+      // Alguien habla.
+      live?.onspeechstart?.();
+      live?.onend?.();
+      vi.advanceTimersByTime(300);
+      const trasHablar = live;
+
+      // Y la siguiente vuelve a ser rapida.
+      live?.onspeechstart?.();
+      live?.onend?.();
+      vi.advanceTimersByTime(300);
+      expect(live).not.toBe(trasHablar);
+
+      engine.stop();
+    });
+
+    it('alguien presente y callado NO cuesta ocho segundos de sordera', async () => {
+      // La primera version media "sin transcripcion" en vez de "sin voz", y
+      // penalizaba a quien esta delante hablando bajito o con ruido de fondo.
+      //
+      // Se queda en DOS sesiones a proposito: a la tercera con voz y sin texto
+      // el motor se rinde por otra regla —"hablo y no volvio nada"— que es
+      // correcta y anterior a esto. Lo que se prueba aqui es solo que la voz
+      // impide la escalera de espera, no lo que pasa despues.
+      const engine = new WebSpeechEngine();
+      await engine.start('es', handlers());
+
+      for (let i = 0; i < 2; i++) {
+        live?.onaudiostart?.();
+        live?.onspeechstart?.();
+        live?.onend?.();
+        vi.advanceTimersByTime(300);
+      }
+
+      // Tercera reapertura, tambien rapida: la voz reinicio el contador cada vez.
+      const antes = live;
+      live?.onaudiostart?.();
+      live?.onend?.();
+      vi.advanceTimersByTime(300);
+      expect(live).not.toBe(antes);
+
+      engine.stop();
+    });
+
+    it('parar durante una espera larga no deja un reinicio en vuelo', async () => {
+      const engine = new WebSpeechEngine();
+      await engine.start('es', handlers());
+
+      for (let i = 0; i < 4; i++) silencio(9000);
+      const ultimo = live;
+
+      live?.onaudiostart?.();
+      live?.onend?.();
+      engine.stop();
+
+      vi.advanceTimersByTime(60_000);
+      expect(live).toBe(ultimo);
+    });
+  });
+
 });

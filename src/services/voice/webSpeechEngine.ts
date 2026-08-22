@@ -90,6 +90,33 @@ const UNPRODUCTIVE_SESSIONS_BEFORE_GIVING_UP = 3;
 
 const RESTART_DELAY_MS = 250;
 
+/**
+ * Espera creciente cuando la sala esta en silencio.
+ *
+ * El navegador cierra la sesion tras unos segundos de silencio, digamos lo que
+ * digamos en `continuous`, y hasta ahora `onend` volvia a abrirla a los 250 ms.
+ * En un escritorio eso no se nota. En Android si: el sistema toca su campanita
+ * de "escuchando" en CADA arranque, y el resultado era un pitido cada siete
+ * segundos durante todo el rato que el escudo estuviera puesto — sobre una
+ * conversacion en la que puede que nadie este hablando.
+ *
+ * Ese sonido no lo podemos silenciar: lo pone el sistema operativo, no la
+ * pagina. Lo que si podemos es dejar de provocarlo. Si nadie habla, se reabre
+ * cada vez mas despacio; en cuanto alguien habla, se vuelve a los 250 ms.
+ *
+ * Reabrir despacio en una sala vacia no pierde nada, porque no hay nada que
+ * transcribir. Lo unico que se arriesga es el arranque de la primera frase tras
+ * un silencio largo, y por eso el tope son 8 segundos y no un minuto.
+ */
+const QUIET_RESTART_STEPS_MS = [RESTART_DELAY_MS, 1000, 3000, 5000, 8000];
+
+/**
+ * Sesiones seguidas sin una sola palabra antes de empezar a espaciar.
+ *
+ * Dos, y no una, para que una pausa normal al respirar no cambie el ritmo.
+ */
+const QUIET_SESSIONS_BEFORE_SLOWING = 2;
+
 function getSpeechRecognitionCtor(): (new () => Recognition) | null {
   if (typeof window === 'undefined') return null;
   const w = window as unknown as Record<string, unknown>;
@@ -115,6 +142,8 @@ export class WebSpeechEngine implements VoiceEngine {
   private speechDetectedThisSession = false;
   /** Did this session produce any transcript at all? */
   private producedResultThisSession = false;
+  /** Sesiones seguidas sin transcripcion. Gobierna cuanto se espera al reabrir. */
+  private quietSessions = 0;
 
   isAvailable(): boolean {
     return getSpeechRecognitionCtor() !== null;
@@ -134,6 +163,7 @@ export class WebSpeechEngine implements VoiceEngine {
     this.wedgedRestarts = 0;
     this.networkFailures = 0;
     this.unproductiveSessions = 0;
+    this.quietSessions = 0;
 
     this.launch();
   }
@@ -245,9 +275,33 @@ export class WebSpeechEngine implements VoiceEngine {
         }
       }
 
+      // Silencio -> se reabre cada vez mas despacio, para no provocar la
+      // campanita del sistema cada pocos segundos. Una palabra basta para
+      // volver al ritmo rapido.
+      // La condicion es que NADIE HAYA HABLADO, no que no haya transcripcion.
+      //
+      // Son cosas distintas y confundirlas cuesta caro: si alguien hablo y no
+      // volvio texto, el problema es el reconocedor —y de eso ya se ocupa el
+      // contador de sesiones improductivas— pero hay una persona ahi delante y
+      // espaciar la reapertura le costaria hasta ocho segundos de sordera justo
+      // cuando vuelva a hablar. Solo se ralentiza la sala vacia.
+      if (this.speechDetectedThisSession || this.producedResultThisSession) {
+        this.quietSessions = 0;
+      } else {
+        this.quietSessions++;
+      }
+
+      const paso = Math.max(0, this.quietSessions - QUIET_SESSIONS_BEFORE_SLOWING);
+      const espera = QUIET_RESTART_STEPS_MS[Math.min(paso, QUIET_RESTART_STEPS_MS.length - 1)]!;
+
+      // Se limpia antes de armar: dos temporizadores vivos abririan dos
+      // reconocedores, y el segundo dejaria al primero huerfano tocando la
+      // campanita por su cuenta.
+      if (this.restartTimer) clearTimeout(this.restartTimer);
       this.restartTimer = setTimeout(() => {
+        this.restartTimer = null;
         if (this.running) this.launch();
-      }, RESTART_DELAY_MS);
+      }, espera);
     };
 
     this.recognition = recognition;

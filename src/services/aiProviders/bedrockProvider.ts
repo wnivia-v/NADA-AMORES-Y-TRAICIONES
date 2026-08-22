@@ -18,6 +18,8 @@ export const bedrockProvider: AIProvider = {
   name: 'AWS Bedrock (requiere proxy propio)',
   cost: 'paid',
 
+  requires: 'backend',
+
   isAvailable(): boolean {
     return hasProxy();
   },

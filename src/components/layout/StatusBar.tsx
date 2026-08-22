@@ -35,7 +35,9 @@ export function StatusBar() {
         <div className="flex items-center gap-2 px-4 py-2 border-b" style={{ background: 'var(--warning-light, rgba(255,170,0,0.1))', borderColor: 'var(--border)' }}>
           <AlertTriangle className="w-3.5 h-3.5 shrink-0" style={{ color: 'var(--warning)' }} />
           <p className="text-[10px] font-medium" style={{ color: 'var(--warning)' }}>
-            Modo degradado — Solo analisis local (sin IA). Configura una API key en Ajustes.
+            Modo degradado — solo analisis local, sin capa de lenguaje. Las claves de las IAs
+            viven en el servidor de NADA: revisa VITE_NADA_API_URL, o el proyecto de Firebase
+            para Gemini. Mira Ajustes para ver que le falta a cada una.
           </p>
         </div>
       )}

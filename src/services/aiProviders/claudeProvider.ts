@@ -16,6 +16,8 @@ export const claudeProvider: AIProvider = {
   name: 'Anthropic Claude (de pago)',
   cost: 'paid',
 
+  requires: 'backend',
+
   isAvailable(): boolean {
     return hasProxy();
   },

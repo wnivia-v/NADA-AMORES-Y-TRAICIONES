@@ -25,6 +25,7 @@ export type {
   ProviderId,
   ProviderStrategy,
   ProviderCost,
+  ProviderRequirement,
 } from './types';
 export { DEFAULT_PROVIDER_CONFIG } from './types';
 export type {

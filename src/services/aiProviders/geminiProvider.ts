@@ -55,6 +55,8 @@ export const geminiProvider: AIProvider = {
   // los 15 RPM publicados para que una rafaga no dispare un 429.
   limits: { rpm: 14, rpd: 1400 },
 
+  requires: 'firebase',
+
   isAvailable(): boolean {
     return hasValidConfig && app !== null;
   },

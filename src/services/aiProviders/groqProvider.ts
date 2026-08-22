@@ -18,6 +18,8 @@ export const groqProvider: AIProvider = {
   cost: 'free-tier',
   limits: { rpm: 30, rpd: 1000 },
 
+  requires: 'backend',
+
   isAvailable(): boolean {
     return hasProxy();
   },

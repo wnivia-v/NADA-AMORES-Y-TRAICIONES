@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNadaStore } from '@/store/useNadaStore';
 import { translations } from '@/utils/translations';
 import { getProvidersStatus, getProviderConfig, saveProviderConfig } from '@/services/aiProviders';
-import type { ProviderStrategy, ProviderId, ProviderCost } from '@/services/aiProviders';
+import type { ProviderStrategy, ProviderId, ProviderCost, ProviderRequirement } from '@/services/aiProviders';
 import { Palette, Globe, Code, Brain, Zap, Shield, Layers, Laptop, Cloud, CreditCard } from 'lucide-react';
 import { PrivacyPanel } from './PrivacyPanel';
 import { AccountPanel } from './AccountPanel';
@@ -25,6 +25,30 @@ const COST_INFO: Record<ProviderCost, { icon: typeof Laptop; es: string; en: str
   'free-local': { icon: Laptop, es: 'Gratis · en tu equipo', en: 'Free · on your device', color: 'var(--success)' },
   'free-tier': { icon: Cloud, es: 'Gratis · con limite', en: 'Free · rate limited', color: 'var(--accent)' },
   paid: { icon: CreditCard, es: 'Requiere pago', en: 'Requires payment', color: 'var(--warning)' },
+};
+
+/**
+ * Que decir cuando un proveedor no esta disponible.
+ *
+ * Antes habia una sola frase —"Falta configurar la clave"— para los cinco. Es
+ * falsa desde que las claves de Groq, Claude y Bedrock se movieron al servidor:
+ * la app ya no tiene donde guardarlas, y quien leyera eso se iba a buscar a
+ * Ajustes un campo que no existe. Lo que de verdad faltaba, la URL del backend,
+ * no se nombraba en ningun sitio.
+ */
+const FALTA: Record<ProviderRequirement, { es: string; en: string }> = {
+  backend: {
+    es: 'Falta el servidor de NADA (VITE_NADA_API_URL). La clave va alli, no aqui.',
+    en: 'NADA backend not set (VITE_NADA_API_URL). The key lives there, not here.',
+  },
+  firebase: {
+    es: 'Falta el proyecto de Firebase en .env.local',
+    en: 'Firebase project missing from .env.local',
+  },
+  'local-model': {
+    es: 'El modelo local no se pudo cargar',
+    en: 'Local model failed to load',
+  },
 };
 
 export function SettingsView() {
@@ -107,13 +131,7 @@ export function SettingsView() {
                       : language === 'es'
                         ? 'Sin limite de consultas'
                         : 'No request limit'
-                    : provider.cost === 'free-local'
-                      ? language === 'es'
-                        ? 'Modelo no disponible'
-                        : 'Model unavailable'
-                      : language === 'es'
-                        ? 'Falta configurar la clave'
-                        : 'API key not configured'}
+                    : FALTA[provider.missing ?? 'backend'][language === 'es' ? 'es' : 'en']}
                 </p>
               </div>
               <button
