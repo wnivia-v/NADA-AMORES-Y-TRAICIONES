@@ -140,6 +140,27 @@ class FeedbackService {
     });
   }
 
+  /** Marca como entregados los reportes que el servidor acepto. */
+  async markSent(ids: string[]): Promise<void> {
+    const db = await this.open();
+    if (!db) return;
+
+    const all = await this.all();
+    const byId = new Map(all.map((r) => [r.id, r]));
+    try {
+      const store = db.transaction(STORE_NAME, 'readwrite').objectStore(STORE_NAME);
+      for (const id of ids) {
+        const report = byId.get(id);
+        // Se conserva el reporte con el estado cambiado en vez de borrarlo:
+        // asi el usuario puede seguir viendo —y exportando— lo que aporto.
+        if (report) store.put({ ...report, status: 'sent' as const });
+      }
+    } catch {
+      // Sin marcar, se reintentara. Reenviar un reporte es inocuo: el servidor
+      // le da un id propio y el duplicado se ve al agrupar.
+    }
+  }
+
   /**
    * Borra los reportes anteriores al corte. Aplica la retencion del pack.
    *

@@ -1,8 +1,137 @@
-﻿generator client {
+// =============================================================================
+// Esquema de NADA — Modo B
+//
+// Hasta ahora este archivo tenia cero modelos: declaraba el datasource y nada
+// mas. Aqui esta lo que el Modo B necesita guardar, que es poco a proposito.
+//
+// Dos reglas gobiernan lo que hay y lo que no:
+//
+//   1. §4.1 — NADA BIOMETRICO. No hay tabla de frames, ni de audio, ni de
+//      landmarks, ni un campo donde pudieran caber. Un reporte del escudo de
+//      video llega con `content` a null y asi se guarda. No es una omision que
+//      alguien pueda "completar" luego: completarla seria reescribir el
+//      producto.
+//   2. BORRAR TIENE QUE BORRAR. Todo lo que pertenece a una persona cuelga de
+//      Account con onDelete: Cascade. Ejercer el derecho de supresion es
+//      eliminar una fila, no acordarse de siete sitios.
+//
+// ESTADO: el esquema esta escrito, las migraciones NO se han ejecutado nunca —
+// no hay base de datos donde hacerlo. El servidor corre hoy sobre el repositorio
+// en memoria (server/src/store/memory.ts), que implementa el mismo contrato y si
+// esta probado. Conectar Prisma es el paso que falta y necesita una base de
+// datos viva; escribir ese adaptador sin poder ejecutarlo seria codigo sin
+// verificar disfrazado de trabajo terminado.
+// =============================================================================
+
+generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+}
+
+/// Una persona con cuenta. El correo es el unico dato personal que se guarda.
+model Account {
+  id           String    @id
+  email        String    @unique
+  /// Derivada con scrypt. Nunca la contraseña.
+  passwordHash String
+  passwordSalt String
+  /// Null mientras no confirme el correo. Sin confirmar no se aceptan reportes.
+  verifiedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  /// Region declarada al registrarse, para saber que pack regia.
+  region       String    @default("default")
+
+  sessions     Session[]
+  reports      Report[]
+  verifications Verification[]
+
+  @@map("accounts")
+}
+
+/// Sesion abierta. Se guarda el HASH del token, nunca el token.
+model Session {
+  /// SHA-256 del token que tiene el cliente. Ver server/src/auth/tokens.ts.
+  tokenHash String   @id
+  accountId String
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+
+  account   Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+/// Token de verificacion de correo. Tambien hasheado, y de un solo uso.
+model Verification {
+  tokenHash String   @id
+  accountId String
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+
+  account   Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId])
+  @@map("verifications")
+}
+
+/// Un reporte de que la deteccion acerto o fallo.
+model Report {
+  id        String   @id
+  accountId String
+  createdAt DateTime @default(now())
+
+  /// text | voice | image | clipboard | screen | video
+  surface   String
+  /// correct | incorrect
+  judgment  String
+  /// false-positive | false-negative | null si acerto
+  errorKind String?
+
+  // --- Lo que se enseño ---
+  band         String
+  riskScore    Int
+  alerted      Boolean
+  corroborated Boolean
+  scanSource   String
+
+  // --- Por que se decidio (el rastro) ---
+  /// IDs de las entradas del lexico que coincidieron. Lo accionable.
+  lexiconIds    String[]
+  combos        String[]
+  dampened      String[]
+  localScore    Int
+  llmScore      Int?
+  injectionHits String[]
+  /// [{ type, evidence }] — lo que sostuvo la fusion.
+  drivers       Json
+
+  // --- Contenido ---
+  /// Comentario libre del usuario.
+  note    String?
+  /// El texto analizado. SIEMPRE null cuando surface = 'video' (§4.1).
+  /// El servidor lo impone al recibir; el cliente no es una frontera de confianza.
+  content String?
+
+  // --- Contexto, para poder agrupar y fechar contra el codigo ---
+  region         String
+  language       String
+  appVersion     String
+  /// Huella del lexico vigente. Sin esto no se sabe si la queja ya se arreglo.
+  lexiconVersion String
+
+  /// Cuando lo miro el backoffice. Null = sin revisar.
+  reviewedAt DateTime?
+
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId])
+  @@index([errorKind, lexiconVersion])
+  @@index([reviewedAt])
+  @@map("reports")
 }

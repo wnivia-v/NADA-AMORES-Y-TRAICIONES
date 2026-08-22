@@ -831,6 +831,88 @@ probado; los valores son de partida.
 | Borrado del lado del servidor | **No existe**: no hay cuentas ni datos que borrar todavia. |
 | Envio de reportes | **Sigue sin existir.** La puerta (`mayShareReports`) ya esta puesta y cerrada. |
 
+## Cuentas y envio de reportes
+
+El envio existe. La cola local por fin se vacia, y solo cuando se cumplen tres
+cosas a la vez: consentimiento vigente para el ambito `reports`, sesion abierta
+con el correo verificado, y red. La comprobacion del consentimiento va primero,
+asi que ninguna de las otras dos puede mandar nada sin ella.
+
+### La cuenta existe por una razon concreta
+
+No es para saber quien eres: es para que **envenenar el corpus cueste algo**.
+
+El riesgo propio de esta funcion no es que alguien lea los reportes, es que
+alguien los ESCRIBA. Quien quiera que NADA deje de detectar su estafa solo tiene
+que mandar mil reportes diciendo que esos mensajes eran legitimos. Sin cuenta,
+mil reportes son mil formularios; con cuenta verificada, son mil buzones. Por
+eso **no hace falta cuenta para usar la app**, solo para contribuir, y la
+pantalla lo dice con esas palabras.
+
+### Tres decisiones de seguridad
+
+1. **Nunca se dice si un correo esta registrado.** Ni al registrarse ni al
+   entrar: misma respuesta, mismo cuerpo, y la contraseña se comprueba tambien
+   cuando la cuenta no existe para que el tiempo tampoco lo delate. Un
+   formulario que distingue "existe" de "no existe" es un comprobador de
+   cuentas, y en una app de seguridad personal eso es informacion sobre alguien
+   que puede estar usandola precisamente para huir de quien pregunta.
+2. **El §4.1 se impone en el SERVIDOR.** Si un reporte llega con
+   `surface: 'video'`, el contenido se descarta pase lo que pase. El cliente ya
+   lo hace, pero el cliente corre en la maquina de otra persona: puede estar
+   modificado, o la peticion puede estar fabricada a mano. La unica garantia que
+   vale es la que se comprueba de este lado — el mismo criterio que llevo a
+   re-endurecer el texto en `/v1/analyze`.
+3. **Borrar borra.** `DELETE /v1/accounts` se lleva cuenta, sesiones,
+   verificaciones y reportes en una sola llamada. Que sea una y no siete es lo
+   que hace que dentro de dos años no se olvide ninguna tabla. Hay un test que
+   lo comprueba tabla por tabla.
+
+Ademas: contraseñas con **scrypt** (no un hash rapido — si la base de datos se
+filtra, lo unico que las protege es cuanto cuesta probarlas), comparacion en
+tiempo constante, y los tokens de sesion se guardan **hasheados**, asi que quien
+lea la base de datos no puede suplantar a nadie con lo que hay dentro.
+
+Sin reglas de "una mayuscula y un simbolo": esas reglas producen `Password1!` en
+vez de una frase larga. Solo longitud minima.
+
+### Verificado contra un servidor en marcha
+
+| Paso | Esperado | Obtenido |
+|---|---|---|
+| Registro | 202 | 202 |
+| Registro repetido | respuesta identica | identica |
+| Reporte sin verificar el correo | 403 | 403 |
+| Verificar | 200 | 200 |
+| Verificar el mismo token otra vez | 400 (un solo uso) | 400 |
+| Reporte ya verificado | 201 | 201 |
+| Reporte sin sesion | 401 | 401 |
+| Borrar cuenta | 204 | 204 |
+| La sesion despues de borrar | 401 | 401 |
+
+### Lo que NO esta hecho, y por que
+
+**El adaptador de Prisma no existe.** `prisma/schema.prisma` esta escrito de
+verdad —cuatro modelos, cascadas de borrado, indices— pero **las migraciones no
+se han ejecutado nunca**: no hay ninguna base de datos en este entorno donde
+hacerlo.
+
+El servidor corre hoy sobre `server/src/store/memory.ts`, que implementa el
+mismo contrato (`Store`) y **si esta probado**: las reglas que importan —cuenta
+sin verificar no reporta, borrar borra, el limite de ritmo corta— se comprueban
+contra el, y son las mismas reglas que regiran con PostgreSQL detras. Lo que
+falta es un adaptador que traduzca ese contrato a Prisma.
+
+No lo he escrito a ciegas a proposito. Sin una base de datos donde ejecutarlo
+seria codigo sin verificar con aspecto de trabajo terminado, y en la capa que
+guarda las contraseñas y los datos personales de la gente eso es exactamente lo
+que no conviene tener.
+
+**Tampoco hay transporte de correo.** En desarrollo el enlace de verificacion se
+escribe en el registro del servidor; en produccion sin `MAIL_TRANSPORT` el
+servidor **avisa al arrancar** y el registro devuelve error. Es preferible
+fallar en el despliegue a fallar en silencio en manos de un usuario.
+
 ## Licencia
 
 Equipo Antigravity.

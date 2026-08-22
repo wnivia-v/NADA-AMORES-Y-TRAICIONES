@@ -8,6 +8,8 @@ import { Onboarding } from '@/components/ui/Onboarding';
 import { ConsentGate } from '@/components/ui/ConsentGate';
 import { loadPolicy, needsConsent, retentionCutoff } from '@/services/policyService';
 import { feedbackService } from '@/services/feedbackService';
+import { syncPendingReports } from '@/services/feedbackSync';
+import { verifyEmail } from '@/services/accountService';
 import { TextAnalyzer } from '@/components/analysis/TextAnalyzer';
 import { VoiceAnalyzer } from '@/components/analysis/VoiceAnalyzer';
 import { CameraAnalyzer } from '@/components/analysis/CameraAnalyzer';
@@ -63,9 +65,37 @@ export default function App() {
       }
 
       setPolicy(needsConsent() ? 'consent' : 'ready');
+
+      // Lo que quedo en cola de sesiones anteriores. syncPendingReports()
+      // comprueba por su cuenta el consentimiento y la sesion, asi que llamarlo
+      // sin mas es seguro: si falta algo, no manda nada.
+      void syncPendingReports();
     });
 
     return () => { cancelled = true; };
+  }, []);
+
+  /**
+   * Enlace de verificacion del correo: la app llega con ?token=... y lo canjea.
+   *
+   * El token se quita de la barra de direcciones en cuanto se usa. Un token de
+   * un solo uso en el historial del navegador —o en el `Referer` de la
+   * siguiente peticion— es un token compartido con mas gente de la que deberia.
+   */
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('token');
+    if (!token) return;
+
+    void verifyEmail(token).then((result) => {
+      addLog(
+        result.ok ? 'CUENTA: correo verificado.' : `CUENTA: no se pudo verificar (${result.error}).`,
+        result.ok ? 'success' : 'warning',
+      );
+      params.delete('token');
+      const query = params.toString();
+      window.history.replaceState({}, '', window.location.pathname + (query ? `?${query}` : ''));
+    });
   }, []);
 
   // Initialize protection engine and notifications

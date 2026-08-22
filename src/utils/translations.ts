@@ -118,6 +118,24 @@ export interface TranslationSet {
   privacyRegion: string;
   privacyRetention: string;
   privacyRetentionNone: string;
+  // Cuenta
+  accountTitle: string;
+  accountWhy: string;
+  accountEmail: string;
+  accountPassword: string;
+  accountRegister: string;
+  accountSignIn: string;
+  accountSignOut: string;
+  accountDelete: string;
+  accountDeleted: string;
+  accountHaveOne: string;
+  accountNeedOne: string;
+  accountCheckEmail: string;
+  accountNotVerified: string;
+  accountNeedsConsent: string;
+  accountSendPending: string;
+  accountSent: string;
+  accountNothingPending: string;
 }
 
 const es: TranslationSet = {
@@ -225,6 +243,23 @@ const es: TranslationSet = {
   privacyRegion: 'Region aplicada',
   privacyRetention: 'Historial conservado: {days} dias',
   privacyRetentionNone: 'El historial no se conserva entre sesiones',
+  accountTitle: 'Cuenta',
+  accountWhy: 'Solo hace falta para enviar reportes. La proteccion funciona igual sin registrarse. La cuenta existe para que nadie pueda mandar mil correcciones falsas y estropear la deteccion de todos.',
+  accountEmail: 'Correo',
+  accountPassword: 'Contraseña (minimo 10 caracteres)',
+  accountRegister: 'Crear cuenta',
+  accountSignIn: 'Entrar',
+  accountSignOut: 'Salir',
+  accountDelete: 'Borrar mi cuenta y mis reportes',
+  accountDeleted: 'Cuenta y reportes borrados.',
+  accountHaveOne: 'Ya tengo cuenta',
+  accountNeedOne: 'No tengo cuenta',
+  accountCheckEmail: 'Si el correo es valido, recibiras un enlace de verificacion.',
+  accountNotVerified: 'Verifica tu correo para poder enviar reportes.',
+  accountNeedsConsent: 'Activa el envio de reportes en Privacidad.',
+  accountSendPending: 'Enviar reportes pendientes',
+  accountSent: '{n} reporte(s) enviado(s).',
+  accountNothingPending: 'No hay nada pendiente de enviar.',
 };
 
 const en: TranslationSet = {
@@ -331,6 +366,23 @@ const en: TranslationSet = {
   privacyRegion: 'Applied region',
   privacyRetention: 'History kept for {days} days',
   privacyRetentionNone: 'History is not kept between sessions',
+  accountTitle: 'Account',
+  accountWhy: 'Only needed to send reports. Protection works the same without signing up. The account exists so nobody can send a thousand fake corrections and wreck detection for everyone.',
+  accountEmail: 'Email',
+  accountPassword: 'Password (at least 10 characters)',
+  accountRegister: 'Create account',
+  accountSignIn: 'Sign in',
+  accountSignOut: 'Sign out',
+  accountDelete: 'Delete my account and reports',
+  accountDeleted: 'Account and reports deleted.',
+  accountHaveOne: 'I already have an account',
+  accountNeedOne: "I don't have an account",
+  accountCheckEmail: 'If the email is valid, you will receive a verification link.',
+  accountNotVerified: 'Verify your email to send reports.',
+  accountNeedsConsent: 'Turn on report sharing in Privacy.',
+  accountSendPending: 'Send pending reports',
+  accountSent: '{n} report(s) sent.',
+  accountNothingPending: 'Nothing pending.',
 };
 
 export const translations: Record<'es' | 'en', TranslationSet> = { es, en };
