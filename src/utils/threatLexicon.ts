@@ -149,7 +149,16 @@ export const LEXICON: readonly LexiconEntry[] = [
   E({
     id: 'fin-send-money', category: 'fraude-financiero', weight: 25, langs: ['es'],
     label: 'Solicitud de dinero',
-    regex: /env[ií]\w*\s*(dinero|plata|pago|transferencia|lana)|(dinero|plata|lana|guita)\s+(necesit|urgente|env[ií]|mand[aá]|pas[aá])|(pas[aá]\w*|mand[aá]\w*|d[aá]\w*)\s+(la\s+)?(plata|lana|guita|dinero)/,
+    // La ultima alternativa cubre la peticion con CANTIDAD en vez de con la
+    // palabra "dinero": "mandame 300 euros", "que me mandes 500€". Faltaba, y
+    // el hueco era grande — pedir una cifra concreta es mas comun que pedir
+    // "dinero" a secas, y es justo lo que hace el guion del fraude del hijo.
+    //
+    // Los verbos van enumerados y NO con \w*: eso excluye la primera persona
+    // ("te mando 300 euros", "te devuelvo 20 euros"), que es alguien mandando
+    // dinero, no pidiendolo. Y el lookahead final evita que "20 euros" case
+    // dentro de "20 europeos" o "3 eurodiputados".
+    regex: /env[ií]\w*\s*(dinero|plata|pago|transferencia|lana)|(dinero|plata|lana|guita)\s+(necesit|urgente|env[ií]|mand[aá]|pas[aá])|(pas[aá]\w*|mand[aá]\w*|d[aá]\w*)\s+(la\s+)?(plata|lana|guita|dinero)|(mandame|mandes|manda|enviame|envies|envia|pasame|pases|pasa|ingresame|ingreses|ingresa|transfiereme|transfieras|transfiere)\s+(unos?\s+)?\d{1,6}\s*(€|euros?|eur|dolares|usd|pavos|pesos|soles|lucas)(?![a-z])/,
   }),
   E({
     id: 'fin-send-money-en', category: 'fraude-financiero', weight: 25, langs: ['en'],
@@ -851,3 +860,44 @@ export const DAMPENERS: readonly DampenerEntry[] = [
     regex: /((me\s*(ha\s*)?(ha\s*)?lleg(ado|o)|he\s*recibido|acabo\s*de\s*recibir|mira\s*lo\s*que\s*me)[^.]{0,60}(esto?|este\s*mensaje|este\s*sms)?[^.]{0,40}(es\s*(una\s*)?estafa|sera\s*estafa|es\s*fiable|es\s*verdad|es\s*real|tu\s*que\s*crees)|¿?(esto|este\s*mensaje|este\s*sms)\s*es\s*(una\s*)?(estafa|timo|phishing|fraude)\??)/,
   }),
 ];
+
+// =============================================================================
+// Huella del lexico
+//
+// Un reporte de un falso positivo sin saber contra QUE version del lexico se
+// produjo no sirve de mucho: llegaria una queja sobre una entrada que ya se
+// corrigio hace tres versiones y no habria forma de distinguirla de una queja
+// actual.
+//
+// Se calcula, no se mantiene a mano. Una constante que hay que acordarse de
+// subir cada vez que se toca una entrada acaba mintiendo — y miente en
+// silencio, que es lo peor que puede hacer un numero de version. Aqui la huella
+// sale de las propias entradas: si cambia una regex, cambia la huella, sin que
+// nadie tenga que hacer nada.
+// =============================================================================
+
+/**
+ * FNV-1a de 32 bits. Ni criptografico ni falta que hace: lo unico que se le
+ * pide es cambiar cuando cambie la entrada, y eso lo cumple de sobra.
+ */
+function fnv1a(text: string): string {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < text.length; i += 1) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash.toString(16).padStart(8, '0');
+}
+
+/**
+ * Identifica el vocabulario vigente: entradas, combinaciones y amortiguadores.
+ *
+ * Los tres cuentan porque los tres cambian el veredicto. Un amortiguador nuevo
+ * puede convertir un falso positivo en un acierto sin que ninguna entrada se
+ * haya tocado.
+ */
+export const LEXICON_VERSION: string = fnv1a([
+  ...LEXICON.map((e) => `${e.id}|${e.weight}|${e.regex.source}`),
+  ...COMBOS.map((c) => `combo:${c.label}|${c.bonus}|${[...c.requires].sort().join(',')}`),
+  ...DAMPENERS.map((d) => `damp:${d.id}|${d.regex.source}|${[...d.reduces].sort().join(',')}`),
+].sort().join('\n'));

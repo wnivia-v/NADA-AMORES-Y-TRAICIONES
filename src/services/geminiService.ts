@@ -10,6 +10,9 @@ import { buildAnalysisRequest } from '@/shared/llm/envelope';
 import { INJECTION_SIGNAL_WEIGHT } from '@/shared/llm/injectionScan';
 import type { AnalysisRequest } from '@/shared/llm/types';
 import type { ScamAnalysis } from '@/store/useNadaStore';
+import { feedbackService } from './feedbackService';
+import { LEXICON_VERSION } from '@/utils/threatLexicon';
+import type { AnalysisSurface, DecisionTrace, ShownVerdict } from '@/shared/feedback/types';
 
 // =============================================================================
 // AI Analysis Service — Multi-Provider Hybrid Pipeline
@@ -27,6 +30,42 @@ import type { ScamAnalysis } from '@/store/useNadaStore';
  * user could be shown "SEGURO" for text that was never sent to the AI.
  */
 export type AnalysisScope = 'ui' | 'clipboard' | 'screen' | 'voice';
+
+/**
+ * De donde vino el texto, para el reporte de feedback.
+ *
+ * No es lo mismo que el carril: 'ui' es un carril, pero el texto que llega por
+ * ahi puede haberlo escrito la usuaria o haberlo sacado el OCR de una captura.
+ * Un falso positivo causado por basura del OCR es un fallo distinto de uno
+ * causado por una entrada del lexico, y mezclarlos ensucia el corpus.
+ */
+const SURFACE_BY_SCOPE: Record<AnalysisScope, AnalysisSurface> = {
+  ui: 'text',
+  clipboard: 'clipboard',
+  screen: 'screen',
+  voice: 'voice',
+};
+
+/** Contexto comun a todo reporte: contra que version se produjo el analisis. */
+function reportContext() {
+  return {
+    // La region efectiva la fija el escaner; aqui se registra la configurada.
+    region: (globalThis.navigator?.language ?? 'es').split('-')[1]?.toLowerCase() ?? '*',
+    language: (globalThis.navigator?.language ?? 'es').split('-')[0] ?? 'es',
+    appVersion: import.meta.env.VITE_APP_VERSION || '0.0.0',
+    lexiconVersion: LEXICON_VERSION,
+  };
+}
+
+function shownFrom(result: ScamAnalysis): ShownVerdict {
+  return {
+    band: result.verdict,
+    riskScore: result.riskScore,
+    alerted: result.alert ?? false,
+    corroborated: result.corroborated ?? false,
+    scanSource: result.scanSource,
+  };
+}
 
 const controllers = new Map<AnalysisScope, AbortController>();
 
@@ -192,6 +231,49 @@ function composeResult(
   };
 }
 
+/**
+ * Guarda todo lo que se sabe de este analisis y devuelve el resultado con su id.
+ *
+ * Tiene que ocurrir AQUI, en el momento del analisis. El rastro de la decision
+ * —que entradas del lexico coincidieron, que amortiguadores retiraron peso, que
+ * sostuvo la fusion— vive dentro del motor y del escaner, y a la interfaz solo
+ * le llega el veredicto. Si no se captura ahora, cuando alguien pulse "no
+ * acerto" ya no habra nada que contarle a un agente salvo el texto y la
+ * puntuacion, que es justo lo que no basta para arreglar nada.
+ */
+function withDraft(
+  result: ScamAnalysis,
+  parts: { surface: AnalysisSurface; text: string; trace: DecisionTrace },
+): ScamAnalysis {
+  const analysisId = feedbackService.registerDraft({
+    surface: parts.surface,
+    shown: shownFrom(result),
+    trace: parts.trace,
+    content: parts.text,
+    context: reportContext(),
+  });
+
+  return { ...result, analysisId };
+}
+
+/** El rastro que deja un analisis completo. */
+function traceOf(
+  fusion: FusionResult,
+  localResult: ReturnType<typeof scanLocalPatterns>,
+  request: AnalysisRequest | null,
+  llmScore: number | null,
+): DecisionTrace {
+  return {
+    drivers: fusion.drivers.map((d) => ({ type: d.type, evidence: Math.round(d.evidence * 1000) / 1000 })),
+    lexiconIds: localResult.matches.map((m) => m.id),
+    combos: localResult.combos,
+    dampened: localResult.dampened,
+    localScore: localResult.riskScore,
+    llmScore,
+    injectionHits: request?.hardening.injectionAttempts.map((a) => a.id) ?? [],
+  };
+}
+
 // Extract URLs from text
 function extractUrls(text: string): string[] {
   const urlRegex = /https?:\/\/[^\s<>"{}|\\^`[\]]+/gi;
@@ -202,21 +284,37 @@ function extractUrls(text: string): string[] {
 // Main Export: analyzeText (multi-provider, cancellable)
 // =============================================================================
 
-export async function analyzeText(text: string, scope: AnalysisScope = 'ui'): Promise<ScamAnalysis> {
+export async function analyzeText(
+  text: string,
+  scope: AnalysisScope = 'ui',
+  /**
+   * De donde salio el texto, si no se deduce del carril.
+   *
+   * Lo usa el analizador de imagenes: su texto llega por el carril 'ui' pero lo
+   * ha sacado el OCR, y un falso positivo provocado por basura de
+   * reconocimiento no es el mismo fallo que uno provocado por el lexico.
+   */
+  surface?: AnalysisSurface,
+): Promise<ScamAnalysis> {
   const signal = beginAnalysis(scope);
   try {
-    return await runTextAnalysis(text, scope, signal);
+    return await runTextAnalysis(text, scope, signal, surface ?? SURFACE_BY_SCOPE[scope]);
   } finally {
     endAnalysis(scope, signal);
   }
 }
 
-async function runTextAnalysis(text: string, scope: AnalysisScope, signal: AbortSignal): Promise<ScamAnalysis> {
+async function runTextAnalysis(
+  text: string,
+  scope: AnalysisScope,
+  signal: AbortSignal,
+  surface: AnalysisSurface,
+): Promise<ScamAnalysis> {
   // Step 0: Check local scam database (instant, no tokens)
   const dbLookup = await scamDatabase.lookup(text);
   if (dbLookup.found && dbLookup.record) {
     getFusionEngine(scope as RiskLane).addSignal('scam-db', dbLookup.record.riskScore, 1);
-    return {
+    const hit: ScamAnalysis = {
       verdict: dbLookup.record.verdict,
       riskScore: dbLookup.record.riskScore,
       tactics: dbLookup.record.tactics,
@@ -230,6 +328,24 @@ async function runTextAnalysis(text: string, scope: AnalysisScope, signal: Abort
       corroborated: true,
       confidence: 1,
     };
+
+    // Tambien se puede opinar sobre esto, y conviene: un acierto guardado en la
+    // BD local que resulta ser un falso positivo lo seguira siendo cada vez que
+    // aparezca el mismo texto, sin volver a analizarse. Es el fallo que mas se
+    // repite si nadie lo corrige.
+    return withDraft(hit, {
+      surface,
+      text,
+      trace: {
+        drivers: [{ type: 'scam-db', evidence: dbLookup.record.riskScore / 100 }],
+        lexiconIds: [],
+        combos: [],
+        dampened: [],
+        localScore: dbLookup.record.riskScore,
+        llmScore: null,
+        injectionHits: [],
+      },
+    });
   }
 
   // Step 1: Local pattern scan (instant)
@@ -277,18 +393,27 @@ async function runTextAnalysis(text: string, scope: AnalysisScope, signal: Abort
     // caught offline and instantly, even if the AI is unreachable then.
     learnFromThreat(normalizeForMatching(text), result.verdict);
 
-    return result;
+    return withDraft(result, {
+      surface,
+      text,
+      trace: traceOf(fusion, localResult, request, aiResult.value),
+    });
   }
 
   // Sin IA: el motor fusiona lo que haya. Un resultado local honesto vale mas
   // que uno inventado.
-  const fallback = composeResult(engine.fuse(), { localResult, scanSource: 'local' });
+  const fallbackFusion = engine.fuse();
+  const fallback = composeResult(fallbackFusion, { localResult, scanSource: 'local' });
 
   if (fallback.verdict !== 'SEGURO') {
     scamDatabase.store(text, fallback.verdict, fallback.riskScore, fallback.tactics, 'local').catch(() => {});
   }
 
-  return fallback;
+  return withDraft(fallback, {
+    surface,
+    text,
+    trace: traceOf(fallbackFusion, localResult, request, null),
+  });
 }
 
 // =============================================================================

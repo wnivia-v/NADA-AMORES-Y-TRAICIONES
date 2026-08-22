@@ -84,6 +84,16 @@ export interface TranslationSet {
   riskScore: string;
   tactics: string;
   recommendations: string;
+  // Feedback — "¿acerto?"
+  feedbackQuestion: string;
+  feedbackCorrect: string;
+  feedbackWasLegit: string;
+  feedbackWasScam: string;
+  feedbackWhatHappened: string;
+  feedbackNotePlaceholder: string;
+  feedbackSend: string;
+  feedbackSaved: string;
+  feedbackFailed: string;
 }
 
 const es: TranslationSet = {
@@ -159,6 +169,16 @@ const es: TranslationSet = {
   riskScore: 'Nivel de riesgo',
   tactics: 'Tacticas detectadas',
   recommendations: 'Recomendaciones',
+  feedbackQuestion: '¿Acerto?',
+  feedbackCorrect: 'Si',
+  feedbackWasLegit: 'No, era legitimo',
+  feedbackWasScam: 'No, era una estafa',
+  feedbackWhatHappened: '¿Que paso?',
+  feedbackNotePlaceholder: 'Cuentanos brevemente (opcional)',
+  feedbackSend: 'Enviar',
+  // Dice donde queda, no "gracias por enviarlo": hoy no se envia a ningun sitio.
+  feedbackSaved: 'Guardado en este dispositivo. Gracias.',
+  feedbackFailed: 'No se pudo guardar en este dispositivo.',
 };
 
 const en: TranslationSet = {
@@ -234,6 +254,15 @@ const en: TranslationSet = {
   riskScore: 'Risk level',
   tactics: 'Detected tactics',
   recommendations: 'Recommendations',
+  feedbackQuestion: 'Did we get it right?',
+  feedbackCorrect: 'Yes',
+  feedbackWasLegit: 'No, it was legitimate',
+  feedbackWasScam: 'No, it was a scam',
+  feedbackWhatHappened: 'What happened?',
+  feedbackNotePlaceholder: 'Tell us briefly (optional)',
+  feedbackSend: 'Send',
+  feedbackSaved: 'Saved on this device. Thank you.',
+  feedbackFailed: 'Could not save on this device.',
 };
 
 export const translations: Record<'es' | 'en', TranslationSet> = { es, en };

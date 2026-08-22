@@ -16,7 +16,17 @@ import { LEXICON, COMBOS, DAMPENERS, type ThreatCategory, type Region } from './
 import { hardenInput } from '@/shared/llm/normalize';
 import { matchLearnedPhrases } from '@/services/threatMemory';
 
-interface PatternMatch {
+export interface PatternMatch {
+  /**
+   * ID de la entrada del lexico que coincidio.
+   *
+   * Es la parte que hace accionable un reporte de falso positivo. `pattern`
+   * lleva la regex, pero una regex no es un identificador estable: cambia en
+   * cuanto alguien la retoca, y entonces ya no se puede decir si la queja de
+   * hace un mes iba de esta entrada o de otra. El id si aguanta, y es ademas lo
+   * que un diff propuesto tiene que nombrar.
+   */
+  id: string;
   category: string;
   pattern: string;
   weight: number;
@@ -125,7 +135,7 @@ export function scanLocalPatterns(text: string, options: ScanOptions = {}): Loca
       hitWeight = entry.weight;
     }
 
-    matches.push({ category: entry.label, pattern: entry.regex.source, weight: hitWeight });
+    matches.push({ id: entry.id, category: entry.label, pattern: entry.regex.source, weight: hitWeight });
     categories.add(entry.category);
     totalWeight += hitWeight;
   }
@@ -145,7 +155,10 @@ export function scanLocalPatterns(text: string, options: ScanOptions = {}): Loca
   // hand-authored lexicon.
   const learned = matchLearnedPhrases(haystack);
   if (learned.weight > 0) {
-    matches.push({ category: 'Coincide con una amenaza vista antes', pattern: 'learned', weight: learned.weight });
+    // Esta no sale del lexico sino de la memoria local del dispositivo, asi que
+    // no hay entrada que arreglar. El id lo dice para que un reporte no mande a
+    // nadie a buscar una entrada que no existe.
+    matches.push({ id: 'learned-phrase', category: 'Coincide con una amenaza vista antes', pattern: 'learned', weight: learned.weight });
     totalWeight += learned.weight;
   }
 

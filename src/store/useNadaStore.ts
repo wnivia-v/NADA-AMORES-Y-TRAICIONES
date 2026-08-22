@@ -58,6 +58,18 @@ export interface ScamAnalysis {
   alert?: boolean;
   /** Dos o mas fuentes independientes sostienen el resultado. */
   corroborated?: boolean;
+  /**
+   * Identificador de este analisis, para poder opinar sobre el.
+   *
+   * Es solo una referencia: el rastro de la decision se queda en
+   * feedbackService, no viaja por la interfaz ni se persiste en el store. Asi
+   * el panel puede decir "sobre ESTE analisis" sin cargar con sus tripas.
+   *
+   * Opcional porque la persistencia de zustand guarda resultados de versiones
+   * anteriores que no lo traen, y porque un analisis restaurado de disco ya no
+   * tiene borrador vivo al que referirse.
+   */
+  analysisId?: string;
   /** Confianza del resultado fusionado, 0-1. */
   confidence?: number;
 }

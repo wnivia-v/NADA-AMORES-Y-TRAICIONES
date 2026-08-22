@@ -71,7 +71,7 @@ export function ImageAnalyzer() {
       setOcrProgress(t.analyzingContent);
 
       // Step 2: AI Analysis
-      const result = await analyzeText(text, 'ui');
+      const result = await analyzeText(text, 'ui', 'image');
       setAnalysisResult(result);
       addLog(`IMAGEN: Veredicto [${result.verdict}] — Riesgo: ${result.riskScore}/100`, result.verdict === 'PELIGROSO' ? 'error' : result.verdict === 'SOSPECHOSO' ? 'warning' : 'success');
       setOcrProgress('');

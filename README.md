@@ -673,6 +673,85 @@ Cuesta ~37 MB en `dist/`, de los que cada navegador descarga la variante que le
 toca (~15 MB, una vez, y despues cacheada por el service worker). No se
 versionan: se regeneran desde `node_modules` y desde la URL oficial del modelo.
 
+## Fase 5: el boton que faltaba
+
+El sistema acertaba o fallaba y **nadie se enteraba nunca**. No existia ninguna
+via por la que un error suyo pudiera expresarse, y sin eso la Fase 5 no tiene de
+que alimentarse: un backoffice de agentes que propone arreglos necesita saber
+que hay que arreglar.
+
+Ahora cada resultado lleva debajo un `¿Acerto?`. Lo que se guarda no es "esto
+estaba mal", es **"esto estaba mal Y ESTO fue lo que lo decidio"**: que entradas
+del lexico coincidieron (por id, no por regex), que combinaciones se activaron,
+que amortiguadores retiraron peso, que sostuvo la fusion y contra que version
+del lexico paso todo. Es la diferencia entre un buzon de quejas y un banco de
+pruebas.
+
+Tres decisiones que sostienen el diseño:
+
+- **La clase de error se deduce, no se pregunta.** Quien acaba de llevarse un
+  susto no tiene por que saber lo que es un falso positivo. Negar un SEGURO es
+  un falso negativo; negar una alerta es un falso positivo. Preguntarlo produce
+  etiquetas peores que no tener ninguna.
+- **La regla del §4.1 vive en el tipo, no en un comentario.** Un reporte del
+  escudo de video no lleva contenido: no hay campo donde meterlo, y
+  `buildReport()` lo descarta aunque el borrador lo traiga. Una tuberia de
+  aprendizaje es exactamente donde esa regla se erosionaria primero.
+- **La huella del lexico se calcula.** `LEXICON_VERSION` sale de las propias
+  entradas, combos y amortiguadores. Una constante que hay que acordarse de
+  subir acaba mintiendo, y miente en silencio.
+
+Los reportes se guardan en IndexedDB y **todavia no se envian a ningun sitio**.
+El mensaje de confirmacion lo dice tal cual — "Guardado en este dispositivo" —
+porque agradecer un envio que no ocurre seria mentir a quien acaba de dedicarte
+su tiempo. El envio necesita consentimiento registrado y una cuenta que permita
+agrupar y limitar el ritmo; sin las dos cosas el endpoint seria una puerta
+abierta al envenenamiento del corpus.
+
+### Modo B: dos decisiones tomadas a sabiendas
+
+El producto va en Modo B, y dos elecciones concretas cargan casi toda la
+responsabilidad legal. Quedan escritas aqui para que sean revisables y no se
+descubran en una auditoria:
+
+1. **El texto analizado viaja siempre** en los reportes de texto, voz e imagen,
+   amparado por el consentimiento general. Ese texto contiene mensajes de
+   **terceros que no han consentido nada**. El aviso de privacidad tiene que
+   decirlo con todas las letras y el borrado por cuenta (ARCO/DSR) tiene que
+   alcanzarlo de verdad.
+2. **Cuentas con correo.** Da trazabilidad fuerte contra el envenenamiento, a
+   cambio de un dato personal mas que custodiar, verificar y borrar.
+
+### Un hueco que encontro el propio boton
+
+Probando el feedback aparecio esto, y merece contarse porque es justo lo que la
+Fase 5 automatizara:
+
+`mandame 300 euros en bitcoin urgente` puntuaba **32/100 — SEGURO**.
+`Envia dinero urgente a mi cuenta bitcoin` puntuaba 62. La entrada
+`fin-send-money` cubria la palabra "dinero" pero no la peticion con **cantidad**,
+que es mas frecuente y es la del fraude del hijo ("mama, mandame 300 euros").
+
+Corregido, con el control de falsos positivos delante: los verbos van
+enumerados en vez de con `\w*`, lo que excluye la primera persona — "te mando
+300 euros" es alguien mandando dinero, no pidiendolo — y un lookahead evita que
+"20 euros" case dentro de "20 europeos".
+
+| | Antes | Despues |
+|---|---|---|
+| `mandame 300 euros en bitcoin urgente` | 32 (SEGURO) | **100 (PELIGROSO)** |
+| `te mando los 300 euros manana` | 0 | 0 |
+| `el presupuesto son 300 euros` | 0 | 0 |
+
+El corpus paso de 44 a 48 casos con los dos nuevos ataques y sus dos controles.
+Ojo con leer la tabla de metricas: el recall baja de 82.4% a 80.6% **no porque
+el sistema empeore** sino porque el corpus se hizo mas dificil — `amount-002`
+("necesito que me mandes 500€ hoy mismo, no puedo hablar ahora") se queda en 30
+porque esa urgencia y esa evitacion de canal no tienen entrada. Es un hueco
+distinto, y esta documentado en vez de perseguido: perseguir a mano cada hueco
+que aparece es precisamente el trabajo que la Fase 5 existe para hacer con
+medicion y aprobacion humana.
+
 ## Licencia
 
 Equipo Antigravity.

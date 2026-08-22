@@ -42,6 +42,12 @@ export default defineConfig(({ mode }) => {
       // No añadas aqui ninguna credencial: si algo necesita una clave secreta,
       // es que va en el backend.
       'import.meta.env.VITE_NADA_API_URL': JSON.stringify(env.VITE_NADA_API_URL || ''),
+      // Version de la app, leida de package.json. Va en cada reporte de
+      // feedback: sin ella no se puede saber si una queja se refiere a algo que
+      // ya se arreglo. No es un secreto ni una credencial, solo una etiqueta.
+      'import.meta.env.VITE_APP_VERSION': JSON.stringify(
+        JSON.parse(fs.readFileSync(path.resolve(__dirname, 'package.json'), 'utf-8')).version,
+      ),
       // Firebase App Check — needed for Gemini to work
       'import.meta.env.VITE_RECAPTCHA_ENTERPRISE_KEY': JSON.stringify(env.VITE_RECAPTCHA_ENTERPRISE_KEY || ''),
     },
