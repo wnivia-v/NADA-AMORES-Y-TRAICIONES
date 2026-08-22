@@ -192,6 +192,17 @@ protege con App Check, no con un secreto que haya que esconder.
 
 `rateLimiter.ts` cuenta las consultas por minuto y por dia de cada proveedor, y persiste el contador diario. Un proveedor sin cuota disponible se descarta antes de llamarlo, porque un 429 se convierte en resultado nulo y degradaria el veredicto sin avisar a nadie. Los intervalos de los escudos estan fijados por esa cuota, no por lo rapido que se podria sondear.
 
+## Seguridad
+
+El protocolo contra inyeccion de prompt y envenenamiento de datos vive en
+**[docs/PROTOCOLO-SEGURIDAD.md](docs/PROTOCOLO-SEGURIDAD.md)**. Mapea las cinco
+familias de inyeccion documentadas y los vectores de envenenamiento del Modo B
+contra el codigo que los contiene y el test que lo sostiene — y dice, con la
+misma claridad, lo que NO cubre.
+
+Si cambias una defensa, ese fichero cambia en el mismo commit. Si no, empieza a
+mentir.
+
 ## Estado actual
 
 Honestidad sobre lo que funciona hoy:
