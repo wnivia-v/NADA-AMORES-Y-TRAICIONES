@@ -890,28 +890,94 @@ vez de una frase larga. Solo longitud minima.
 | Borrar cuenta | 204 | 204 |
 | La sesion despues de borrar | 401 | 401 |
 
-### Lo que NO esta hecho, y por que
+### La base de datos
 
-**El adaptador de Prisma no existe.** `prisma/schema.prisma` esta escrito de
-verdad —cuatro modelos, cascadas de borrado, indices— pero **las migraciones no
-se han ejecutado nunca**: no hay ninguna base de datos en este entorno donde
-hacerlo.
+```bash
+npm run db:up        # arranca el cluster
+npm run db:setup     # rol, bases y migraciones. Idempotente.
+```
 
-El servidor corre hoy sobre `server/src/store/memory.ts`, que implementa el
-mismo contrato (`Store`) y **si esta probado**: las reglas que importan —cuenta
-sin verificar no reporta, borrar borra, el limite de ritmo corta— se comprueban
-contra el, y son las mismas reglas que regiran con PostgreSQL detras. Lo que
-falta es un adaptador que traduzca ese contrato a Prisma.
+PostgreSQL 16 con Prisma. Cuatro tablas, cascadas de borrado declaradas en el
+esquema, migraciones versionadas en `prisma/migrations/`.
 
-No lo he escrito a ciegas a proposito. Sin una base de datos donde ejecutarlo
-seria codigo sin verificar con aspecto de trabajo terminado, y en la capa que
-guarda las contraseñas y los datos personales de la gente eso es exactamente lo
-que no conviene tener.
+Una correccion que toca hacer: en una version anterior de este README dije que
+**no habia PostgreSQL en el entorno**. Era falso. Estaba instalado desde el
+principio; mi comprobacion fue mala — busque `postgres` en el PATH, y Debian y
+Ubuntu ponen los binarios en `/usr/lib/postgresql/16/bin`, fuera de el. De ahi
+que `scripts/setup-db.mjs` exista: el paso de levantar la base es justo donde un
+proyecto se vuelve imposible de arrancar para quien llega nuevo.
 
-**Tampoco hay transporte de correo.** En desarrollo el enlace de verificacion se
-escribe en el registro del servidor; en produccion sin `MAIL_TRANSPORT` el
-servidor **avisa al arrancar** y el registro devuelve error. Es preferible
-fallar en el despliegue a fallar en silencio en manos de un usuario.
+#### La misma bateria, contra las dos implementaciones
+
+El servidor no importa un almacen concreto: pide el activo (`server/src/store/`).
+Eso permite correr **los mismos 22 tests de seguridad** contra el almacen en
+memoria y contra PostgreSQL:
+
+```bash
+npm test                                    # 402 pasan, 1 se salta (ruidosamente)
+TEST_DATABASE_URL=... npm test              # 424 pasan
+```
+
+No hay dos juegos de tests que puedan divergir sin que nadie se entere: hay uno
+aplicado a las dos implementaciones. Y sin `TEST_DATABASE_URL` la vuelta de
+PostgreSQL **se salta diciendolo**, con un `it.skip` visible — un test que
+desaparece en silencio cuando falta una variable de entorno es un test que un
+dia ya no existe.
+
+Comprobado que la vuelta de PostgreSQL prueba de verdad: apuntandola a una base
+sin tablas, fallan exactamente esos 22 y ninguno mas.
+
+#### El ciclo completo, contra la base real
+
+| Paso | Resultado |
+|---|---|
+| Registro | 202, y el correo **sale por SMTP** |
+| Cuenta en PostgreSQL | presente, `verifiedAt` null |
+| Reporte sin verificar | 403 |
+| Verificar con el token **sacado del correo** | 200 |
+| Reporte ya verificado | 201 |
+| Filas (cuentas, sesiones, reportes) | `1 / 1 / 1` |
+| `DELETE /v1/accounts` | 204 |
+| Filas despues | **`0 / 0 / 0`** |
+
+Esa ultima fila es el derecho de supresion comprobado en la base de datos, no en
+una promesa: las cascadas se llevan sesiones, verificaciones y reportes.
+
+### El correo
+
+Cliente SMTP minimo escrito con `node:net` y `node:tls`, sin dependencias
+(`server/src/auth/smtp.ts`). Una libreria de correo es codigo con acceso a las
+credenciales del buzon y a todo lo que se manda por el; aqui hacian falta seis
+ordenes del protocolo.
+
+**La razon de leer ese archivo es la inyeccion de cabeceras.** La direccion de
+destino viene del formulario de registro, o sea de fuera. En SMTP las cabeceras
+se separan por CRLF, asi que una direccion como
+
+```
+victima@ejemplo.test\r\nBcc: otros@sitio.test
+```
+
+convierte el correo de verificacion en un envio masivo firmado por nosotros. Lo
+mismo con el asunto. Nada que venga de fuera llega a una cabecera sin
+comprobarlo, y lo que lleva CR o LF **rechaza el envio entero** en vez de
+limpiarse — limpiar invita a discutir despues que se limpio y que no. La
+comprobacion va **antes de abrir el socket**, y hay un test que lo demuestra
+apuntando a un puerto muerto: el error es de inyeccion, no de conexion.
+
+Ademas: el certificado TLS **se valida**, y las credenciales no se mandan por un
+canal sin cifrar salvo que se pida explicitamente (lo cual solo hacen los tests,
+contra un servidor de mentira en localhost).
+
+Probado contra un servidor SMTP que se levanta en el propio test: conversacion
+completa, AUTH LOGIN en base64, y el *dot stuffing* del protocolo — un punto solo
+en una linea termina el mensaje, asi que un texto que empiece por punto cortaria
+el correo por la mitad si no se doblara.
+
+Sin `MAIL_TRANSPORT`, en desarrollo el enlace se escribe en el registro; en
+produccion el servidor **avisa al arrancar** y el registro devuelve error. Una
+URL de transporte que no se entiende cuenta como ausente: parecer configurado y
+no mandar nada es peor que no estarlo.
 
 ## Backoffice de agentes: proponer, medir, aprobar
 

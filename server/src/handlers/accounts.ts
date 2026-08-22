@@ -25,7 +25,7 @@ import {
 } from '../auth/credentials';
 import { loginLimiter, registerLimiter } from '../auth/rateLimit';
 import { deliverVerification } from '../auth/mailer';
-import { store } from '../store/memory';
+import { activeStore } from '../store';
 import type { HandlerResponse } from '../handler';
 
 /** Cuanto dura una sesion. */
@@ -81,7 +81,7 @@ export async function handleRegister(raw: unknown, ctx: RequestContext): Promise
   // Un correo mal formado tampoco delata nada: no depende de si existe.
   if (!looksLikeEmail(email)) return { status: 400, body: { error: 'correo invalido' } };
 
-  const existing = await store.accountByEmail(email);
+  const existing = await activeStore().accountByEmail(email);
   if (existing) {
     // Ya registrado: se responde EXACTAMENTE lo mismo y no se crea nada. Quien
     // pruebe correos ajenos no aprende nada; quien se registro de verdad y lo
@@ -91,7 +91,7 @@ export async function handleRegister(raw: unknown, ctx: RequestContext): Promise
 
   const digest = await hashPassword(password);
   const accountId = randomUUID();
-  await store.createAccount({
+  await activeStore().createAccount({
     id: accountId,
     email,
     passwordHash: digest.hash,
@@ -102,7 +102,7 @@ export async function handleRegister(raw: unknown, ctx: RequestContext): Promise
   });
 
   const token = newToken();
-  await store.createVerification({
+  await activeStore().createVerification({
     tokenHash: hashToken(token),
     accountId,
     createdAt: new Date(),
@@ -127,13 +127,13 @@ export async function handleVerify(raw: unknown): Promise<HandlerResponse> {
 
   // De un solo uso: se consume aunque haya caducado, para que un token filtrado
   // no se pueda reintentar.
-  const record = await store.consumeVerification(hashToken(token));
+  const record = await activeStore().consumeVerification(hashToken(token));
   if (!record) return { status: 400, body: { error: 'token invalido' } };
   if (record.expiresAt.getTime() < Date.now()) {
     return { status: 400, body: { error: 'token caducado' } };
   }
 
-  await store.markVerified(record.accountId, new Date());
+  await activeStore().markVerified(record.accountId, new Date());
   return { status: 200, body: { ok: true } };
 }
 
@@ -151,7 +151,7 @@ export async function handleLogin(raw: unknown, ctx: RequestContext): Promise<Ha
     return { status: 429, body: { error: 'demasiados intentos, prueba mas tarde' } };
   }
 
-  const account = await store.accountByEmail(email);
+  const account = await activeStore().accountByEmail(email);
   // Misma respuesta para "no existe" y para "contraseña mal". Y se comprueba la
   // contraseña igualmente cuando no hay cuenta, para que el tiempo de respuesta
   // tampoco delate la diferencia.
@@ -165,7 +165,7 @@ export async function handleLogin(raw: unknown, ctx: RequestContext): Promise<Ha
   }
 
   const token = newToken();
-  await store.createSession({
+  await activeStore().createSession({
     tokenHash: hashToken(token),
     accountId: account.id,
     createdAt: new Date(),
@@ -183,7 +183,7 @@ export async function handleLogin(raw: unknown, ctx: RequestContext): Promise<Ha
 
 /** DELETE /v1/sessions — salir. */
 export async function handleLogout(token: string | null): Promise<HandlerResponse> {
-  if (token) await store.deleteSession(hashToken(token));
+  if (token) await activeStore().deleteSession(hashToken(token));
   // 204 pase lo que pase: salir nunca debe fallar, y decir "esa sesion no
   // existia" no ayuda a nadie salvo a quien esta probando tokens.
   return { status: 204, body: null };
@@ -204,15 +204,15 @@ export async function authenticate(token: string | null): Promise<Authenticated 
   if (!token) return null;
 
   const tokenHash = hashToken(token);
-  const session = await store.sessionByHash(tokenHash);
+  const session = await activeStore().sessionByHash(tokenHash);
   if (!session) return null;
 
   if (session.expiresAt.getTime() < Date.now()) {
-    await store.deleteSession(tokenHash);
+    await activeStore().deleteSession(tokenHash);
     return null;
   }
 
-  const account = await store.accountById(session.accountId);
+  const account = await activeStore().accountById(session.accountId);
   if (!account) return null;
 
   return { accountId: account.id, verified: account.verifiedAt !== null };
@@ -227,6 +227,6 @@ export async function authenticate(token: string | null): Promise<Authenticated 
  * donde no toca.
  */
 export async function handleDeleteAccount(auth: Authenticated): Promise<HandlerResponse> {
-  await store.deleteAccount(auth.accountId);
+  await activeStore().deleteAccount(auth.accountId);
   return { status: 204, body: null };
 }

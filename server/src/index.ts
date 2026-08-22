@@ -16,6 +16,7 @@ import {
 } from './handlers/accounts';
 import { handleFeedback } from './handlers/feedback';
 import { mailerMode } from './auth/mailer';
+import { initStore } from './store';
 
 /** Tope de cuerpo. Corta la lectura en cuanto se pasa, sin acumular en memoria. */
 const MAX_BODY_BYTES = 64 * 1024;
@@ -212,6 +213,12 @@ const server = createServer((req, res) => {
   }
 
   send(res, origin, { status: 404, body: { error: 'no encontrado' } });
+});
+
+// El almacen se elige ANTES de escuchar: aceptar peticiones sin saber donde se
+// van a guardar las cuentas seria aceptar a ciegas.
+void initStore().then((kind) => {
+  console.log(`[NADA][server] almacen: ${kind}`);
 });
 
 server.listen(PORT, () => {

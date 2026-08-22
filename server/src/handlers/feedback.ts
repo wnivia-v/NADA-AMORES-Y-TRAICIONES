@@ -24,7 +24,7 @@
 
 import { randomUUID } from 'node:crypto';
 
-import { store } from '../store/memory';
+import { activeStore } from '../store';
 import { REPORTS_PER_HOUR } from '../auth/rateLimit';
 import type { Authenticated } from './accounts';
 import type { HandlerResponse } from '../handler';
@@ -202,7 +202,7 @@ export async function handleFeedback(raw: unknown, auth: Authenticated): Promise
   }
 
   const hourAgo = new Date(Date.now() - 60 * 60 * 1000);
-  const recent = await store.countReportsSince(auth.accountId, hourAgo);
+  const recent = await activeStore().countReportsSince(auth.accountId, hourAgo);
   if (recent >= REPORTS_PER_HOUR) {
     return { status: 429, body: { error: 'demasiados reportes en poco tiempo' } };
   }
@@ -215,6 +215,6 @@ export async function handleFeedback(raw: unknown, auth: Authenticated): Promise
     };
   }
 
-  await store.saveReport({ ...validation.report, accountId: auth.accountId });
+  await activeStore().saveReport({ ...validation.report, accountId: auth.accountId });
   return { status: 201, body: { ok: true, id: validation.report.id } };
 }
