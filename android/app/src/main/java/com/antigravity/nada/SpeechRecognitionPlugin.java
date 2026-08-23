@@ -42,11 +42,30 @@ public class SpeechRecognitionPlugin extends Plugin implements RecognitionListen
     private static final int MAX_RESTARTS = 500;
     private static final long RESTART_DELAY_MS = 250;
 
+    /**
+     * Espera creciente cuando ninguna sesion trae palabras.
+     *
+     * Reportado usando la app: con el escudo puesto y un podcast sonando,
+     * Spotify se pausaba y volvia una y otra vez. La causa es que
+     * SpeechRecognizer.startListening() PIDE EL FOCO DE AUDIO en cada arranque,
+     * y Android pausa lo que este sonando; al soltarlo, vuelve. Reabrir cada
+     * 250 ms convertia eso en un tartamudeo continuo.
+     *
+     * Espaciar los reinicios no lo elimina —el foco se pide igual, solo que
+     * menos veces— y por eso el arreglo de verdad esta en otro sitio: el motor
+     * local abre el microfono UNA vez y no compite. Esto reduce el daño de
+     * quien se quede con el reconocedor del sistema.
+     */
+    private static final long[] QUIET_RESTART_STEPS_MS = { RESTART_DELAY_MS, 1000, 3000, 5000, 8000 };
+    private static final int QUIET_SESSIONS_BEFORE_SLOWING = 2;
+
     private final Handler handler = new Handler(Looper.getMainLooper());
     private SpeechRecognizer recognizer;
     private boolean listening = false;
     private String lang = "es-ES";
     private int restartCount = 0;
+    /** Sesiones seguidas sin una palabra. Gobierna cuanto se espera al reabrir. */
+    private int quietSessions = 0;
 
     @PluginMethod
     public void isSupported(PluginCall call) {
@@ -88,6 +107,7 @@ public class SpeechRecognitionPlugin extends Plugin implements RecognitionListen
         }
 
         restartCount = 0;
+        quietSessions = 0;
         listening = true;
         getActivity().runOnUiThread(this::createAndStartRecognizer);
         call.resolve();
@@ -130,9 +150,13 @@ public class SpeechRecognitionPlugin extends Plugin implements RecognitionListen
             emitError("start-failed");
             return;
         }
+
+        int paso = Math.max(0, quietSessions - QUIET_SESSIONS_BEFORE_SLOWING);
+        long espera = QUIET_RESTART_STEPS_MS[Math.min(paso, QUIET_RESTART_STEPS_MS.length - 1)];
+
         handler.postDelayed(() -> {
             if (listening) createAndStartRecognizer();
-        }, RESTART_DELAY_MS);
+        }, espera);
     }
 
     // ── RecognitionListener ─────────────────────────────────────────────
@@ -167,11 +191,15 @@ public class SpeechRecognitionPlugin extends Plugin implements RecognitionListen
         }
         // Transient (no-speech, network hiccup, recognizer busy, ...) — restart,
         // same as speechService.ts's onend-driven restart loop on the web.
+        quietSessions++;
         restartIfListening();
     }
 
     @Override
     public void onResults(Bundle results) {
+        // Hubo palabras: se vuelve al ritmo rapido. Alguien esta hablando y no
+        // es momento de tardar ocho segundos en reabrir.
+        quietSessions = 0;
         emitTranscript(results, true);
         restartIfListening();
     }

@@ -2,6 +2,7 @@ import { Capacitor } from '@capacitor/core';
 import { WebSpeechEngine } from './webSpeechEngine';
 import { WhisperEngine } from './whisperEngine';
 import { NativeAndroidEngine } from './nativeEngine';
+import { orderEngines, voicePreference } from './preference';
 import {
   isEngineIndependentFailure,
   toVoiceLanguage,
@@ -37,6 +38,8 @@ import {
 // =============================================================================
 
 export type { VoiceLanguage, VoiceEngineId, VoiceErrorCode } from './types';
+export type { VoicePreference } from './preference';
+export { voicePreference, setVoicePreference } from './preference';
 export { SUPPORTED_VOICE_LANGUAGES, languageLabel } from './types';
 
 export interface VoiceSessionOptions {
@@ -66,10 +69,24 @@ class VoiceRecognition {
   private lang: VoiceLanguage = 'es';
   private running = false;
 
+  /**
+   * Los motores de este aparato, en el orden que pida la preferencia.
+   *
+   * El orden por defecto sigue siendo el medido —reconocedor del sistema
+   * primero, local de respaldo— pero deja de ser el unico posible. Quien
+   * escuche algo mientras vigila puede poner el local delante: es el unico que
+   * abre el microfono UNA vez y no le roba el foco de audio a la reproduccion
+   * en cada reinicio.
+   */
   private buildChain(): VoiceEngine[] {
-    return isAndroid()
+    const todos: VoiceEngine[] = isAndroid()
       ? [new NativeAndroidEngine(), new WhisperEngine()]
       : [new WebSpeechEngine(), new WhisperEngine()];
+
+    const orden = orderEngines(todos.map((e) => e.id), voicePreference());
+    return orden
+      .map((id) => todos.find((e) => e.id === id))
+      .filter((e): e is VoiceEngine => e !== undefined);
   }
 
   isSupported(): boolean {
