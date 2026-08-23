@@ -17,9 +17,12 @@
 // =============================================================================
 
 import { useState } from 'react';
-import { Mic, Music, CloudOff } from 'lucide-react';
+import { Mic, Music, CloudOff, Volume2 } from 'lucide-react';
 import { useNadaStore } from '@/store/useNadaStore';
-import { voicePreference, setVoicePreference, type VoicePreference } from '@/services/voice';
+import {
+  voicePreference, setVoicePreference, type VoicePreference,
+  micMode, setMicMode, type MicMode,
+} from '@/services/voice';
 
 interface Opcion {
   id: VoicePreference;
@@ -71,6 +74,12 @@ export function VoiceEnginePanel() {
   const { language } = useNadaStore();
   const idioma = language === 'es' ? 'es' : 'en';
   const [elegido, setElegido] = useState<VoicePreference>(() => voicePreference());
+  const [modoMic, setModoMic] = useState<MicMode>(() => micMode());
+
+  const cambiarMic = (m: MicMode) => {
+    setMicMode(m);
+    setModoMic(m);
+  };
 
   const elegir = (id: VoicePreference) => {
     setVoicePreference(id);
@@ -134,6 +143,68 @@ export function VoiceEnginePanel() {
             </button>
           );
         })}
+      </div>
+
+      {/* Como se PIDE el microfono. Es lo que de verdad decide si Spotify se
+          para, y va aparte del motor porque afecta tambien al escudo de video. */}
+      <div className="mt-4 pt-3 border-t" style={{ borderColor: 'var(--border)' }}>
+        <div className="flex items-center gap-2 mb-1">
+          <Volume2 className="w-4 h-4" style={{ color: 'var(--accent)' }} />
+          <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+            {idioma === 'es' ? 'Compartir el microfono con otras apps' : 'Share the microphone with other apps'}
+          </span>
+        </div>
+
+        <p className="text-[11px] leading-snug mb-2" style={{ color: 'var(--text-muted)' }}>
+          {idioma === 'es'
+            ? 'Por defecto NADA pide el microfono con cancelacion de eco, y Android lo interpreta como una llamada: pausa lo que este sonando. Activando esto se pide el microfono corriente, que convive.'
+            : 'By default NADA asks for the microphone with echo cancellation, which Android treats as a call: it pauses whatever is playing. Turning this on asks for the plain microphone, which coexists.'}
+        </p>
+
+        {/* Solo sirve con el motor local. El reconocedor del sistema abre el
+            microfono por su cuenta y no acepta restricciones nuestras: decir lo
+            contrario dejaria a alguien peleandose con un interruptor que en su
+            configuracion no puede hacer nada. */}
+        {elegido === 'system' && (
+          <p
+            className="text-[11px] leading-snug mb-2 rounded-lg p-2"
+            style={{ color: 'var(--warning)', background: 'var(--suspicious-bg)' }}
+          >
+            {idioma === 'es'
+              ? 'Con el reconocedor del sistema elegido, esto no tiene efecto: ese motor abre el microfono por su cuenta y no acepta estas opciones. Cambia a "En el dispositivo" para que sirva.'
+              : 'With the system recognizer selected this has no effect: that engine opens the microphone itself and ignores these options. Switch to "On-device" for it to work.'}
+          </p>
+        )}
+
+        <button
+          onClick={() => cambiarMic(modoMic === 'convivir' ? 'aislado' : 'convivir')}
+          className="w-full text-left rounded-xl p-3 cursor-pointer transition-all hover:opacity-90"
+          style={{
+            background: modoMic === 'convivir' ? 'var(--accent-light)' : 'var(--bg-elevated)',
+            border: `1.5px solid ${modoMic === 'convivir' ? 'var(--accent)' : 'var(--border)'}`,
+          }}
+        >
+          <span className="flex items-center justify-between gap-2">
+            <span className="text-sm font-bold" style={{ color: modoMic === 'convivir' ? 'var(--accent)' : 'var(--text-primary)' }}>
+              {idioma === 'es' ? 'No interrumpir otro audio' : 'Do not interrupt other audio'}
+            </span>
+            <span
+              className="text-[10px] font-bold px-2 py-0.5 rounded shrink-0"
+              style={{
+                background: modoMic === 'convivir' ? 'var(--accent)' : 'var(--bg-primary)',
+                color: modoMic === 'convivir' ? 'var(--bg-primary)' : 'var(--text-secondary)',
+                border: '1px solid var(--border)',
+              }}
+            >
+              {modoMic === 'convivir' ? 'ON' : 'OFF'}
+            </span>
+          </span>
+          <span className="block text-[11px] leading-snug mt-1.5" style={{ color: 'var(--warning)' }}>
+            {idioma === 'es'
+              ? 'Coste: sin cancelacion de eco el escudo OYE el altavoz del propio movil. Lo que suene entra en la transcripcion y se analiza, asi que un podcast puede provocar avisos sobre su contenido en vez de sobre una llamada.'
+              : 'Cost: without echo cancellation the shield HEARS the phone speaker. Whatever plays enters the transcript and gets analysed, so a podcast can trigger warnings about its content instead of a call.'}
+          </span>
+        </button>
       </div>
 
       <p className="text-[10px] leading-snug mt-2" style={{ color: 'var(--text-muted)' }}>

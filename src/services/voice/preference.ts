@@ -16,7 +16,15 @@
 //
 //   En el dispositivo (Whisper)
 //     Abre getUserMedia UNA vez y mantiene el flujo. Una sola toma de
-//     microfono, sin reinicios, y convive con la reproduccion.
+//     microfono, sin reinicios — se acaba el tartamudeo.
+//
+//     CORRECCION de lo que decia aqui antes: "y convive con la reproduccion"
+//     era falso a medias. Abrir el microfono una sola vez quita el
+//     pausa-vuelve-pausa, pero abrirlo SIGUE pausando la reproduccion mientras
+//     dure, porque las restricciones que se piden lo abren en modo
+//     comunicacion. Convivir de verdad depende de micMode.ts, no de que motor
+//     se use. Lo destapo un reporte: "no permite audio de Spotify y microfono
+//     a la vez".
 //
 // De ahi que esto sea una eleccion y no una heuristica escondida: los dos
 // motores son correctos para casos distintos, y quien usa la app es quien sabe

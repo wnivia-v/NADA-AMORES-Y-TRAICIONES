@@ -4,6 +4,7 @@ import { FrameBudget } from '@/shared/vision/frameBudget';
 import { playAlertTone } from '@/utils/audioAlert';
 import { notificationService } from './notificationService';
 import type { ScamAnalysis } from '@/store/useNadaStore';
+import { audioConstraints } from './voice/micMode';
 
 // =============================================================================
 // Video Shield — orquestador singleton
@@ -122,7 +123,13 @@ class VideoShieldService {
       // enseñarte un deepfake de ti mismo. "own" se mantiene para pruebas.
       const stream = source === 'call'
         ? await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true })
-        : await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: 640, height: 480 }, audio: true });
+        : await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: 'user', width: 640, height: 480 },
+            // `audio: true` dejaba elegir al navegador, y Chrome elige
+            // procesado: el escudo de video pausaba la reproduccion igual que
+            // el de voz, por la misma razon y sin que nadie lo hubiera pedido.
+            audio: audioConstraints(),
+          });
 
       this.stream = stream;
       this.source = source;

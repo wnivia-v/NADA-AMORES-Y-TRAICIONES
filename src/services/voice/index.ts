@@ -40,6 +40,8 @@ import {
 export type { VoiceLanguage, VoiceEngineId, VoiceErrorCode } from './types';
 export type { VoicePreference } from './preference';
 export { voicePreference, setVoicePreference } from './preference';
+export type { MicMode } from './micMode';
+export { micMode, setMicMode, audioConstraints } from './micMode';
 export { SUPPORTED_VOICE_LANGUAGES, languageLabel } from './types';
 
 export interface VoiceSessionOptions {

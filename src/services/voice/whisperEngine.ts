@@ -1,5 +1,6 @@
 import type { VoiceEngine, VoiceHandlers, VoiceLanguage } from './types';
 import { whisperLanguage } from './types';
+import { audioConstraints } from './micMode';
 
 // =============================================================================
 // Whisper on-device engine — the offline fallback
@@ -228,8 +229,10 @@ export class WhisperEngine implements VoiceEngine {
     if (!this.running) return; // stopped while loading
 
     try {
+      // Las restricciones salen de micMode.ts: pedirlas procesadas abre el
+      // microfono en modo comunicacion y Android pausa lo que este sonando.
       this.stream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+        audio: audioConstraints(),
       });
     } catch (e) {
       this.running = false;
