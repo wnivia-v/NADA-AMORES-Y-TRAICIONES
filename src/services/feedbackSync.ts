@@ -8,9 +8,12 @@
 //   1. mayShareReports() — el usuario encendio el ambito de reportes y su
 //      consentimiento sigue vigente. Es la puerta del §4.4 y esta es la unica
 //      llamada que la cruza.
-//   2. Hay sesion. Sin cuenta no hay a quien atribuir el reporte, y sin eso el
-//      corpus no se puede defender de quien lo quiera envenenar.
+//   2. Hay servidor configurado.
 //   3. Hay red. Si no, la cola espera: no se pierde nada.
+//
+// El contexto del aparato viaja SOLO si mayShareTelemetry() lo permite, que es
+// una puerta aparte: se puede seguir contribuyendo reportes sin que viaje de
+// que aparato salen.
 //
 // Van en ese orden por un motivo: la comprobacion de consentimiento es la
 // primera, asi que ninguna de las otras dos puede llegar a mandar nada sin ella.
@@ -20,8 +23,8 @@
 // arrastra a los demas.
 // =============================================================================
 
-import { mayShareReports } from './policyService';
-import { authHeaders } from './accountService';
+import { mayShareReports, mayShareTelemetry } from './policyService';
+import { collectDeviceContext } from './telemetryService';
 import { feedbackService, type QueuedReport } from './feedbackService';
 import { proxyBaseUrl, hasProxy } from './aiProviders/proxyClient';
 
@@ -32,7 +35,7 @@ export interface SyncOutcome {
   /** No se pudieron entregar ahora. Siguen en cola. */
   pending: number;
   /** Por que no se hizo nada, si no se hizo nada. */
-  skipped?: 'no-consent' | 'no-session' | 'no-server' | 'nothing-to-send';
+  skipped?: 'no-consent' | 'no-server' | 'nothing-to-send';
 }
 
 /**
@@ -48,15 +51,27 @@ function wireFormat(report: QueuedReport) {
   return rest;
 }
 
+/** Idioma de la interfaz, para el contexto. Sin store: esto corre en segundo plano. */
+function uiLanguage(): string {
+  try {
+    return localStorage.getItem('nada-language') ?? 'es';
+  } catch {
+    return 'es';
+  }
+}
+
 export async function syncPendingReports(): Promise<SyncOutcome> {
   const empty: SyncOutcome = { sent: 0, rejected: 0, pending: 0 };
 
   // La puerta, primero.
   if (!mayShareReports()) return { ...empty, skipped: 'no-consent' };
 
-  const headers = authHeaders();
-  if (!headers) return { ...empty, skipped: 'no-session' };
   if (!hasProxy()) return { ...empty, skipped: 'no-server' };
+
+  // Se recoge UNA vez para toda la tanda, no por reporte: es el mismo aparato.
+  // Y solo si la segunda puerta lo permite — si no, no se llega a llamar, que
+  // ademas evita crear el identificador de instalacion de quien lo apago.
+  const device = mayShareTelemetry() ? collectDeviceContext(uiLanguage()) : null;
 
   const pending = await feedbackService.pending();
   if (pending.length === 0) return { ...empty, skipped: 'nothing-to-send' };
@@ -70,8 +85,8 @@ export async function syncPendingReports(): Promise<SyncOutcome> {
     try {
       response = await fetch(`${proxyBaseUrl()}/v1/feedback`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...headers },
-        body: JSON.stringify(wireFormat(report)),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...wireFormat(report), device }),
       });
     } catch {
       // Fallo de red: se queda en cola y se reintenta otro dia.
@@ -93,10 +108,11 @@ export async function syncPendingReports(): Promise<SyncOutcome> {
       continue;
     }
 
-    // 401 (sesion caida), 403 (sin verificar), 429 (limite): todos se arreglan
-    // solos con el tiempo o con una accion del usuario. Se espera.
+    // 429 (limite de ritmo) y todo lo demas se arreglan con el tiempo. Se
+    // espera. En el 429 ademas se corta la tanda: seguir insistiendo con los
+    // demas solo gastaria bateria para recibir el mismo 429.
     stillPending += 1;
-    if (response.status === 401 || response.status === 429) break;
+    if (response.status === 429) break;
   }
 
   if (delivered.length > 0) await feedbackService.markSent(delivered);

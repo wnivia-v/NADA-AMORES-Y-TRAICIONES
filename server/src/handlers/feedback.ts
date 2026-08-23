@@ -26,7 +26,7 @@ import { randomUUID } from 'node:crypto';
 
 import { activeStore } from '../store';
 import { REPORTS_PER_HOUR } from '../auth/rateLimit';
-import type { Authenticated } from './accounts';
+import type { DeviceContext } from '../../../src/shared/telemetry/types';
 import type { HandlerResponse } from '../handler';
 import type { StoredReport } from '../store/types';
 
@@ -86,7 +86,7 @@ function boundedNumber(value: unknown, min: number, max: number): number | null 
 export type ValidationFailure = { field: string; reason: string };
 
 export type ValidationResult =
-  | { ok: true; report: Omit<StoredReport, 'accountId'> }
+  | { ok: true; report: Omit<StoredReport, 'installId' | 'platform' | 'os' | 'deviceModel' | 'ip'> }
   | { ok: false; failure: ValidationFailure };
 
 /**
@@ -213,17 +213,42 @@ export function validateReport(raw: unknown): ValidationResult {
   };
 }
 
-/** POST /v1/feedback */
-export async function handleFeedback(raw: unknown, auth: Authenticated): Promise<HandlerResponse> {
-  if (!auth.verified) {
-    return {
-      status: 403,
-      body: { error: 'verifica tu correo antes de enviar reportes' },
-    };
-  }
+/**
+ * Quien envia, visto por el servidor.
+ *
+ * `ip` no es opcional y `device` si: la conexion siempre tiene origen, el
+ * contexto del aparato solo llega si quien usa la app dejo encendida la
+ * telemetria. Un reporte sin contexto sigue valiendo — se pierde poder saber
+ * si cien quejas iguales vienen de cien sitios o de uno, no la queja.
+ */
+export interface Sender {
+  ip: string;
+  device: DeviceContext | null;
+}
 
+/**
+ * Identidad de un reporte sin cuenta.
+ *
+ * Sin telemetria no hay instalacion que anotar, y entonces la IP hace de las
+ * dos cosas. No es equivalente —una IP la comparten los de una casa y cambia
+ * al moverse— pero es lo unico que queda, y dejarlo en blanco significaria que
+ * ese reporte no cuenta para ningun limite.
+ */
+function identidad(sender: Sender): string {
+  return sender.device?.installId ?? `ip:${sender.ip}`;
+}
+
+/** POST /v1/feedback */
+export async function handleFeedback(raw: unknown, sender: Sender): Promise<HandlerResponse> {
   const hourAgo = new Date(Date.now() - 60 * 60 * 1000);
-  const recent = await activeStore().countReportsSince(auth.accountId, hourAgo);
+
+  // Las dos claves frenan por separado, y hacen falta las dos. Contar solo por
+  // instalacion se salta vaciando el almacenamiento entre envios; contar solo
+  // por IP castiga a toda una casa por lo que haga uno.
+  const recent = await activeStore().countReportsSince(
+    { installId: sender.device?.installId, ip: sender.ip },
+    hourAgo,
+  );
   if (recent >= REPORTS_PER_HOUR) {
     return { status: 429, body: { error: 'demasiados reportes en poco tiempo' } };
   }
@@ -236,6 +261,35 @@ export async function handleFeedback(raw: unknown, auth: Authenticated): Promise
     };
   }
 
-  await activeStore().saveReport({ ...validation.report, accountId: auth.accountId });
+  await activeStore().saveReport({
+    ...validation.report,
+    installId: identidad(sender),
+    platform: sender.device?.platform ?? null,
+    os: sender.device?.os ?? null,
+    deviceModel: sender.device?.deviceModel ?? null,
+    ip: sender.ip,
+  });
   return { status: 201, body: { ok: true, id: validation.report.id } };
+}
+
+/**
+ * DELETE /v1/reports — derecho de supresion sin cuenta.
+ *
+ * Sin correo no hay a quien pedirle que demuestre que es quien dice. Lo que
+ * queda es el identificador de instalacion: quien lo tiene, borra lo suyo. Es
+ * mas debil que una cuenta y hay que decirlo — cualquiera que consiga ese
+ * identificador puede borrar esos reportes. A cambio, borrar no exige tener
+ * una cuenta que nadie queria crear.
+ */
+export async function handleDeleteReports(sender: Sender): Promise<HandlerResponse> {
+  const installId = sender.device?.installId;
+  if (!installId) {
+    return {
+      status: 400,
+      body: { error: 'hace falta el identificador de instalacion para saber que borrar' },
+    };
+  }
+
+  const borrados = await activeStore().deleteReportsByInstall(installId);
+  return { status: 200, body: { ok: true, deleted: borrados } };
 }

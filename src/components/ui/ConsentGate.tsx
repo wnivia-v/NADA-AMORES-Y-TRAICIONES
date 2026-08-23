@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ShieldCheck, Send, ExternalLink } from 'lucide-react';
+import { ShieldCheck, Send, Smartphone, ExternalLink } from 'lucide-react';
 
 import { currentPack, recordConsent } from '@/services/policyService';
 import { translations } from '@/utils/translations';
@@ -37,6 +37,7 @@ export function ConsentGate({ language, onDone }: ConsentGateProps) {
 
   const [age, setAge] = useState(false);
   const [reports, setReports] = useState(false);
+  const [telemetry, setTelemetry] = useState(false);
 
   // La proteccion es lo que se viene a usar; el consentimiento se recoge, pero
   // no tiene sentido ofrecerla apagada — apagada no hay producto. Lo que si es
@@ -44,7 +45,12 @@ export function ConsentGate({ language, onDone }: ConsentGateProps) {
   const canContinue = age;
 
   const accept = () => {
-    recordConsent({ ageConfirmed: age, scopes: { protection: true, reports } });
+    recordConsent({
+      ageConfirmed: age,
+      // La telemetria no puede viajar sin reporte al que acompañar: si alguien
+      // desmarca la contribucion, se apaga con ella.
+      scopes: { protection: true, reports, telemetry: reports && telemetry },
+    });
     onDone();
   };
 
@@ -86,6 +92,33 @@ export function ConsentGate({ language, onDone }: ConsentGateProps) {
               </span>
             </span>
           </label>
+
+          {/* Casilla PROPIA, y no una linea dentro de la anterior.
+              Aceptar los terminos no puede arrastrar de tapadillo el envio de
+              datos del aparato: si van juntos, quien acepta lo primero no ha
+              elegido lo segundo. Se puede contribuir sin esto. */}
+          {reports && (
+            <label
+              className="flex items-start gap-3 cursor-pointer pt-2 border-t"
+              style={{ borderColor: 'var(--border)' }}
+            >
+              <input
+                type="checkbox"
+                checked={telemetry}
+                onChange={(e) => setTelemetry(e.target.checked)}
+                className="mt-1 shrink-0"
+              />
+              <span>
+                <span className="flex items-center gap-1.5 text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
+                  <Smartphone className="w-3.5 h-3.5" style={{ color: 'var(--accent)' }} aria-hidden="true" />
+                  {t.consentTelemetryTitle}
+                </span>
+                <span className="block text-xs mt-1 leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+                  {t.consentTelemetryBody}
+                </span>
+              </span>
+            </label>
+          )}
         </div>
 
         <label className="flex items-start gap-3 cursor-pointer">

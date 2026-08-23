@@ -31,6 +31,7 @@ import {
   consentNeeded,
   grantConsent,
   mayShareReports as mayShare,
+  mayShareTelemetry as mayTelemetry,
   parseConsent,
   withdrawScope,
   type ConsentRecord,
@@ -179,6 +180,17 @@ export function forgetConsent(): void {
  */
 export function mayShareReports(): boolean {
   return mayShare(currentPack(), readConsent());
+}
+
+/**
+ * True cuando el contexto del aparato puede acompañar a un reporte.
+ *
+ * Puerta aparte de la anterior a proposito: apagar la telemetria no puede
+ * apagar la contribucion. Alguien puede querer seguir ayudando a mejorar la
+ * deteccion y no querer que viaje de que aparato sale.
+ */
+export function mayShareTelemetry(): boolean {
+  return mayTelemetry(currentPack(), readConsent());
 }
 
 // -----------------------------------------------------------------------------

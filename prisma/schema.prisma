@@ -11,16 +11,14 @@
 //      video llega con `content` a null y asi se guarda. No es una omision que
 //      alguien pueda "completar" luego: completarla seria reescribir el
 //      producto.
-//   2. BORRAR TIENE QUE BORRAR. Todo lo que pertenece a una persona cuelga de
-//      Account con onDelete: Cascade. Ejercer el derecho de supresion es
-//      eliminar una fila, no acordarse de siete sitios.
+//   2. BORRAR TIENE QUE BORRAR. Sin cuentas, lo que agrupa los datos de una
+//      persona es `installId`: borrar es un deleteMany por ese campo, no
+//      acordarse de siete sitios. Es mas debil que una cuenta y hay que
+//      decirlo — quien tenga ese identificador puede borrar esos reportes.
 //
-// ESTADO: el esquema esta escrito, las migraciones NO se han ejecutado nunca —
-// no hay base de datos donde hacerlo. El servidor corre hoy sobre el repositorio
-// en memoria (server/src/store/memory.ts), que implementa el mismo contrato y si
-// esta probado. Conectar Prisma es el paso que falta y necesita una base de
-// datos viva; escribir ese adaptador sin poder ejecutarlo seria codigo sin
-// verificar disfrazado de trabajo terminado.
+// ESTADO HISTORICO: el esquema estuvo escrito antes de tener base de datos. Hoy
+// corre sobre PostgreSQL real, y la misma bateria de tests se ejecuta contra el
+// almacen en memoria y contra la base.
 // =============================================================================
 
 generator client {
@@ -32,58 +30,12 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-/// Una persona con cuenta. El correo es el unico dato personal que se guarda.
-model Account {
-  id           String    @id
-  email        String    @unique
-  /// Derivada con scrypt. Nunca la contraseña.
-  passwordHash String
-  passwordSalt String
-  /// Null mientras no confirme el correo. Sin confirmar no se aceptan reportes.
-  verifiedAt   DateTime?
-  createdAt    DateTime  @default(now())
-  /// Region declarada al registrarse, para saber que pack regia.
-  region       String    @default("default")
-
-  sessions     Session[]
-  reports      Report[]
-  verifications Verification[]
-
-  @@map("accounts")
-}
-
-/// Sesion abierta. Se guarda el HASH del token, nunca el token.
-model Session {
-  /// SHA-256 del token que tiene el cliente. Ver server/src/auth/tokens.ts.
-  tokenHash String   @id
-  accountId String
-  createdAt DateTime @default(now())
-  expiresAt DateTime
-
-  account   Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
-
-  @@index([accountId])
-  @@index([expiresAt])
-  @@map("sessions")
-}
-
-/// Token de verificacion de correo. Tambien hasheado, y de un solo uso.
-model Verification {
-  tokenHash String   @id
-  accountId String
-  createdAt DateTime @default(now())
-  expiresAt DateTime
-
-  account   Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
-
-  @@index([accountId])
-  @@map("verifications")
-}
-
-/// Un reporte de que la deteccion acerto o fallo.
+/// Un reporte enviado por alguien que acepto contribuir.
 model Report {
   id        String   @id
-  accountId String
+  /// Instalacion que lo envio. Sustituye a la cuenta con correo: identifica,
+  /// no autentica. Ver el comentario en server/src/store/types.ts.
+  installId String
   createdAt DateTime @default(now())
 
   /// text | voice | image | clipboard | screen | video
@@ -128,9 +80,23 @@ model Report {
   /// Cuando lo miro el backoffice. Null = sin revisar.
   reviewedAt DateTime?
 
-  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  // --- Contexto del aparato ---
+  //
+  // Todo null cuando la telemetria esta apagada en ajustes. Un reporte sin
+  // contexto sigue siendo util: se pierde poder distinguir si cien quejas
+  // iguales vienen de cien sitios o de uno, no la queja en si.
+  /// web | android | electron
+  platform    String?
+  os          String?
+  deviceModel String?
+  /// La lee el servidor de la conexion. NUNCA la manda el cliente.
+  ip          String?
 
-  @@index([accountId])
+  // Los dos indices que sostienen el limite de ritmo: se cuenta por instalacion
+  // Y por IP en la misma consulta, y sin ellos seria un recorrido completo de la
+  // tabla en cada reporte.
+  @@index([installId])
+  @@index([ip])
   @@index([errorKind, lexiconVersion])
   @@index([reviewedAt])
   @@map("reports")

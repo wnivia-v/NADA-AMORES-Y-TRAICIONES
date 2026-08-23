@@ -23,7 +23,7 @@
 import { PrismaClient } from '@prisma/client';
 
 import type {
-  AccountRecord, ReportQuery, SessionRecord, StoredReport, Store, VerificationRecord,
+  ReportQuery, StoredReport, Store,
 } from './types';
 
 type Driver = { type: string; evidence: number };
@@ -41,88 +41,29 @@ export class PrismaStore implements Store {
    * quedarsela. El manejador es el que decide si procede — aqui solo se hace
    * posible. Con `create` a secas, reclamar reventaba por clave duplicada.
    */
-  async createAccount(account: AccountRecord): Promise<void> {
-    await this.db.account.upsert({
-      where: { id: account.id },
-      create: account,
-      update: {
-        passwordHash: account.passwordHash,
-        passwordSalt: account.passwordSalt,
-        region: account.region,
-      },
-    });
-  }
-
-  async accountByEmail(email: string): Promise<AccountRecord | null> {
-    return this.db.account.findUnique({ where: { email } });
-  }
-
-  async accountById(id: string): Promise<AccountRecord | null> {
-    return this.db.account.findUnique({ where: { id } });
-  }
-
-  async markVerified(accountId: string, at: Date): Promise<void> {
-    // updateMany y no update: si la cuenta ya no existe, no es un error que
-    // deba tumbar la peticion. update lanzaria.
-    await this.db.account.updateMany({ where: { id: accountId }, data: { verifiedAt: at } });
-  }
-
-  async deleteAccount(accountId: string): Promise<void> {
-    await this.db.account.deleteMany({ where: { id: accountId } });
-  }
-
-  // --- Sesiones ---
-
-  async createSession(session: SessionRecord): Promise<void> {
-    // upsert y no create: renovar una sesion existente no debe fallar por
-    // clave duplicada. La clave es el hash del token, asi que colisionar
-    // significa el mismo token, no dos sesiones distintas.
-    await this.db.session.upsert({
-      where: { tokenHash: session.tokenHash },
-      create: session,
-      update: { expiresAt: session.expiresAt },
-    });
-  }
-
-  async sessionByHash(tokenHash: string): Promise<SessionRecord | null> {
-    return this.db.session.findUnique({ where: { tokenHash } });
-  }
-
-  async deleteSession(tokenHash: string): Promise<void> {
-    await this.db.session.deleteMany({ where: { tokenHash } });
-  }
-
-  // --- Verificacion ---
-
-  async createVerification(verification: VerificationRecord): Promise<void> {
-    await this.db.verification.create({ data: verification });
-  }
-
-  /**
-   * De un solo uso, y de forma atomica.
-   *
-   * El borrado y la lectura van en una transaccion: si dos peticiones canjean
-   * el mismo token a la vez, solo una puede encontrarlo. Sin la transaccion,
-   * las dos leerian y las dos verificarian — que es exactamente lo que "de un
-   * solo uso" tiene que impedir.
-   */
-  async consumeVerification(tokenHash: string): Promise<VerificationRecord | null> {
-    return this.db.$transaction(async (tx) => {
-      const record = await tx.verification.findUnique({ where: { tokenHash } });
-      if (!record) return null;
-      await tx.verification.delete({ where: { tokenHash } });
-      return record;
-    });
-  }
-
-  // --- Reportes ---
-
   async saveReport(report: StoredReport): Promise<void> {
     await this.db.report.create({ data: { ...report, drivers: report.drivers } });
   }
 
-  async countReportsSince(accountId: string, since: Date): Promise<number> {
-    return this.db.report.count({ where: { accountId, createdAt: { gte: since } } });
+  async countReportsSince(
+    key: { installId?: string; ip?: string },
+    since: Date,
+  ): Promise<number> {
+    // OR y no AND: cada clave frena por su cuenta. Con AND, borrar el
+    // almacenamiento local dejaria la cuenta a cero aunque la IP llevara mil.
+    const claves: Array<Record<string, string>> = [];
+    if (key.installId !== undefined) claves.push({ installId: key.installId });
+    if (key.ip !== undefined) claves.push({ ip: key.ip });
+    if (claves.length === 0) return 0;
+
+    return this.db.report.count({
+      where: { createdAt: { gte: since }, OR: claves },
+    });
+  }
+
+  async deleteReportsByInstall(installId: string): Promise<number> {
+    const { count } = await this.db.report.deleteMany({ where: { installId } });
+    return count;
   }
 
   async findReports(query: ReportQuery): Promise<StoredReport[]> {
@@ -149,12 +90,9 @@ export class PrismaStore implements Store {
     await this.db.report.updateMany({ where: { id: { in: ids } }, data: { reviewedAt: at } });
   }
 
-  /** Solo para tests: vacia las tablas. Las cascadas hacen el resto. */
+  /** Solo para tests: vacia la tabla. Sin cuentas ya no hay cascadas. */
   async reset(): Promise<void> {
-    await this.db.account.deleteMany({});
     await this.db.report.deleteMany({});
-    await this.db.session.deleteMany({});
-    await this.db.verification.deleteMany({});
   }
 
   /**

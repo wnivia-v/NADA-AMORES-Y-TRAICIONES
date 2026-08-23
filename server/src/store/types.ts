@@ -2,47 +2,28 @@
 // El contrato de almacenamiento
 //
 // El servidor habla con esta interfaz y no con ninguna base de datos concreta.
-// No es abstraccion por gusto: es lo que permite probar la logica de cuentas y
-// de reportes —que es donde estan las decisiones de seguridad— sin levantar un
-// PostgreSQL. Las reglas que importan (una cuenta sin verificar no puede
-// reportar, borrar borra de verdad, el limite de ritmo) se comprueban contra la
-// implementacion en memoria, y son las mismas reglas que corren en produccion.
+// No es abstraccion por gusto: permite probar la logica de reportes —que es
+// donde estan las decisiones de seguridad— sin levantar un PostgreSQL. Las
+// reglas que importan (el limite de ritmo, que borrar borre de verdad, que un
+// reporte de video no lleve contenido) corren contra las DOS implementaciones
+// con la misma bateria de tests.
 //
-// Hay dos implementaciones previstas:
-//   - memory.ts   — la que existe hoy, probada.
-//   - prisma      — SIN ESCRIBIR. Necesita una base de datos viva para poder
-//                   verificarla; escribirla a ciegas seria codigo sin probar
-//                   con aspecto de trabajo terminado.
+//   - memory.ts   — para los tests y para cuando la base no esta.
+//   - prisma.ts   — PostgreSQL, la de produccion.
 // =============================================================================
 
-export interface AccountRecord {
-  id: string;
-  email: string;
-  passwordHash: string;
-  passwordSalt: string;
-  verifiedAt: Date | null;
-  createdAt: Date;
-  region: string;
-}
-
-export interface SessionRecord {
-  tokenHash: string;
-  accountId: string;
-  createdAt: Date;
-  expiresAt: Date;
-}
-
-export interface VerificationRecord {
-  tokenHash: string;
-  accountId: string;
-  createdAt: Date;
-  expiresAt: Date;
-}
-
-/** Un reporte ya validado y atado a su cuenta. */
+/** Un reporte ya validado, atado a la instalacion que lo envio. */
 export interface StoredReport {
   id: string;
-  accountId: string;
+  /**
+   * Instalacion de origen. Sustituye a la cuenta con correo.
+   *
+   * Identifica, no autentica: se borra vaciando el almacenamiento y quien
+   * quiera falsear reportes en serio lo rotara. Contra el ruido y la
+   * repeticion sirve; contra un atacante decidido, la que aguanta es la IP,
+   * que la lee el servidor y el cliente no puede poner.
+   */
+  installId: string;
   createdAt: Date;
   surface: string;
   judgment: string;
@@ -67,6 +48,26 @@ export interface StoredReport {
   appVersion: string;
   lexiconVersion: string;
   reviewedAt: Date | null;
+
+  // --- Contexto del aparato -------------------------------------------------
+  //
+  // Todo esto es null cuando la telemetria esta apagada en ajustes. Un reporte
+  // sin contexto sigue siendo un reporte util: se pierde poder distinguir si
+  // cien quejas iguales vienen de cien sitios o de uno, no la queja en si.
+
+  /** 'web' | 'android' | 'electron'. */
+  platform: string | null;
+  os: string | null;
+  deviceModel: string | null;
+  /**
+   * IP de la conexion, leida por el servidor.
+   *
+   * NUNCA la manda el cliente. Pedirsela seria pedirle a alguien que se
+   * identifique solo, y quien quiera falsear reportes es justamente quien
+   * pondria otra cosa. Es el unico campo de este bloque que no se puede fingir
+   * desde el navegador, y por eso es el que sostiene el limite de ritmo.
+   */
+  ip: string | null;
 }
 
 export interface ReportQuery {
@@ -78,32 +79,17 @@ export interface ReportQuery {
 }
 
 export interface Store {
-  // --- Cuentas ---
-  createAccount(account: AccountRecord): Promise<void>;
-  accountByEmail(email: string): Promise<AccountRecord | null>;
-  accountById(id: string): Promise<AccountRecord | null>;
-  markVerified(accountId: string, at: Date): Promise<void>;
-  /**
-   * Borra la cuenta y TODO lo que cuelga de ella.
-   *
-   * Es el derecho de supresion. Que sea una sola llamada, y no siete, es lo que
-   * hace que no se olvide ninguna tabla dentro de dos años.
-   */
-  deleteAccount(accountId: string): Promise<void>;
-
-  // --- Sesiones ---
-  createSession(session: SessionRecord): Promise<void>;
-  sessionByHash(tokenHash: string): Promise<SessionRecord | null>;
-  deleteSession(tokenHash: string): Promise<void>;
-
-  // --- Verificacion ---
-  createVerification(verification: VerificationRecord): Promise<void>;
-  consumeVerification(tokenHash: string): Promise<VerificationRecord | null>;
-
   // --- Reportes ---
   saveReport(report: StoredReport): Promise<void>;
-  /** Cuantos reportes lleva esa cuenta desde `since`. Para el limite de ritmo. */
-  countReportsSince(accountId: string, since: Date): Promise<number>;
+  /**
+   * Cuantos reportes lleva esa instalacion —o esa IP— desde `since`.
+   *
+   * Las dos claves cuentan por separado y las dos frenan. Solo por instalacion
+   * seria trivial de saltar: basta borrar el almacenamiento entre envios.
+   */
+  countReportsSince(key: { installId?: string; ip?: string }, since: Date): Promise<number>;
+  /** Derecho de supresion sin cuenta: se borra por instalacion. */
+  deleteReportsByInstall(installId: string): Promise<number>;
   findReports(query: ReportQuery): Promise<StoredReport[]>;
   markReviewed(ids: string[], at: Date): Promise<void>;
 }

@@ -7,15 +7,11 @@
 // =============================================================================
 
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
-import { ALLOWED_ORIGINS, PORT, VERIFY_URL_BASE, configuredUpstreams } from './config';
+import { ALLOWED_ORIGINS, PORT, configuredUpstreams } from './config';
 import { handleAnalyze, handleHealth, type HandlerResponse } from './handler';
 import { handlePolicy } from './policy';
-import {
-  handleRegister, handleVerify, handleLogin, handleLogout,
-  handleDeleteAccount, authenticate, type RequestContext,
-} from './handlers/accounts';
-import { handleFeedback } from './handlers/feedback';
-import { mailerMode } from './auth/mailer';
+import { handleFeedback, handleDeleteReports, type Sender } from './handlers/feedback';
+import { parseDeviceContext } from '../../src/shared/telemetry/types';
 import { initStore } from './store';
 
 /** Tope de cuerpo. Corta la lectura en cuanto se pasa, sin acumular en memoria. */
@@ -66,18 +62,6 @@ function send(res: ServerResponse, origin: string | undefined, { status, body }:
   res.end(payload);
 }
 
-/** El token de sesion viaja en Authorization: Bearer, no en cookie.
- *
- * La app es de otro origen que el API, asi que una cookie exigiria SameSite=None
- * y traeria consigo el problema de CSRF. Una cabecera que el navegador no manda
- * sola no lo tiene.
- */
-function bearerToken(req: IncomingMessage): string | null {
-  const header = req.headers.authorization;
-  if (!header || !header.startsWith('Bearer ')) return null;
-  const token = header.slice(7).trim();
-  return token || null;
-}
 
 /**
  * Clave para el limite de ritmo.
@@ -92,12 +76,6 @@ function clientKey(req: IncomingMessage): string {
   return (first ?? req.socket.remoteAddress ?? 'desconocido').trim();
 }
 
-function requestContext(req: IncomingMessage): RequestContext {
-  return {
-    clientKey: clientKey(req),
-    verifyUrlBase: VERIFY_URL_BASE,
-  };
-}
 
 /** Lee el cuerpo, lo parsea y delega. Un JSON roto es 400, no una excepcion. */
 function withJsonBody(
@@ -140,28 +118,19 @@ function withJsonBody(
     });
 }
 
-/** Resuelve la sesion y delega, o responde 401. */
-function withAuth(
-  req: IncomingMessage,
-  res: ServerResponse,
-  origin: string | undefined,
-  handler: (auth: NonNullable<Awaited<ReturnType<typeof authenticate>>>) => Promise<HandlerResponse>,
-): void {
-  void authenticate(bearerToken(req))
-    .then((auth) => {
-      if (!auth) {
-        send(res, origin, { status: 401, body: { error: 'sesion invalida' } });
-        return undefined;
-      }
-      return handler(auth).then((result) => send(res, origin, result));
-    })
-    .catch((error: unknown) => {
-      // authenticate() consulta el almacen, asi que tambien puede fallar por
-      // la base de datos. Sin este catch, la promesa quedaba rechazada sin
-      // manejar y el cliente se quedaba esperando para siempre.
-      console.error('[NADA][server] fallo al autenticar:', error);
-      send(res, origin, { status: 500, body: { error: 'error interno' } });
-    });
+/**
+ * Quien envia, segun el servidor.
+ *
+ * La IP se lee SIEMPRE, y de la conexion — nunca de lo que diga el cliente. El
+ * contexto del aparato solo llega si la telemetria esta encendida, y llega
+ * dentro del cuerpo: no hay cabecera propia porque no es una credencial, es
+ * un dato mas del reporte.
+ */
+function senderOf(req: IncomingMessage, body: unknown): Sender {
+  const device = typeof body === 'object' && body !== null
+    ? parseDeviceContext((body as Record<string, unknown>)['device'])
+    : null;
+  return { ip: clientKey(req), device };
 }
 
 const server = createServer((req, res) => {
@@ -191,54 +160,21 @@ const server = createServer((req, res) => {
     return;
   }
 
-  // --- Cuentas ---
-
-  if (req.method === 'POST' && url.pathname === '/v1/accounts') {
-    withJsonBody(req, res, origin, (parsed) => handleRegister(parsed, requestContext(req)));
-    return;
-  }
-
-  if (req.method === 'POST' && url.pathname === '/v1/accounts/verify') {
-    withJsonBody(req, res, origin, handleVerify);
-    return;
-  }
-
-  if (req.method === 'DELETE' && url.pathname === '/v1/accounts') {
-    withAuth(req, res, origin, handleDeleteAccount);
-    return;
-  }
-
-  if (req.method === 'POST' && url.pathname === '/v1/sessions') {
-    withJsonBody(req, res, origin, (parsed) => handleLogin(parsed, requestContext(req)));
-    return;
-  }
-
-  if (req.method === 'DELETE' && url.pathname === '/v1/sessions') {
-    void handleLogout(bearerToken(req)).then((result) => send(res, origin, result));
-    return;
-  }
-
   // --- Reportes ---
 
   if (req.method === 'POST' && url.pathname === '/v1/feedback') {
-    withAuth(req, res, origin, (auth) =>
-      new Promise<HandlerResponse>((resolve) => {
-        readBody(req)
-          .then((rawBody) => {
-            let parsed: unknown;
-            try {
-              parsed = JSON.parse(rawBody);
-            } catch {
-              resolve({ status: 400, body: { error: 'JSON invalido' } });
-              return undefined;
-            }
-            return handleFeedback(parsed, auth).then(resolve);
-          })
-          .catch(() => resolve({ status: 413, body: { error: 'cuerpo demasiado grande' } }));
-      }),
-    );
+    withJsonBody(req, res, origin, (parsed) => handleFeedback(parsed, senderOf(req, parsed)));
     return;
   }
+
+  // Derecho de supresion sin cuenta: se borra lo de esta instalacion. El
+  // identificador viaja en el cuerpo, igual que al enviar.
+  if (req.method === 'DELETE' && url.pathname === '/v1/reports') {
+    withJsonBody(req, res, origin, (parsed) =>
+      handleDeleteReports(senderOf(req, parsed)));
+    return;
+  }
+
 
   send(res, origin, { status: 404, body: { error: 'no encontrado' } });
 });
@@ -251,11 +187,6 @@ void initStore().then((kind) => {
 
 server.listen(PORT, () => {
   const upstreams = configuredUpstreams();
-  // Un despliegue sin transporte de correo deja a todo el mundo sin poder
-  // verificar su cuenta. Se avisa al arrancar, no cuando lo descubra un usuario.
-  if (mailerMode() === 'missing') {
-    console.error('[NADA][server] SIN MAIL_TRANSPORT: nadie podra verificar su cuenta');
-  }
   console.log(`[NADA][server] escuchando en http://127.0.0.1:${PORT}`);
   console.log(
     upstreams.length > 0

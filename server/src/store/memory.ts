@@ -12,82 +12,39 @@
 // de supresion lo dira.
 // =============================================================================
 
-import type {
-  AccountRecord, ReportQuery, SessionRecord, StoredReport, Store, VerificationRecord,
-} from './types';
+import type { ReportQuery, StoredReport, Store } from './types';
 
 export class MemoryStore implements Store {
-  private accounts = new Map<string, AccountRecord>();
-  private emailIndex = new Map<string, string>();
-  private sessions = new Map<string, SessionRecord>();
-  private verifications = new Map<string, VerificationRecord>();
   private reports = new Map<string, StoredReport>();
-
-  /** Crea, o reemplaza si existia sin verificar. Ver la version de Prisma. */
-  async createAccount(account: AccountRecord): Promise<void> {
-    this.accounts.set(account.id, account);
-    this.emailIndex.set(account.email, account.id);
-  }
-
-  async accountByEmail(email: string): Promise<AccountRecord | null> {
-    const id = this.emailIndex.get(email);
-    return id ? this.accounts.get(id) ?? null : null;
-  }
-
-  async accountById(id: string): Promise<AccountRecord | null> {
-    return this.accounts.get(id) ?? null;
-  }
-
-  async markVerified(accountId: string, at: Date): Promise<void> {
-    const account = this.accounts.get(accountId);
-    if (account) this.accounts.set(accountId, { ...account, verifiedAt: at });
-  }
-
-  async deleteAccount(accountId: string): Promise<void> {
-    const account = this.accounts.get(accountId);
-    if (!account) return;
-
-    this.accounts.delete(accountId);
-    this.emailIndex.delete(account.email);
-    for (const [key, s] of this.sessions) if (s.accountId === accountId) this.sessions.delete(key);
-    for (const [key, v] of this.verifications) if (v.accountId === accountId) this.verifications.delete(key);
-    for (const [key, r] of this.reports) if (r.accountId === accountId) this.reports.delete(key);
-  }
-
-  async createSession(session: SessionRecord): Promise<void> {
-    this.sessions.set(session.tokenHash, session);
-  }
-
-  async sessionByHash(tokenHash: string): Promise<SessionRecord | null> {
-    return this.sessions.get(tokenHash) ?? null;
-  }
-
-  async deleteSession(tokenHash: string): Promise<void> {
-    this.sessions.delete(tokenHash);
-  }
-
-  async createVerification(verification: VerificationRecord): Promise<void> {
-    this.verifications.set(verification.tokenHash, verification);
-  }
-
-  /** De un solo uso: se borra al canjearlo, haya caducado o no. */
-  async consumeVerification(tokenHash: string): Promise<VerificationRecord | null> {
-    const record = this.verifications.get(tokenHash);
-    if (!record) return null;
-    this.verifications.delete(tokenHash);
-    return record;
-  }
 
   async saveReport(report: StoredReport): Promise<void> {
     this.reports.set(report.id, report);
   }
 
-  async countReportsSince(accountId: string, since: Date): Promise<number> {
+  async countReportsSince(
+    key: { installId?: string; ip?: string },
+    since: Date,
+  ): Promise<number> {
     let count = 0;
     for (const report of this.reports.values()) {
-      if (report.accountId === accountId && report.createdAt >= since) count += 1;
+      if (report.createdAt < since) continue;
+      const coincide =
+        (key.installId !== undefined && report.installId === key.installId) ||
+        (key.ip !== undefined && report.ip !== null && report.ip === key.ip);
+      if (coincide) count += 1;
     }
     return count;
+  }
+
+  async deleteReportsByInstall(installId: string): Promise<number> {
+    let borrados = 0;
+    for (const [id, report] of this.reports) {
+      if (report.installId === installId) {
+        this.reports.delete(id);
+        borrados += 1;
+      }
+    }
+    return borrados;
   }
 
   async findReports(query: ReportQuery): Promise<StoredReport[]> {
@@ -111,13 +68,9 @@ export class MemoryStore implements Store {
 
   /** Solo para tests. */
   reset(): void {
-    this.accounts.clear();
-    this.emailIndex.clear();
-    this.sessions.clear();
-    this.verifications.clear();
     this.reports.clear();
   }
 }
 
-/** El almacen del proceso. Se sustituira por el de Prisma cuando exista. */
+/** El almacen del proceso cuando no hay base de datos configurada. */
 export const store = new MemoryStore();

@@ -5,7 +5,7 @@ import { getProvidersStatus, getProviderConfig, saveProviderConfig } from '@/ser
 import type { ProviderStrategy, ProviderId, ProviderCost, ProviderRequirement } from '@/services/aiProviders';
 import { Palette, Globe, Code, Brain, Zap, Shield, Layers, Laptop, Cloud, CreditCard } from 'lucide-react';
 import { PrivacyPanel } from './PrivacyPanel';
-import { AccountPanel } from './AccountPanel';
+import { DataSharingPanel } from './DataSharingPanel';
 
 const STRATEGY_INFO: Record<ProviderStrategy, { icon: typeof Zap; label: string; desc: string }> = {
   fallback: { icon: Shield, label: 'Fallback', desc: 'Intenta el siguiente si falla' },
@@ -253,7 +253,7 @@ export function SettingsView() {
       </div>
 
       {/* Cuenta: solo hace falta para contribuir reportes. */}
-      <AccountPanel />
+      <DataSharingPanel />
 
       {/* Privacidad: retirar el consentimiento y borrar lo guardado. */}
       <PrivacyPanel />

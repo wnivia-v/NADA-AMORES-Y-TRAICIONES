@@ -33,9 +33,22 @@ import type { JurisdictionPack } from './jurisdiction';
  * humana, no algo que deba deducir una funcion. Al subirla, todo el mundo
  * vuelve a pasar por la pantalla.
  */
-export const CONSENT_TEXT_VERSION = '2026-08-1';
+export const CONSENT_TEXT_VERSION = '2026-08-2';
 
-export type ConsentScope = 'protection' | 'reports';
+/**
+ * Que se acepta, por separado.
+ *
+ * - `protection`: usar la app. Sin esto no hay producto.
+ * - `reports`: contribuir el analisis al corpus para mejorar la deteccion.
+ * - `telemetry`: acompañar esos reportes con el contexto del dispositivo
+ *   —plataforma, sistema, modelo, version— para poder distinguir un fallo real
+ *   de alguien mandando informacion falsa a mano.
+ *
+ * `telemetry` es un ambito propio y no una casilla dentro de `reports` por un
+ * motivo practico: se retira por separado. Alguien puede querer seguir
+ * ayudando con sus reportes y no querer que viaje de que aparato salen.
+ */
+export type ConsentScope = 'protection' | 'reports' | 'telemetry';
 
 export interface ConsentRecord {
   /** Version del texto aceptado + region, para saber si sigue vigente. */
@@ -101,6 +114,20 @@ export function mayShareReports(pack: JurisdictionPack, consent: ConsentRecord |
   return consent?.scopes.reports === true;
 }
 
+/**
+ * True cuando el contexto del dispositivo puede acompañar a un reporte.
+ *
+ * Exige las DOS cosas. No hay telemetria suelta: el contexto del aparato solo
+ * tiene sentido pegado a un reporte que explique de que analisis habla, y
+ * mandarlo por su cuenta seria recoger datos sin nada que mejorar con ellos.
+ */
+export function mayShareTelemetry(
+  pack: JurisdictionPack,
+  consent: ConsentRecord | null,
+): boolean {
+  return mayShareReports(pack, consent) && consent?.scopes.telemetry === true;
+}
+
 /** Concede lo elegido bajo el pack vigente. */
 export function grantConsent(
   pack: JurisdictionPack,
@@ -117,6 +144,7 @@ export function grantConsent(
       // Solo un true explicito enciende el envio. Cualquier otra cosa
       // —undefined, null, 'si', 1— lo deja apagado.
       reports: choice.scopes.reports === true,
+      telemetry: choice.scopes.telemetry === true,
     },
   };
 }
@@ -158,6 +186,9 @@ export function parseConsent(raw: unknown): ConsentRecord | null {
     scopes: {
       protection: s['protection'] === true,
       reports: s['reports'] === true,
+      // Un registro guardado antes de que existiera este ambito no lo trae, y
+      // ausente significa apagado. Nadie consintio algo que no se le pregunto.
+      telemetry: s['telemetry'] === true,
     },
   };
 }

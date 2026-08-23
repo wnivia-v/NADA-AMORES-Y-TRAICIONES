@@ -102,6 +102,8 @@ export interface TranslationSet {
   consentReportsTitle: string;
   consentReportsBody: string;
   consentThirdParty: string;
+  consentTelemetryTitle: string;
+  consentTelemetryBody: string;
   consentAge: string;
   consentPrivacyNotice: string;
   consentAuthority: string;
@@ -228,6 +230,9 @@ const es: TranslationSet = {
   consentReportsTitle: 'Ayudar a mejorar la deteccion (opcional)',
   consentReportsBody: 'Cuando marques que nos hemos equivocado, enviarnos ese caso para corregirlo. Puedes usar la app sin activarlo.',
   consentThirdParty: 'Incluye el texto analizado, que puede contener mensajes escritos por otras personas.',
+  consentTelemetryTitle: 'Incluir datos de este aparato',
+  consentTelemetryBody:
+    'Plataforma, sistema, modelo y un numero aleatorio que identifica esta instalacion. El servidor anota ademas la IP de la conexion. Sirve solo para distinguir un fallo real de alguien mandando informacion falsa a mano, y se puede desactivar despues en Ajustes.',
   consentAge: 'Declaro que tengo al menos {age} años.',
   consentPrivacyNotice: 'Aviso de privacidad',
   consentAuthority: 'Autoridad de control: {authority}',
@@ -351,6 +356,9 @@ const en: TranslationSet = {
   consentReportsTitle: 'Help improve detection (optional)',
   consentReportsBody: 'When you mark that we got it wrong, send us that case so we can fix it. You can use the app without this.',
   consentThirdParty: 'This includes the analysed text, which may contain messages written by other people.',
+  consentTelemetryTitle: 'Include this device data',
+  consentTelemetryBody:
+    'Platform, OS, model and a random number identifying this install. The server also records the connection IP. Used only to tell a real failure from someone feeding false information, and it can be turned off later in Settings.',
   consentAge: 'I declare that I am at least {age} years old.',
   consentPrivacyNotice: 'Privacy notice',
   consentAuthority: 'Supervisory authority: {authority}',

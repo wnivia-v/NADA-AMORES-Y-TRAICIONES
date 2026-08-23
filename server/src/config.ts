@@ -66,10 +66,3 @@ export const ALLOWED_ORIGINS = env('ALLOWED_ORIGINS', 'http://localhost:5173,htt
 /** Tiempo maximo que se espera a un proveedor antes de rendirse. */
 export const UPSTREAM_TIMEOUT_MS = Number(env('UPSTREAM_TIMEOUT_MS', '15000'));
 
-/**
- * URL publica donde la app atiende el enlace de verificacion.
- *
- * El servidor no sabe por que dominio se le llega, asi que esto es
- * configuracion de despliegue como el resto de las direcciones.
- */
-export const VERIFY_URL_BASE = env('VERIFY_URL_BASE', 'http://localhost:5173/verificar');

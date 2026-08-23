@@ -262,15 +262,25 @@ precisamente lo que se le pide.
 
 | Control | Valor | Dónde |
 |---|---|---|
-| Cuenta con correo verificado | Obligatoria para reportar | `server/src/handlers/accounts.ts` |
-| Tope de reportes por cuenta y hora | `REPORTS_PER_HOUR` | `server/src/auth/rateLimit.ts` |
-| Registro por IP y hora | 5 | `registerLimiter` |
-| Intentos de login | 8 / 15 min | `loginLimiter` |
+| Tope de reportes por instalación y hora | `REPORTS_PER_HOUR` | `server/src/auth/rateLimit.ts` |
+| Tope de reportes por **IP** y hora | El mismo, contado aparte | `server/src/handlers/feedback.ts` |
 | Validación de campos del reporte | Lista blanca `/^[a-z0-9._:-]{1,60}$/` en ids, región, idioma | `server/src/handlers/feedback.ts` |
+| Validación del contexto del aparato | Cerrada: lo que no encaje entero se rechaza entero | `src/shared/telemetry/types.ts` |
 
-La cuenta con correo se eligió **a sabiendas de su coste**: da trazabilidad
-contra el envenenamiento a cambio de custodiar un dato personal más. Es la
-decisión registrada en la PR #1.
+**Las cuentas con correo se retiraron, y esto es más débil.** Un correo
+verificado cuesta trabajo falsificar; un identificador de instalación se borra
+vaciando el almacenamiento. Lo que sostiene el límite ahora es la **IP**, que es
+el único dato que el cliente no puede poner — por eso se cuenta por las dos
+claves con `OR` y no con `AND`: contar solo por instalación se saltaría borrando
+datos entre envíos.
+
+Probado explícitamente: *«ROTAR el identificador no salta el límite: la IP sigue
+contando»* en `src/tests/reports.test.ts`.
+
+Lo que se perdió con las cuentas, dicho claro: ya no hay forma de atar una
+campaña de envenenamiento a una identidad que persista entre reinstalaciones, ni
+de bloquear a quien la haga. Contra un atacante decidido, la red que queda es la
+del §2.1 — la medición contra el corpus curado.
 
 ### 2.4 El lazo de auto-aprendizaje en el dispositivo
 
