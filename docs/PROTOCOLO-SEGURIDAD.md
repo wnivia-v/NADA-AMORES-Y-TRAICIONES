@@ -339,6 +339,28 @@ Sin esta sección, el resto del documento sería propaganda.
 
 ---
 
+## 3bis. Identificadores públicos: MITRE ATLAS
+
+Hasta aquí el protocolo describe las amenazas con palabras propias. Eso vale
+para entenderlo y no vale para que nadie lo compruebe: «aislamos el prompt» no
+se puede contrastar con nada.
+
+Dos skills instaladas en `.claude/skills/` traen el mapeo a **MITRE ATLAS**, la
+taxonomía de amenazas adversarias contra sistemas de IA:
+
+| Nuestra sección | Técnica ATLAS | Qué nombra |
+|---|---|---|
+| §1.6 y la superficie de OCR/portapapeles | `AML.T0051.001` | Inyección de prompt **indirecta** — el ataque llega por un canal de datos que parece de confianza |
+| Escudo de voz y de vídeo | `AML.T0088`, `AML.T0043`, `AML.T0018`, `AML.T0052` | Audio sintético, ejemplos adversarios, envenenamiento de modelo |
+| Toda la §1 | NIST AI RMF `MEASURE-2.7` | Medir la resistencia a ataques adversarios |
+
+Lo que esto cambia: un tribunal puede coger la lista de ATLAS y preguntar por
+técnica, en vez de creerse el índice que escribimos nosotros. **Y puede ver
+cuáles no cubrimos**, que es la mitad que da credibilidad.
+
+Procedencia y qué se auditó de esas skills: `.claude/skills/PROCEDENCIA.md`. No
+son de Anthropic pese al nombre con que circulan.
+
 ## 4. Qué hacer cuando se toca algo de esto
 
 1. **Si añades un lector del corpus de medición** en `src/` o `server/`:
@@ -351,4 +373,8 @@ Sin esta sección, el resto del documento sería propaganda.
    ataque: sin grupo de control, «detecta el 100%» se consigue marcándolo todo.
 3. **Si relajas `autoRejectReason`**, estás quitando la única puerta que se
    cierra sola. Esa decisión es de la persona propietaria del proyecto.
-4. **Antes de publicar**, resuelve el punto 1 del §3.
+4. **Si actualizas o añades una skill de terceros**, se revisa igual que la
+   primera vez y `.claude/skills/PROCEDENCIA.md` se actualiza en el mismo
+   commit. Una skill es un fichero de instrucciones que el agente obedece:
+   instalar una es una decisión de cadena de suministro, no una descarga.
+5. **Antes de publicar**, resuelve el punto 1 del §3.
