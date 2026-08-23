@@ -1,0 +1,40 @@
+# Dependencias de las dos skills de .claude/skills/
+#
+# Se instalan con `npm run skills:setup`, que las mete en .venv-skills/ y NO en
+# el Python del sistema — Debian lo marca como externally-managed y con razon:
+# pisarlo rompe herramientas del sistema que dependen de sus versiones.
+#
+# NO se pone aqui en el hook de arranque a proposito. Son 548 MB y estas skills
+# se usan de vez en cuando, no en cada sesion; que arrancar a escribir codigo
+# cueste dos minutos de descarga seria peor negocio que teclear una orden el dia
+# que hagan falta.
+
+# --- Extraccion de contenido (skill de inyeccion indirecta) ---
+beautifulsoup4      # HTML: comentarios, display:none, alt de imagenes
+pypdf               # PDF: texto en blanco sobre blanco, cuerpos diminutos
+pillow              # imagenes
+pytesseract         # OCR — necesita ADEMAS el binario tesseract del sistema
+
+# --- Analisis de audio (skill de deepfake) ---
+librosa             # MFCC, centroide y contraste espectral, cruces por cero
+numpy
+scikit-learn        # RandomForest y GradientBoosting del clasificador
+joblib              # serializa el modelo entrenado en local
+
+# --- LO QUE NO SE INSTALA, Y POR QUE ---
+#
+# llm-guard, transformers y torch quedan fuera. No es por el tamaño: es que se
+# MIDIO que sus modelos no se pueden descargar aqui.
+#
+#   huggingface.co        -> 000 (bloqueado por el proxy de este entorno)
+#   cdn-lfs.huggingface.co -> 000
+#   pypi.org             -> 200
+#
+# Serian ~1 GB de librerias que al ejecutarse fallarian al buscar los pesos. El
+# camino heuristico del script funciona sin ellas y ya produce la salida con el
+# identificador de ATLAS; los campos `llmguard.available` y `model.available`
+# salen en false, que es honesto y visible.
+#
+# Donde Hugging Face SI se alcance, se añaden con:
+#   .venv-skills/bin/pip install llm-guard transformers torch
+# y entonces los indicadores `--use-llmguard` y `--use-model` empiezan a valer.

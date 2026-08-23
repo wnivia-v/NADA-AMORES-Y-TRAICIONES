@@ -47,3 +47,6 @@ public/vision-worker.js.map
 # Vista previa del terminal de deliberacion: se regenera con `npm run preview:deliberacion`
 bench/deliberation-preview.*.html
 bench/.preview.css
+
+# Entorno de las skills de seguridad: se recrea con `npm run skills:setup`
+.venv-skills/

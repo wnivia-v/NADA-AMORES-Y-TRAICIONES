@@ -33,6 +33,7 @@
     "bench:redteam": "tsx bench/injection-redteam.ts",
     "bench:vision": "node bench/chromium-smoke.mjs",
     "preview:deliberacion": "tsx bench/deliberation-preview.tsx",
+    "skills:setup": "bash scripts/setup-skills.sh",
     "backoffice": "tsx bench/backoffice.ts",
     "icon": "node scripts/generate-icon.mjs",
     "electron:dev": "npm run icon && tsc -p tsconfig.electron.json && concurrently -k \"vite\" \"wait-on http://127.0.0.1:5173 && electron .\"",

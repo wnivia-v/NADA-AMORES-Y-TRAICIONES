@@ -70,6 +70,57 @@ lectura completa, y conviene que quede dicho.
   del de vídeo, y aporta el vocabulario forense (MFCC, contraste espectral) que
   el proyecto no tenía.
 
+## Ejecutadas, no solo instaladas
+
+    npm run skills:setup
+
+Crea `.venv-skills/` (548 MB), instala las dependencias de
+`requirements.txt`, se trae el binario de `tesseract` si falta, y termina
+lanzando el detector para que no haya duda de si quedó bien.
+
+Se hicieron correr contra entradas reales, no solo `--help`:
+
+| Prueba | Resultado |
+|---|---|
+| Texto con `Ignore all previous instructions` | `decision: block`, con la heurística que disparó |
+| HTML con la carga en un comentario y en un `display:none` | La extrae de los dos sitios y bloquea |
+| WAV sintético de 2 s | 238 características; marca *pitch jitter* 0,30 Hz y variación del centroide 0,046, ambas por debajo del umbral de voz genuina |
+
+Ese último caso vale la pena leerlo: el fichero era un tono con armónicos, y lo
+que señaló es exactamente lo que delata a una voz sintética — no varía lo
+suficiente. Funciona.
+
+## Lo que NO se instaló, y por qué
+
+`llm-guard`, `transformers` y `torch` quedan fuera. **No por el tamaño: porque
+se midió que sus modelos no se pueden descargar aquí.**
+
+    huggingface.co         -> 000 (bloqueado por el proxy del entorno)
+    cdn-lfs.huggingface.co -> 000
+    pypi.org               -> 200
+
+Serían ~1 GB de librerías que al ejecutarse fallarían buscando los pesos. El
+camino heurístico ya produce la salida con el identificador de ATLAS, y los
+campos `llmguard.available` y `model.available` salen en `false` — que es
+honesto y se ve.
+
+Donde Hugging Face sí se alcance:
+
+    .venv-skills/bin/pip install llm-guard transformers torch
+
+y entonces `--use-llmguard` y `--use-model` empiezan a valer.
+
+## Por qué no está en el hook de arranque
+
+El hook prepara la base de datos y MediaPipe en cada sesión porque el contenedor
+es efímero. Estas dependencias **no** están ahí a propósito: son 548 MB y estas
+skills se usan de vez en cuando. Que arrancar a escribir código costara dos
+minutos de descarga sería peor negocio que teclear una orden el día que hagan
+falta.
+
+`.venv-skills/` está en `.gitignore`. Lo versionado es `requirements.txt` y el
+script, que es lo que hace falta para reconstruirlo.
+
 ## Cómo actualizarlas
 
 **No con un `git pull`.** Vuelven a revisarse igual que la primera vez, y este
