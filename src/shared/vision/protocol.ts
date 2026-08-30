@@ -22,7 +22,7 @@ import type { TierBudget } from './deviceTier';
  * documentacion, y un test la contrasta con la version instalada para que no se
  * quede mintiendo cuando alguien actualice el paquete.
  */
-export const MEDIAPIPE_VERSION = '0.10.35';
+export const MEDIAPIPE_VERSION = '1.0.1';
 
 /**
  * Ruta del runtime WASM, en el propio origen.

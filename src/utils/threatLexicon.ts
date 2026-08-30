@@ -917,7 +917,6 @@ export const LEXICON: readonly LexiconEntry[] = [
     id: 'vio-know-where', category: 'amenaza-violencia', weight: 30, langs: ['es'],
     label: 'Dice saber donde vives o donde estas',
     regex: /((se|sabe|se\s*muy\s*bien)\s*d[oó]nde\s*(vives|trabajas|estas)|te\s*(tengo|tenemos)\s*localizad|te\s*estoy\s*(viendo|siguiendo)|se\s*por\s*d[oó]nde\s*(pasas|andas))/,
->>>>>>> origin/main
   }),
 ];
 

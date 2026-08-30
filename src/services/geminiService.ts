@@ -366,7 +366,6 @@ async function runTextAnalysis(
   // display a local-only "SEGURO" as if the AI had cleared the text.
   if (signal.aborted) throw new AnalysisAbortedError(scope);
 
-<<<<<<< HEAD
   // Step 3: AI Provider orchestration (local, Gemini, y los remotos via proxy)
   const request = prepare(text, 'text');
   recordInjectionAttempts(request, scope);
