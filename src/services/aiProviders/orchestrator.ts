@@ -12,6 +12,7 @@ import { geminiProvider } from './geminiProvider';
 import { groqProvider } from './groqProvider';
 import { claudeProvider } from './claudeProvider';
 import { bedrockProvider } from './bedrockProvider';
+import { veniceProvider } from './veniceProvider';
 
 // Registry of all providers
 const PROVIDERS: Record<ProviderId, AIProvider> = {
@@ -20,6 +21,7 @@ const PROVIDERS: Record<ProviderId, AIProvider> = {
   groq: groqProvider,
   claude: claudeProvider,
   bedrock: bedrockProvider,
+  venice: veniceProvider,
 };
 
 /**
@@ -272,6 +274,149 @@ async function strategyConsensus(
 // =============================================================================
 // Main orchestration entry point
 // =============================================================================
+
+// =============================================================================
+// Orchestration with real-time per-provider progress callbacks
+// =============================================================================
+
+export type ProviderProgressStatus = 'pending' | 'thinking' | 'done' | 'error' | 'disabled' | 'no-key';
+
+export interface ProviderProgressEvent {
+  providerId: ProviderId;
+  providerName: string;
+  status: ProviderProgressStatus;
+  result: AIAnalysisResult | null;
+  durationMs: number | null;
+  error?: string;
+}
+
+export type ProviderProgressCallback = (event: ProviderProgressEvent) => void;
+
+/**
+ * Fires all enabled+available providers simultaneously and streams progress
+ * events as each one resolves. Returns the final orchestrated result.
+ *
+ * This is the entry point for the AI Console Panel so each sub-panel can
+ * animate independently as providers respond.
+ */
+export async function orchestrateAnalysisWithProgress(
+  text: string,
+  prompt: string,
+  onProgress: ProviderProgressCallback,
+  signal?: AbortSignal,
+): Promise<{ result: AIAnalysisResult | null; providerId: ProviderId | null }> {
+  const config = getConfig();
+
+  // Emit initial state: all providers with their status
+  for (const [id, provider] of Object.entries(PROVIDERS) as [ProviderId, AIProvider][]) {
+    const cfg = config.providers[id];
+    if (!cfg?.enabled) {
+      onProgress({
+        providerId: id,
+        providerName: provider.name,
+        status: 'disabled',
+        result: null,
+        durationMs: null,
+      });
+      continue;
+    }
+    if (!provider.isAvailable()) {
+      onProgress({
+        providerId: id,
+        providerName: provider.name,
+        status: 'no-key',
+        result: null,
+        durationMs: null,
+      });
+      continue;
+    }
+    if (!hasQuota(provider)) {
+      onProgress({
+        providerId: id,
+        providerName: provider.name,
+        status: 'error',
+        result: null,
+        durationMs: null,
+        error: 'Cuota agotada',
+      });
+      continue;
+    }
+    // Mark as thinking
+    onProgress({
+      providerId: id,
+      providerName: provider.name,
+      status: 'thinking',
+      result: null,
+      durationMs: null,
+    });
+  }
+
+  const activeProviders = getActiveProviders();
+
+  // Fire all active providers and stream results as they resolve
+  const promises = activeProviders.map(async (provider) => {
+    const start = Date.now();
+    const outcome = await callProvider(provider, text, prompt, signal);
+    const durationMs = Date.now() - start;
+
+    onProgress({
+      providerId: provider.id,
+      providerName: provider.name,
+      status: outcome ? 'done' : 'error',
+      result: outcome?.result ?? null,
+      durationMs,
+      error: outcome ? undefined : 'Sin respuesta o timeout',
+    });
+
+    return outcome;
+  });
+
+  const outcomes = (await Promise.allSettled(promises))
+    .filter((r): r is PromiseFulfilledResult<ProviderOutcome> => r.status === 'fulfilled')
+    .map((r) => r.value);
+
+  // Apply the configured strategy to the collected results
+  const validResults: ProviderSuccess[] = outcomes.filter(
+    (o): o is ProviderSuccess => o !== null,
+  );
+
+  if (validResults.length === 0) return { result: null, providerId: null };
+
+  switch (config.strategy) {
+    case 'best-result': {
+      const allSafe = validResults.every((r) => r.result.verdict === 'SEGURO');
+      validResults.sort((a, b) =>
+        allSafe
+          ? a.result.riskScore - b.result.riskScore
+          : b.result.riskScore - a.result.riskScore,
+      );
+      return validResults[0] ?? { result: null, providerId: null };
+    }
+    case 'consensus': {
+      const verdictCounts: Record<string, number> = {};
+      for (const { result } of validResults) {
+        verdictCounts[result.verdict] = (verdictCounts[result.verdict] ?? 0) + 1;
+      }
+      const threshold = Math.ceil(validResults.length * config.consensusThreshold);
+      let consensusVerdict: string | null = null;
+      for (const [verdict, count] of Object.entries(verdictCounts)) {
+        if (count >= threshold) { consensusVerdict = verdict; break; }
+      }
+      if (consensusVerdict) {
+        const group = validResults.filter((r) => r.result.verdict === consensusVerdict);
+        group.sort((a, b) => a.result.riskScore - b.result.riskScore);
+        return group[Math.floor(group.length / 2)] ?? { result: null, providerId: null };
+      }
+      validResults.sort((a, b) => b.result.riskScore - a.result.riskScore);
+      return validResults[0] ?? { result: null, providerId: null };
+    }
+    case 'race':
+    case 'fallback':
+    default:
+      // Return the first successful result (already ordered by priority via getActiveProviders)
+      return validResults[0] ?? { result: null, providerId: null };
+  }
+}
 
 export async function orchestrateAnalysis(
   text: string,

@@ -1,10 +1,12 @@
-import { scanLocalPatterns, normalizeForMatching } from '@/utils/scamPatterns';
+import { scanLocalPatterns, normalizeForMatching, feedDictionaryLearning } from '@/utils/scamPatterns';
 import { learnFromThreat } from './threatMemory';
 import { checkUrlSafety } from './safeBrowsingService';
 import { scamDatabase } from './scamDatabase';
 import { riskScorer } from '@/utils/riskScorer';
-import { orchestrateAnalysis } from './aiProviders';
+import { orchestrateAnalysisWithProgress } from './aiProviders';
+import { useNadaStore } from '@/store/useNadaStore';
 import { TEXT_ANALYSIS_PROMPT, VOICE_FRAGMENT_PROMPT } from '@/utils/geminiPrompts';
+import { scanDictionary } from '@/utils/threatDictionary';
 import type { ScamAnalysis } from '@/store/useNadaStore';
 
 // =============================================================================
@@ -139,13 +141,18 @@ async function runTextAnalysis(text: string, scope: AnalysisScope, signal: Abort
   // display a local-only "SEGURO" as if the AI had cleared the text.
   if (signal.aborted) throw new AnalysisAbortedError(scope);
 
-  // Step 3: AI Provider orchestration (Gemini, Claude, Bedrock — based on config)
+  // Step 3: AI Provider orchestration with real-time streaming to store
   const sanitizedText = sanitizeForPrompt(text);
-  const { result: aiResult, providerId } = await orchestrateAnalysis(
+  const store = useNadaStore.getState();
+  store.resetMultiAiEvents(text);
+
+  const { result: aiResult, providerId } = await orchestrateAnalysisWithProgress(
     sanitizedText,
     TEXT_ANALYSIS_PROMPT,
+    (event) => store.updateMultiAiEvent(event),
     signal,
   );
+  store.setMultiAiFinalProviderId(providerId);
 
   if (signal.aborted) throw new AnalysisAbortedError(scope);
 
@@ -189,6 +196,15 @@ async function runTextAnalysis(text: string, scope: AnalysisScope, signal: Abort
     // Remember the phrasing so the next message built from this script is
     // caught offline and instantly, even if the AI is unreachable then.
     learnFromThreat(normalizeForMatching(text), verdict);
+
+    // Feed the dictionary auto-learning: new threat words get stored so the
+    // dictionary grows with each confirmed threat.
+    if (verdict === 'PELIGROSO') {
+      const dictScan = scanDictionary(text);
+      if (dictScan.categories.length > 0) {
+        feedDictionaryLearning(normalizeForMatching(text), dictScan.categories);
+      }
+    }
 
     return {
       verdict,
@@ -278,11 +294,16 @@ async function runVoiceFragmentAnalysis(
     if (signal.aborted) throw new AnalysisAbortedError(scope);
 
     const sanitizedText = sanitizeForPrompt(transcript);
-    const { result: aiResult } = await orchestrateAnalysis(
+    const store = useNadaStore.getState();
+    store.resetMultiAiEvents(transcript);
+
+    const { result: aiResult, providerId } = await orchestrateAnalysisWithProgress(
       sanitizedText,
       VOICE_FRAGMENT_PROMPT,
+      (event) => store.updateMultiAiEvent(event),
       signal,
     );
+    store.setMultiAiFinalProviderId(providerId);
 
     if (signal.aborted) throw new AnalysisAbortedError(scope);
 

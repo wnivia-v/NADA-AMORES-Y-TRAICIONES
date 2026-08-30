@@ -14,6 +14,7 @@
 
 import { LEXICON, COMBOS, type ThreatCategory } from './threatLexicon';
 import { matchLearnedPhrases } from '@/services/threatMemory';
+import { scanDictionary, learnWordsFromThreat, type DictCategory } from './threatDictionary';
 
 interface PatternMatch {
   category: string;
@@ -109,8 +110,50 @@ export function scanLocalPatterns(text: string): LocalScanResult {
     totalWeight += learned.weight;
   }
 
+  // Dictionary scan — density-based word matching with conjugations.
+  // Catches threats the regex layer misses because it covers all verb forms
+  // and scores by density of threat words, not exact phrase matches.
+  const dictResult = scanDictionary(text);
+  if (dictResult.score > 0) {
+    // Dict label maps for user-facing tactic names
+    const DICT_LABELS: Record<DictCategory, string> = {
+      'extorsion': 'Extorsion (diccionario)',
+      'bullying': 'Bullying / Acoso (diccionario)',
+      'sextorsion': 'Sextorsion (diccionario)',
+      'fraude-financiero': 'Fraude financiero (diccionario)',
+      'phishing-datos': 'Phishing / Robo de datos (diccionario)',
+      'secuestro-virtual': 'Secuestro virtual (diccionario)',
+      'amenaza-violencia': 'Amenaza de violencia (diccionario)',
+      'manipulacion-emocional': 'Manipulacion emocional (diccionario)',
+      'suplantacion': 'Suplantacion de identidad (diccionario)',
+      'estafa-romantica': 'Estafa romantica (diccionario)',
+      'autolesion': 'Induccion a autolesion (diccionario)',
+      'urgencia': 'Presion de urgencia (diccionario)',
+    };
+
+    for (const cat of dictResult.categories) {
+      const catScore = dictResult.categoryScores[cat] ?? 0;
+      if (catScore > 0) {
+        matches.push({ category: DICT_LABELS[cat] ?? cat, pattern: 'dictionary', weight: catScore });
+      }
+    }
+    // Dictionary contributes its score to corroborate regex or act as standalone floor.
+    // When regex already matched, dictionary acts as corroboration (0.4 multiplier).
+    // When regex had 0 matches (regex missed), dictionary acts as primary detector (0.7 multiplier).
+    const multiplier = matches.length > dictResult.categories.length ? 0.4 : 0.7;
+    totalWeight += Math.round(dictResult.score * multiplier);
+  }
+
   const riskScore = Math.min(100, Math.round(totalWeight * 1.2));
-  const tactics = [...matches.map((m) => m.category), ...combos];
+  const tactics = [...new Set([...matches.map((m) => m.category), ...combos])];
 
   return { riskScore, tactics, matches, categories: [...categories], combos };
+}
+
+/**
+ * Called by protectionEngine after a confirmed PELIGROSO verdict.
+ * Feeds newly-seen threat words into the dictionary's learning store.
+ */
+export function feedDictionaryLearning(normalizedText: string, categories: DictCategory[]): void {
+  learnWordsFromThreat(normalizedText, categories).catch(() => {});
 }

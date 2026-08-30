@@ -88,7 +88,7 @@ const WEDGED_RESTARTS_BEFORE_GIVING_UP = 12;
  */
 const UNPRODUCTIVE_SESSIONS_BEFORE_GIVING_UP = 3;
 
-const RESTART_DELAY_MS = 250;
+const RESTART_DELAY_MS = 100;
 
 function getSpeechRecognitionCtor(): (new () => Recognition) | null {
   if (typeof window === 'undefined') return null;

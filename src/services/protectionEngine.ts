@@ -4,6 +4,7 @@ import { voiceRecognition, type VoiceErrorCode } from './voice';
 import { scanLocalPatterns } from '@/utils/scamPatterns';
 import { playAlertTone } from '@/utils/audioAlert';
 import { notificationService } from './notificationService';
+import { initDictDB } from '@/utils/threatDictionary';
 import type { ScamAnalysis, ShieldId, Verdict } from '@/store/useNadaStore';
 
 // =============================================================================
@@ -79,15 +80,17 @@ class ProtectionEngine {
   private voiceTranscript = '';
   private lastVoiceAnalyzed = '';
   private lastVoiceAnalysisAt = 0;
-  // 6s was tuned purely for API-quota safety, not for how a live demo reads —
-  // a real extortion phrase sitting on screen for 6s with no reaction looks
-  // like the shield is doing nothing. 3s keeps quota usage sane (still well
-  // under the ~15 req/min free tier this app budgets for) while reacting fast
-  // enough to look — and be — "oportuno".
-  private readonly VOICE_ANALYSIS_COOLDOWN_MS = 3_000;
-  private readonly VOICE_MIN_FRAGMENT_LEN = 12;
-  /** Sliding window of recent speech sent for analysis. */
-  private readonly VOICE_WINDOW_CHARS = 200;
+  // 1500ms keeps quota well under the ~15 req/min free tier (max ~40 req/min
+  // at this rate, never reached in practice since the AI itself takes 1-3s)
+  // while being fast enough to catch a threat mid-sentence. The voiceAiInFlight
+  // guard already prevents overlapping requests, so the cooldown is only a
+  // floor for the gap between successive completed analyses.
+  private readonly VOICE_ANALYSIS_COOLDOWN_MS = 1_500;
+  private readonly VOICE_MIN_FRAGMENT_LEN = 8;
+  /** Sliding window of recent speech sent to the AI. Wider = more context. */
+  private readonly VOICE_WINDOW_CHARS = 300;
+  /** Local scan uses a tighter window so short scam phrases are not diluted. */
+  private readonly LOCAL_SCAN_WINDOW_CHARS = 120;
 
   /**
    * True while an AI voice analysis is in flight.
@@ -109,12 +112,17 @@ class ProtectionEngine {
   private lastVoiceAlertAt = 0;
   private readonly VOICE_REALERT_MS = 25_000;
 
-  /** Local score at which the offline layer alerts on its own, without the AI. */
-  private readonly LOCAL_VOICE_ALERT_MIN = 40;
+  /** Local score at which the offline layer alerts on its own, without the AI.
+   * Lowered to 30: short scam phrases ("mandame la clave", "no digas nada")
+   * score ~35-45 and were being missed at 40, especially early in a session
+   * before the AI window accumulated enough context. */
+  private readonly LOCAL_VOICE_ALERT_MIN = 30;
 
   init(callbacks: EngineCallbacks) {
     this.callbacks = callbacks;
     this.bindScreenCaptureListener();
+    // Pre-load the learned dictionary from IndexedDB so it's ready for scanning
+    initDictDB();
     this.log('Motor de proteccion inicializado.', 'system');
   }
 
@@ -471,7 +479,15 @@ class ProtectionEngine {
   private maybeAnalyzeVoiceFragment(text: string) {
     if (text.length < this.VOICE_MIN_FRAGMENT_LEN) return;
 
-    const fragment = text.length > this.VOICE_WINDOW_CHARS
+    // Local scan: use a TIGHT window so short scam phrases are not diluted
+    // by earlier conversation. A 300-char history of "buenos dias como estas"
+    // can push a high-risk "mandame tu clave" below the detection threshold.
+    const localFragment = text.length > this.LOCAL_SCAN_WINDOW_CHARS
+      ? text.slice(-this.LOCAL_SCAN_WINDOW_CHARS)
+      : text;
+
+    // AI scan: wider window for better context (models understand full phrases).
+    const aiFragment = text.length > this.VOICE_WINDOW_CHARS
       ? text.slice(-this.VOICE_WINDOW_CHARS)
       : text;
 
@@ -479,10 +495,10 @@ class ProtectionEngine {
     // synchronous, offline and cannot be cancelled, so an explicit threat is
     // flagged the instant it is spoken — it does not wait on a network round
     // trip that may be throttled, aborted, or unavailable entirely.
-    this.runInstantLocalVoiceScan(fragment);
+    this.runInstantLocalVoiceScan(localFragment);
 
     // The AI pass then refines that with context the pattern layer cannot see.
-    this.maybeRunAiVoiceAnalysis(fragment);
+    this.maybeRunAiVoiceAnalysis(aiFragment);
   }
 
   /**
@@ -540,6 +556,10 @@ class ProtectionEngine {
     const now = Date.now();
     if (now - this.lastVoiceAnalysisAt < this.VOICE_ANALYSIS_COOLDOWN_MS) return;
 
+    // Mark the timestamp and fragment NOW (before the async call) so that
+    // if the AI takes longer than the cooldown, the NEXT onTranscript call
+    // sees a new fragment and queues a fresh analysis instead of being blocked
+    // by a stale lastVoiceAnalyzed that will never change.
     this.lastVoiceAnalysisAt = now;
     this.lastVoiceAnalyzed = fragment;
     this.voiceAiInFlight = true;

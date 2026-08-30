@@ -47,6 +47,38 @@ function createMainWindow() {
     },
   });
 
+  // ── Permission Handlers ─────────────────────────────────────────────────────
+  // Without these, Electron silently denies every Web API permission request
+  // (clipboard-read, microphone, screen capture, notifications) before it ever
+  // reaches the OS — so the user sees a dialog they cannot accept because the
+  // app already said "no" underneath. Grant the permissions NADA genuinely
+  // needs and deny everything else.
+  const ALLOWED_PERMISSIONS = new Set([
+    'clipboard-read',
+    'clipboard-sanitized-write',
+    'media',            // microphone / camera
+    'mediaKeySystem',
+    'notifications',
+    'fullscreen',
+    'pointerLock',
+    'openExternal',
+    'display-capture',  // screen sharing via getDisplayMedia
+  ]);
+
+  mainWindow.webContents.session.setPermissionRequestHandler(
+    (_webContents: any, permission: string, callback: (granted: boolean) => void) => {
+      callback(ALLOWED_PERMISSIONS.has(permission));
+    }
+  );
+
+  // setPermissionCheckHandler runs synchronously before a permission request is
+  // even shown. Return true so clipboard / media checks don't get pre-rejected.
+  mainWindow.webContents.session.setPermissionCheckHandler(
+    (_webContents: any, permission: string) => {
+      return ALLOWED_PERMISSIONS.has(permission);
+    }
+  );
+
   // Set CSP headers for production
   mainWindow.webContents.session.webRequest.onHeadersReceived((details: any, callback: any) => {
     callback({

@@ -1,41 +1,36 @@
 // =============================================================================
-// Groq Provider — free tier, no credit card
+// Venice.ai Provider — free tier con modelos de privacidad primero
 //
-// Published free limits at time of writing: 30 requests/minute on the
-// Llama 4 Scout model. Verify at https://console.groq.com since these change.
-// Note: llama-3.3-70b-versatile was deprecated in August 2026.
+// Venice.ai ofrece modelos open-source con privacidad: no almacena conversaciones.
+// API compatible con OpenAI. Requiere clave de API gratuita en venice.ai
 //
-// Same caveat as Claude: the key is read from import.meta.env, which Vite inlines
-// into the client bundle. Fine for local and desktop use, not for a public
-// deployment — see the `deploy` agent notes.
+// CORS: En dev usamos proxy /api/venice/* -> https://api.venice.ai/*
+// En producción (Electron) se llama directamente.
 // =============================================================================
 
 import type { AIProvider, AIAnalysisResult } from './types';
 
-// In dev mode (browser on localhost) calls to api.groq.com are blocked by CORS.
-// The Vite server proxies /api/groq/* -> https://api.groq.com/* to work around it.
-// In production (Electron desktop, where CORS doesn't apply) we call the real URL.
 const IS_DEV_BROWSER =
   typeof window !== 'undefined' &&
   (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
 
-const GROQ_API_URL = IS_DEV_BROWSER
-  ? '/api/groq/openai/v1/chat/completions'
-  : 'https://api.groq.com/openai/v1/chat/completions';
+const VENICE_API_URL = IS_DEV_BROWSER
+  ? '/api/venice/api/v1/chat/completions'
+  : 'https://api.venice.ai/api/v1/chat/completions';
 
 function getApiKey(): string {
-  return import.meta.env.VITE_GROQ_API_KEY || '';
+  return import.meta.env.VITE_VENICE_API_KEY || '';
 }
 
 function getModel(): string {
-  return import.meta.env.VITE_GROQ_MODEL || 'llama-3.3-70b-versatile';
+  return import.meta.env.VITE_VENICE_MODEL || 'llama-3.3-70b';
 }
 
-export const groqProvider: AIProvider = {
-  id: 'groq',
-  name: 'Groq (Llama 3.3 70B, gratis)',
+export const veniceProvider: AIProvider = {
+  id: 'venice',
+  name: 'Venice.ai (Llama 3.3 70B, privacidad)',
   cost: 'free-tier',
-  limits: { rpm: 30, rpd: 1000 },
+  limits: { rpm: 20, rpd: 500 },
 
   isAvailable(): boolean {
     return Boolean(getApiKey());
@@ -47,16 +42,16 @@ export const groqProvider: AIProvider = {
     const apiKey = getApiKey();
     if (!apiKey) return null;
 
-    const modelsToTry = [getModel(), 'llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'gemma2-9b-it'];
-    // Deduplicate models
+    const modelsToTry = [getModel(), 'llama-3.3-70b', 'llama-3.2-3b', 'qwen-2.5-7b', 'default'];
     const uniqueModels = [...new Set(modelsToTry)];
 
     for (const model of uniqueModels) {
       if (signal?.aborted) return null;
+
       try {
         const finalPrompt = prompt.replace('{{TEXT}}', text);
 
-        const response = await fetch(GROQ_API_URL, {
+        const response = await fetch(VENICE_API_URL, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -67,7 +62,6 @@ export const groqProvider: AIProvider = {
             messages: [{ role: 'user', content: finalPrompt }],
             max_tokens: 1024,
             temperature: 0,
-            response_format: { type: 'json_object' },
           }),
           signal,
         });
@@ -76,10 +70,9 @@ export const groqProvider: AIProvider = {
 
         if (!response.ok) {
           const errText = await response.text().catch(() => '');
-          console.warn(`[NADA][Groq] Model ${model} returned ${response.status}: ${errText}`);
+          console.warn(`[NADA][Venice] Model ${model} returned ${response.status}: ${errText}`);
           if (response.status === 404) {
-            // Model not found, try next candidate
-            continue;
+            continue; // Try next model
           }
           return null;
         }
@@ -100,7 +93,7 @@ export const groqProvider: AIProvider = {
         };
       } catch (e) {
         if (signal?.aborted) return null;
-        console.warn(`[NADA][Groq] Error with model ${model}:`, e);
+        console.warn(`[NADA][Venice] Error with model ${model}:`, e);
       }
     }
     return null;

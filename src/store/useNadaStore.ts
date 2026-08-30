@@ -99,6 +99,11 @@ interface NadaState {
   // Alertas y Logs
   alerts: AlertEntry[];
   logs: LogEntry[];
+
+  // Estado global Multi-IA en tiempo real (para la Consola inferior)
+  multiAiActiveText: string;
+  multiAiFinalProviderId: ProviderId | null;
+  multiAiEvents: Record<string, any>;
 }
 
 interface NadaActions {
@@ -123,6 +128,10 @@ interface NadaActions {
   setVoiceError: (message: string | null) => void;
   resetVoiceSession: () => void;
   setVideoStatus: (score: number, lipSyncMeasured: boolean) => void;
+  setMultiAiActiveText: (text: string) => void;
+  updateMultiAiEvent: (event: any) => void;
+  setMultiAiFinalProviderId: (id: any) => void;
+  resetMultiAiEvents: (text: string) => void;
 }
 
 // =============================================================================
@@ -181,11 +190,18 @@ export const useNadaStore = create<NadaState & NadaActions>()(
       voiceError: null,
       videoDeepfakeScore: 0,
       videoLipSyncMeasured: false,
+
+      // Alertas y Logs
       alerts: [],
       logs: [
         { timestamp: timestamp(), message: 'SISTEMA: Motor NADA v2 iniciado.', type: 'system' },
         { timestamp: timestamp(), message: 'MOTOR: Firmas de patrones cargadas.', type: 'info' },
       ],
+
+      // Multi-IA tiempo real
+      multiAiActiveText: '',
+      multiAiFinalProviderId: null,
+      multiAiEvents: {},
 
       // Acciones
       setActiveMode: (mode) => {
@@ -208,14 +224,6 @@ export const useNadaStore = create<NadaState & NadaActions>()(
 
       setAnalyzing: (v) => set({ isAnalyzing: v }),
 
-      /**
-       * Single source of truth for scan metrics.
-       *
-       * Every completed analysis passes through here exactly once, including
-       * background shield detections (protectionEngine calls onAlert and then
-       * onAnalysisResult for the same event). addAlert deliberately does NOT
-       * touch counters — when both fired, every scan was counted twice.
-       */
       setAnalysisResult: (result) => {
         set({ analysisResult: result });
         if (result) {
@@ -242,9 +250,6 @@ export const useNadaStore = create<NadaState & NadaActions>()(
           id: crypto.randomUUID(),
           timestamp: new Date().toLocaleTimeString(),
         };
-        // Counters are owned by setAnalysisResult / recordDailyScan.
-        // protectionEngine fires onAlert AND onAnalysisResult for the same
-        // detection, so incrementing here double-counted every background scan.
         set((s) => ({
           alerts: [entry, ...s.alerts].slice(0, 100),
         }));
@@ -283,14 +288,27 @@ export const useNadaStore = create<NadaState & NadaActions>()(
       resetVoiceSession: () => set({ voiceTranscript: '', voiceInterim: '', voiceRealtimeVerdict: null, voiceSpeechActive: false, voiceError: null }),
       setVideoStatus: (score, lipSyncMeasured) => set({ videoDeepfakeScore: score, videoLipSyncMeasured: lipSyncMeasured }),
 
+      setMultiAiActiveText: (text) => set({ multiAiActiveText: text }),
+
+      resetMultiAiEvents: (text) => set({
+        multiAiActiveText: text,
+        multiAiFinalProviderId: null,
+        multiAiEvents: {},
+      }),
+
+      updateMultiAiEvent: (event) => set((state) => ({
+        multiAiEvents: {
+          ...state.multiAiEvents,
+          [event.providerId]: event,
+        },
+      })),
+
+      setMultiAiFinalProviderId: (id) => set({ multiAiFinalProviderId: id }),
+
       recordDailyScan: (isThreat) => {
         set((s) => {
           const today = todayKey();
           const hasToday = s.dailyHistory.some((r) => r.date === today);
-
-          // Copy each touched record instead of mutating it. The previous
-          // version spread the array but mutated the record object in place,
-          // which rewrote the old state and could skip re-renders.
           const history: DailyThreatRecord[] = hasToday
             ? s.dailyHistory.map((r) =>
                 r.date === today

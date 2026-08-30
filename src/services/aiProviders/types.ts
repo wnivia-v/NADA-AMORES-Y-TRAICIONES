@@ -26,7 +26,7 @@ export interface AIProviderConfig {
 
 export type ProviderStrategy = 'fallback' | 'race' | 'best-result' | 'consensus';
 
-export type ProviderId = 'local' | 'gemini' | 'groq' | 'claude' | 'bedrock';
+export type ProviderId = 'local' | 'gemini' | 'groq' | 'claude' | 'bedrock' | 'venice';
 
 /** How a provider is paid for. Surfaced in the UI so the cost is never a surprise. */
 export type ProviderCost = 'free-local' | 'free-tier' | 'paid';
@@ -69,11 +69,12 @@ export const DEFAULT_PROVIDER_CONFIG: ProviderOrchestrationConfig = {
   // outweigh latency (e.g. a final post-call review, not a live shield).
   strategy: 'race',
   providers: {
-    local: { enabled: true, priority: 1 },  // Primero: siempre disponible, sin red, sin clave
-    groq: { enabled: true, priority: 2 },   // Segundo: gratis, rápido, si hay API key
-    gemini: { enabled: true, priority: 3 }, // Tercero: Firebase AI
-    claude: { enabled: false, priority: 4 },
-    bedrock: { enabled: false, priority: 5 },
+    local:   { enabled: true,  priority: 1 }, // Primero: siempre disponible, sin red, sin clave
+    groq:    { enabled: true,  priority: 2 }, // Segundo: gratis, rápido, si hay API key
+    gemini:  { enabled: true,  priority: 3 }, // Tercero: Firebase AI
+    venice:  { enabled: true,  priority: 4 }, // Cuarto: Venice.ai, privacidad, free tier
+    claude:  { enabled: false, priority: 5 },
+    bedrock: { enabled: false, priority: 6 },
   },
   timeoutMs: 8000, // Reducido de 15s a 8s para evitar que se quede colgado
   consensusThreshold: 0.66,

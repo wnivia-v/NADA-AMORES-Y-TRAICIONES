@@ -41,6 +41,9 @@ export default defineConfig(({ mode }) => {
       'import.meta.env.VITE_BEDROCK_MODEL': JSON.stringify(env.VITE_BEDROCK_MODEL || 'anthropic.claude-3-haiku-20240307-v1:0'),
       // Firebase App Check — needed for Gemini to work
       'import.meta.env.VITE_RECAPTCHA_ENTERPRISE_KEY': JSON.stringify(env.VITE_RECAPTCHA_ENTERPRISE_KEY || ''),
+      // Venice.ai
+      'import.meta.env.VITE_VENICE_API_KEY': JSON.stringify(env.VITE_VENICE_API_KEY || ''),
+      'import.meta.env.VITE_VENICE_MODEL': JSON.stringify(env.VITE_VENICE_MODEL || 'llama-3.3-70b'),
     },
     plugins: [
       react(),
@@ -106,6 +109,11 @@ export default defineConfig(({ mode }) => {
           target: 'https://api.groq.com',
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/api\/groq/, ''),
+        },
+        '/api/venice': {
+          target: 'https://api.venice.ai',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/api\/venice/, ''),
         },
       },
     },

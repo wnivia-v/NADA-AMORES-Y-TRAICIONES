@@ -1,5 +1,5 @@
 // =============================================================================
-// Claude Provider — Anthropic API (Claude 3.5 Sonnet / Haiku)
+// Claude Provider — Anthropic API (Claude Sonnet 5 / Haiku 4.5)
 // Direct REST API call (no SDK needed for browser)
 // =============================================================================
 
@@ -12,12 +12,12 @@ function getApiKey(): string {
 }
 
 function getModel(): string {
-  return import.meta.env.VITE_CLAUDE_MODEL || 'claude-sonnet-4-20250514';
+  return import.meta.env.VITE_CLAUDE_MODEL || 'claude-sonnet-5';
 }
 
 export const claudeProvider: AIProvider = {
   id: 'claude',
-  name: 'Anthropic Claude (de pago)',
+  name: 'Anthropic Claude Sonnet 5 (de pago)',
   cost: 'paid',
 
   isAvailable(): boolean {

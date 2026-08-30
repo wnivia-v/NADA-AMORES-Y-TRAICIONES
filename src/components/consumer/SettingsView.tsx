@@ -241,7 +241,7 @@ export function SettingsView() {
           NADA Amores y Traiciones v2.0.0
         </p>
         <p className="text-[9px] mt-1" style={{ color: 'var(--text-muted)' }}>
-          Multi-AI: Gemini + Claude + AWS Bedrock
+          Multi-AI: Local · Groq · Gemini · Venice.ai · Claude · AWS Bedrock
         </p>
       </div>
     </div>

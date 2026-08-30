@@ -295,6 +295,112 @@
       "category": "fraude-facturacion",
       "text": "Estimado proveedor, le informamos que hemos cambiado nuestra cuenta bancaria. A partir de hoy todos los pagos deben realizarse a la nueva cuenta: ES91 2100 0418 4502 0005 1332. Rogamos actualice sus registros.",
       "note": "REAL: based on INCIBE case (July 2026). BEC fraud where attacker intercepts email and changes payment account. Classic invoice fraud targeting businesses."
+    },
+
+    {
+      "id": "voice-001",
+      "label": "PELIGROSO",
+      "category": "extorsion-verbal",
+      "text": "Escuchame bien si no pagas ahora mismo te va a ir muy mal te tenemos ubicado sabemos donde vives",
+      "note": "VOICE CASE. Verbal extortion with location threat. Short, no punctuation — as speech-to-text produces it."
+    },
+    {
+      "id": "voice-002",
+      "label": "PELIGROSO",
+      "category": "bullying-verbal",
+      "text": "Eres una basura no sirves para nada idiota nadie te quiere pudrete eres lo peor que existe",
+      "note": "VOICE CASE. Sustained verbal bullying. Multiple insults in sequence — how spoken harassment arrives as transcript."
+    },
+    {
+      "id": "voice-003",
+      "label": "PELIGROSO",
+      "category": "sextorsion-verbal",
+      "text": "Tengo tus fotos y tus videos y si no me depositas se los mando a todos tus contactos y a tu familia",
+      "note": "VOICE CASE. Spoken sextortion threat. Direct, informal phone phrasing."
+    },
+    {
+      "id": "voice-004",
+      "label": "PELIGROSO",
+      "category": "phishing-verbal",
+      "text": "Necesito que me digas tu numero de tarjeta y la clave de seguridad para poder verificar tu cuenta es urgente",
+      "note": "VOICE CASE. Verbal phishing for card data. The spoken version of a phishing SMS."
+    },
+    {
+      "id": "voice-005",
+      "label": "PELIGROSO",
+      "category": "secuestro-virtual-verbal",
+      "text": "Aqui tengo a tu hijo no cuelgues si quieres que lo soltemos necesitamos que deposites cien mil pesos ahora",
+      "note": "VOICE CASE. Virtual kidnapping over phone. Classic spoken script with family member hostage claim."
+    },
+    {
+      "id": "voice-006",
+      "label": "PELIGROSO",
+      "category": "amenaza-violencia-verbal",
+      "text": "Te voy a hacer dano cuidate las espaldas ya sabemos donde trabajas y vamos a ir por ti",
+      "note": "VOICE CASE. Direct violence threat with surveillance claim. Spoken intimidation."
+    },
+    {
+      "id": "voice-007",
+      "label": "PELIGROSO",
+      "category": "manipulacion-verbal",
+      "text": "No le digas a nadie de esto es entre tu y yo si le cuentas a alguien te va a ir peor confia en mi",
+      "note": "VOICE CASE. Emotional manipulation with isolation. Grooming/control pattern in spoken form."
+    },
+    {
+      "id": "voice-008",
+      "label": "PELIGROSO",
+      "category": "extorsion-policial-verbal",
+      "text": "Le habla el sargento Rodriguez usted tiene una orden de detencion por lavado de dinero si no deposita la fianza vamos a su domicilio",
+      "note": "VOICE CASE. Police impersonation extortion over phone. Combines authority claim with legal threat and payment demand."
+    },
+    {
+      "id": "voice-009",
+      "label": "PELIGROSO",
+      "category": "autolesion-verbal",
+      "text": "Matate nadie te va a extranar no mereces vivir el mundo estaria mejor sin ti",
+      "note": "VOICE CASE. Inducement to self-harm. Maximum severity — must trigger on its own."
+    },
+    {
+      "id": "voice-010",
+      "label": "SOSPECHOSO",
+      "category": "fraude-verbal",
+      "text": "Oye necesito que me mandes dinero ahorita es urgente despues te explico no le digas a nadie",
+      "note": "VOICE CASE. Money request with urgency and secrecy. Could be legitimate emergency but has fraud markers."
+    },
+    {
+      "id": "voice-011",
+      "label": "PELIGROSO",
+      "category": "extorsion-datos-verbal",
+      "text": "Dame tu clave del banco y el codigo que te llego al celular si no obedeces le va a pasar algo a tu familia",
+      "note": "VOICE CASE. Data theft combined with family threat. Common phone extortion pattern."
+    },
+    {
+      "id": "voice-012",
+      "label": "PELIGROSO",
+      "category": "bullying-severo-verbal",
+      "text": "Voy a hacer tu vida imposible todo el mundo se va a enterar de lo que hiciste te voy a destruir",
+      "note": "VOICE CASE. Severe bullying with public humiliation and destruction threat."
+    },
+    {
+      "id": "voice-safe-001",
+      "label": "SEGURO",
+      "category": "llamada-normal",
+      "text": "Hola mama ya llegue bien al trabajo te llamo mas tarde para ver a que hora paso por ti un beso",
+      "note": "VOICE CASE. Normal phone call to a family member. Must not be flagged despite mentions of calling and family."
+    },
+    {
+      "id": "voice-safe-002",
+      "label": "SEGURO",
+      "category": "conversacion-amigos",
+      "text": "Oye guey pues si estuvo dificil el examen pero creo que me fue bien nos vemos manana para estudiar",
+      "note": "VOICE CASE. Casual friend conversation. Colloquial language that must not false-alarm."
+    },
+    {
+      "id": "voice-safe-003",
+      "label": "SEGURO",
+      "category": "trabajo-normal",
+      "text": "Si jefe ya le mande el reporte por correo necesito que me confirme si esta bien para enviarselo al cliente",
+      "note": "VOICE CASE. Normal work conversation. Contains 'necesito', 'confirme', 'enviar' — words present in threat patterns but used benignly."
     }
   ]
 }

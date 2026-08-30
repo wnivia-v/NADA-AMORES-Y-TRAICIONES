@@ -64,7 +64,7 @@ class VisionService {
     try {
       const { FaceLandmarker, FilesetResolver } = await import('@mediapipe/tasks-vision');
       const filesetResolver = await FilesetResolver.forVisionTasks(
-        'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm',
+        'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/wasm',
       );
       this.landmarker = await FaceLandmarker.createFromOptions(filesetResolver, {
         baseOptions: {

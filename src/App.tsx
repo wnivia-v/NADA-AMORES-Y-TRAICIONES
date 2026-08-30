@@ -9,6 +9,7 @@ import { TextAnalyzer } from '@/components/analysis/TextAnalyzer';
 import { VoiceAnalyzer } from '@/components/analysis/VoiceAnalyzer';
 import { CameraAnalyzer } from '@/components/analysis/CameraAnalyzer';
 import { ImageAnalyzer } from '@/components/analysis/ImageAnalyzer';
+import { AIConsolePanel } from '@/components/analysis/AIConsolePanel';
 import { notificationService } from '@/services/notificationService';
 import { ConsumerHome } from '@/components/consumer/ConsumerHome';
 import { AlertsView } from '@/components/consumer/AlertsView';
@@ -118,7 +119,7 @@ export default function App() {
   // Tab index for sliding indicator
   const tabIndex = activeTab === 'home' ? 0 : activeTab === 'alerts' ? 1 : 2;
 
-  // Debug mode tabs including IMAGEN
+  // Debug mode tabs
   const debugModes: DebugMode[] = ['TEXTO', 'VOZ', 'CAMARA', 'IMAGEN'];
 
   return (
@@ -131,7 +132,7 @@ export default function App() {
 
       {/* Debug mode: technical dashboard */}
       {activeTab === 'debug' ? (
-        <main className="flex-1 p-4 lg:p-6 max-w-4xl w-full mx-auto fade-slide-in">
+        <main className="flex-1 p-4 lg:p-6 max-w-5xl w-full mx-auto fade-slide-in">
           <div className="flex gap-2 mb-4 overflow-x-auto pb-1">
             {debugModes.map((mode) => (
               <button

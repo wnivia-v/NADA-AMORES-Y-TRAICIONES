@@ -364,6 +364,92 @@ export const LEXICON: readonly LexiconEntry[] = [
     label: 'Dominio sospechoso',
     regex: /\.(ru|cn|tk|xyz|top|buzz)\//,
   }),
+
+  // ── Voice-specific spoken patterns ─────────────────────────────────────────
+  // In a phone call or voice note, threats are short, direct and informal.
+  // Written-fraud patterns use longer constructions that speech-to-text rarely
+  // produces verbatim. These catch what people actually SAY.
+
+  // Verbal data theft — the spoken version of phishing
+  E({
+    id: 'voice-data-theft', category: 'phishing-credenciales', weight: 22, langs: ['es'],
+    label: 'Solicitud verbal de datos personales',
+    regex: /(d[aá]me|dame|pas[aá]me|pasame|dict[aá]me|dictame|dime)\s+(tu[s]?\s*)?(datos|dato|n[uú]mero|clave|contrase[nñ]a|c[oó]digo|pin|tarjeta|cuenta|credencial|direcci[oó]n|direccion|cedula|c[eé]dula|curp|rfc)/,
+  }),
+  E({
+    id: 'voice-data-theft-2', category: 'phishing-credenciales', weight: 22, langs: ['es'],
+    label: 'Extraccion verbal de informacion sensible',
+    regex: /(necesito|ocupo|requiero)\s+(que\s+me\s+)?(di(gas|ctes)|pase[s]?|de[s]?|envie[s]?|mande[s]?)\s+(tu[s]?\s*)?(datos|n[uú]mero|clave|nip|pin|contrase[nñ]a|c[oó]digo|tarjeta)/,
+  }),
+  E({
+    id: 'voice-confirm-code', category: 'phishing-credenciales', weight: 20, langs: ['es'],
+    label: 'Solicitud verbal de codigo de verificacion',
+    regex: /(d[ií]me|dame|pasame|pas[aá]me|lee?me)\s+(el\s+)?(c[oó]digo|codigo|sms|mensaje|numero)\s+(que\s+te\s+lleg[oó]|que\s+recibiste|de\s+verificaci[oó]n)/,
+  }),
+
+  // Verbal extortion — spoken threats for money
+  E({
+    id: 'voice-extort-pay', category: 'extorsion', weight: 28, langs: ['es'],
+    label: 'Exigencia verbal de pago',
+    regex: /(paga|pagame|p[aá]game|p[aá]ganos|deposita|deposit[aá]me)\s*.{0,30}?(o\s+(te|le|les|si\s+no)|sino|si\s+no)/,
+  }),
+  E({
+    id: 'voice-extort-consequence', category: 'extorsion', weight: 25, langs: ['es'],
+    label: 'Amenaza verbal con consecuencias',
+    regex: /(te\s+va\s+a\s+ir\s+mal|vas\s+a\s+sufrir|te\s+vamos\s+a\s+chingar|te\s+vamos\s+a\s+joder|te\s+va\s+a\s+costar\s+caro|la\s+vas\s+a\s+pagar|me\s+las\s+vas\s+a\s+pagar)/,
+  }),
+  E({
+    id: 'voice-we-know-you', category: 'amenaza-violencia', weight: 28, langs: ['es'],
+    label: 'Vigilancia e intimidacion verbal',
+    regex: /(te\s+estamos\s+vigilando|te\s+tenemos\s+ubicad[oa]|sabemos\s+qui[eé]n\s+eres|sabemos\s+todo\s+de\s+ti|tenemos\s+tus\s+datos|te\s+estoy\s+vigilando|ya\s+te\s+tenemos\s+identificad[oa]|ya\s+sabemos\s+d[oó]nde)/,
+  }),
+  E({
+    id: 'voice-harm-threat', category: 'amenaza-violencia', weight: 30, langs: ['es'],
+    label: 'Amenaza directa de daño',
+    regex: /(te\s+voy\s+a\s+hacer\s+da[nñ]o|te\s+vamos\s+a\s+hacer\s+da[nñ]o|te\s+va\s+a\s+pasar\s+algo|le\s+va\s+a\s+pasar\s+algo\s+a\s+tu|cuida(te|se)\s+las?\s+espaldas?|te\s+va\s+a\s+doler)/,
+  }),
+
+  // Verbal bullying — escalated spoken abuse
+  E({
+    id: 'voice-bully-worthless', category: 'acoso-severo', weight: 22, langs: ['es'],
+    label: 'Humillacion y desprecio verbal',
+    regex: /(no\s+sirves\s+para\s+nada|eres\s+patetic[oa]|das\s+lastima|nadie\s+te\s+soporta|todo\s+el\s+mundo\s+te\s+odia|eres\s+lo\s+peor|no\s+mereces\s+vivir|eres\s+un[a]?\s+buena?\s+para\s+nada)/,
+    repeatable: true, repeatCap: 3,
+  }),
+  E({
+    id: 'voice-bully-threat', category: 'acoso-severo', weight: 22, langs: ['es'],
+    label: 'Acoso con amenaza implicita',
+    regex: /(te\s+voy\s+a\s+arruinar\s+la\s+vida|te\s+voy\s+a\s+destruir|te\s+voy\s+a\s+hundir|voy\s+a\s+acabar\s+contigo|voy\s+a\s+hacer\s+tu\s+vida\s+imposible)/,
+  }),
+  E({
+    id: 'voice-bully-expose', category: 'acoso-severo', weight: 22, langs: ['es'],
+    label: 'Amenaza de exposicion / humillacion publica',
+    regex: /(le\s+voy\s+a\s+(contar|decir|mostrar)\s+a\s+todos?|todo\s+el\s+mundo\s+se\s+va\s+a\s+enterar|lo\s+voy\s+a\s+publicar\s+todo|voy\s+a\s+exhibirte)/,
+  }),
+
+  // Spoken fraud demands — how people actually ask for money on the phone
+  E({
+    id: 'voice-send-now', category: 'fraude-financiero', weight: 22, langs: ['es'],
+    label: 'Exigencia inmediata de dinero',
+    regex: /(manda(me|le)?|env[ií]a(me|le)?|haz(me)?|depos[ií]ta(me)?)\s+(la\s+)?(lana|feria|varo[s]?|billete[s]?|billullo|baro[s]?)\b/,
+  }),
+  E({
+    id: 'voice-dont-tell-police', category: 'aislamiento-manipulacion', weight: 25, langs: ['es'],
+    label: 'Prohibicion de contactar autoridades',
+    regex: /(no\s+(llames?|avises?|vayas?|acudas?)\s+(a\s+)?(la\s+)?(polic[ií]a|autoridades|comisari[oa]|comisar[ií]a|ley|ministerio))/,
+  }),
+  E({
+    id: 'voice-obey', category: 'extorsion', weight: 22, langs: ['es'],
+    label: 'Exigencia de obediencia',
+    regex: /(haz\s+lo\s+que\s+te\s+digo|haz\s+lo\s+que\s+te\s+pido|obedece|obedeceme|has\s+lo\s+que\s+te\s+digo|calladito|calladita|sin\s+preguntas)/,
+  }),
+
+  // Spoken kidnapping — informal phone phrasing
+  E({
+    id: 'voice-kidnap-informal', category: 'secuestro-virtual', weight: 35, langs: ['es'],
+    label: 'Secuestro virtual (frases orales)',
+    regex: /(aqui\s+tengo\s+a|aqu[ií]\s+tengo\s+a|lo\s+tengo\s+aqui|la\s+tengo\s+aqui|est[aá]\s+conmigo\s+tu|escucha\s+a\s+tu|oye\s+como\s+(llora|grita))\s*(tu\s+)?(hij[oa]|mam[aá]|pap[aá]|herman[oa]|espos[oa]|familia|ni[nñ][oa])/,
+  }),
 ];
 
 // =============================================================================
@@ -450,5 +536,42 @@ export const COMBOS: readonly ComboRule[] = [
     requires: ['extorsion', 'canal-pago-irrastreable'],
     bonus: 30,
     label: 'Amenaza acompanada de exigencia de pago',
+  },
+  // ── Voice-typical combination shapes ─────────────────────────────────────
+  {
+    id: 'extortion-violence',
+    requires: ['extorsion', 'amenaza-violencia'],
+    bonus: 30,
+    label: 'Extorsion con amenaza de violencia',
+  },
+  {
+    id: 'bullying-self-harm',
+    requires: ['acoso-severo', 'induccion-autolesion'],
+    bonus: 30,
+    label: 'Acoso severo con induccion a autolesion',
+  },
+  {
+    id: 'data-theft-isolation',
+    requires: ['phishing-credenciales', 'aislamiento-manipulacion'],
+    bonus: 25,
+    label: 'Robo de datos con aislamiento (no se lo digas a nadie)',
+  },
+  {
+    id: 'violence-isolation',
+    requires: ['amenaza-violencia', 'aislamiento-manipulacion'],
+    bonus: 28,
+    label: 'Amenaza de violencia con aislamiento',
+  },
+  {
+    id: 'extortion-data-theft',
+    requires: ['extorsion', 'phishing-credenciales'],
+    bonus: 25,
+    label: 'Extorsion combinada con robo de datos',
+  },
+  {
+    id: 'insult-severe-escalation',
+    requires: ['acoso-insulto', 'acoso-severo'],
+    bonus: 20,
+    label: 'Acoso que escala a hostigamiento severo',
   },
 ];

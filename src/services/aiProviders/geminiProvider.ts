@@ -1,5 +1,5 @@
 // =============================================================================
-// Gemini Provider — Firebase AI (Gemini 2.0 Flash)
+// Gemini Provider — Firebase AI (Gemini 3.7 Flash)
 // =============================================================================
 
 import { app, hasValidConfig } from '../firebaseConfig';
@@ -14,7 +14,7 @@ async function getModel() {
   try {
     const { getGenerativeModel, getAI } = await import('firebase/ai');
     const ai = getAI(app);
-    geminiModel = getGenerativeModel(ai, { model: 'gemini-2.0-flash' });
+    geminiModel = getGenerativeModel(ai, { model: 'gemini-3.7-flash' });
     return geminiModel;
   } catch (e) {
     console.warn('[NADA][Gemini] Model init failed:', e);
@@ -24,7 +24,7 @@ async function getModel() {
 
 export const geminiProvider: AIProvider = {
   id: 'gemini',
-  name: 'Google Gemini 2.0 Flash',
+  name: 'Google Gemini 3.7 Flash',
   cost: 'free-tier',
   // Gemini Developer API free tier. It requires the Firebase project to stay on
   // the no-cost Spark plan (i.e. NOT linked to Cloud Billing). Kept slightly
