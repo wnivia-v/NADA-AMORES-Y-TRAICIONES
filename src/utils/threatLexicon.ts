@@ -1237,7 +1237,6 @@ export const COMBOS: readonly ComboRule[] = [
     requires: ['difusion-datos', 'extorsion'],
     bonus: 28,
     label: 'Chantaje con difundir material privado',
->>>>>>> origin/main
   },
 ];
 
