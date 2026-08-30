@@ -44,6 +44,34 @@ export interface ScamAnalysis {
   explanation: string;
   scanSource: 'local' | 'gemini' | 'hybrid';
   recommendations: string[];
+  /**
+   * Si procede AVISAR — tono, notificacion, entrada en alertas.
+   *
+   * Distinto de `verdict`. El principio del proyecto es que ninguna alerta
+   * salta por una señal aislada, no que haya que ocultar el riesgo: la banda se
+   * muestra siempre, la alarma se reserva para lo corroborado o para una
+   * amenaza explicita de categoria tasada.
+   *
+   * Opcional porque la persistencia de zustand guarda alertas de versiones
+   * anteriores que no lo traen.
+   */
+  alert?: boolean;
+  /** Dos o mas fuentes independientes sostienen el resultado. */
+  corroborated?: boolean;
+  /**
+   * Identificador de este analisis, para poder opinar sobre el.
+   *
+   * Es solo una referencia: el rastro de la decision se queda en
+   * feedbackService, no viaja por la interfaz ni se persiste en el store. Asi
+   * el panel puede decir "sobre ESTE analisis" sin cargar con sus tripas.
+   *
+   * Opcional porque la persistencia de zustand guarda resultados de versiones
+   * anteriores que no lo traen, y porque un analisis restaurado de disco ya no
+   * tiene borrador vivo al que referirse.
+   */
+  analysisId?: string;
+  /** Confianza del resultado fusionado, 0-1. */
+  confidence?: number;
 }
 
 // Daily threat tracking for trend chart
@@ -118,6 +146,8 @@ interface NadaActions {
   clearLogs: () => void;
   addAlert: (alert: Omit<AlertEntry, 'id' | 'timestamp'>) => void;
   clearAlerts: () => void;
+  /** Aplica la retencion del jurisdiction pack al historial. Devuelve cuantas se fueron. */
+  pruneAlertsBefore: (cutoff: number) => number;
   updateShieldStatus: (shield: ShieldId, status: Partial<ShieldStatus>) => void;
   resetSession: () => void;
   recordDailyScan: (isThreat: boolean) => void;
@@ -259,6 +289,25 @@ export const useNadaStore = create<NadaState & NadaActions>()(
       clearAlerts: () => {
         set({ alerts: [] });
         get().addLog('HISTORIAL: Alertas limpiadas.', 'system');
+      },
+
+      pruneAlertsBefore: (cutoff) => {
+        const before = get().alerts;
+        // El timestamp de una alerta es una cadena ISO; una que no se pueda
+        // interpretar se CONSERVA. Ante la duda no se borra: perder el
+        // historial de alguien por un formato raro seria peor que guardarlo de
+        // mas unos dias.
+        const kept = before.filter((a) => {
+          const at = Date.parse(a.timestamp);
+          return !Number.isFinite(at) || at >= cutoff;
+        });
+
+        const removed = before.length - kept.length;
+        if (removed > 0) {
+          set({ alerts: kept });
+          get().addLog(`RETENCION: ${removed} alerta(s) fuera del periodo de conservacion.`, 'system');
+        }
+        return removed;
       },
 
       updateShieldStatus: (shield, status) => {

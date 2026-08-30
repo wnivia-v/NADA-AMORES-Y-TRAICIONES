@@ -35,12 +35,30 @@ Ejecutar la cadena completa antes de dar algo por terminado. Que el build salga 
 El análisis atraviesa cinco capas, en este orden:
 
 1. `scamDatabase.ts` — caché IndexedDB con hashes SHA-256. Si acierta, devuelve sin llamar a la IA.
-2. `scamPatterns.ts` — 25+ regex con peso. Única capa que funciona sin red ni API keys.
+2. `scamPatterns.ts` — motor de puntuación sobre `threatLexicon.ts`. Única capa que funciona sin red ni API keys, y la única con opinión cuando no hay clave de nube configurada.
 3. `safeBrowsingService.ts` — URLs contra Google Safe Browsing.
 4. `aiProviders/` — Gemini, Claude o Bedrock, según la estrategia configurada (`fallback`, `race`, `best-result`, `consensus`).
 5. `riskScorer.ts` — agrega señales con decaimiento temporal; se mezcla 80/20 con el resultado de la IA.
 
 Umbrales: `SEGURO` 0-39, `SOSPECHOSO` 40-69, `PELIGROSO` 70-100. Están codificados en varios sitios; cambiarlos altera lo que la app le dice a una víctima y requiere aprobación explícita.
+
+### El resultado local es un piso, no un voto
+
+En `geminiService.ts`, el score final es `Math.max(mezcla_80/20, localResult.riskScore)`. Promediar dejaba que una IA distraída hundiera una detección local sólida — dos extorsiones reales se reportaron como `SEGURO 0/100` por eso. **No volver a promediar el resultado local.**
+
+## Diccionario de amenazas (`utils/threatLexicon.ts`)
+
+72 entradas en 25 categorías, ES/EN/PT, más 26 reglas de combinación en `COMBOS`.
+
+Las entradas marcadas INCIBE provienen de los avisos publicados por el instituto nacional de ciberseguridad de España (`incibe.es/ciudadania/avisos`) y de los casos de su línea 017: campañas fechadas y documentadas que se ejecutaron contra personas reales. Preferir esa fuente antes que inventar redacciones plausibles — registra los ganchos exactos, y cuatro familias enteras (tasas de aduana, Bizum inverso, soporte con acceso remoto, familiar con número nuevo) eran invisibles para el lexicon hasta que se leyeron esos avisos.
+
+La regla de diseño que hay que respetar al agregar entradas: **los pesos individuales quedan por debajo del umbral de alerta**; la precisión la aportan las combinaciones. Una estafa es una forma (presión + pago irrastreable + aislamiento), y cada parte suelta es conversación normal. Subir un peso individual para "que detecte más" es exactamente cómo se empieza a alertar sobre "no cuelgues que ya te paso con mi mamá" — hay tests que lo impiden.
+
+Excepción deliberada: `induccion-autolesion` alerta sola.
+
+Los patrones corren contra texto ya pasado por `normalizeForMatching` (NFD sin acentos, minúsculas, espacios colapsados), porque ASR y OCR escriben inconsistentemente. Un patrón con mayúsculas o una vocal acentuada suelta nunca coincide — hay un test que lo verifica.
+
+`services/threatMemory.ts` aprende frases de veredictos `PELIGROSO` únicamente, con tope `MAX_LEARNED_WEIGHT = 24` (por debajo de `SOSPECHOSO`) para que lo aprendido jamás decida un veredicto por sí solo. Aprender de la propia salida es como un detector se envenena; no aflojar estos límites.
 
 ## Escudo de video (deepfake en videollamada)
 
@@ -139,6 +157,7 @@ Estos bugs figuraban antes en esta lista; el código actual ya los corrige. Si a
 - El icono de Electron era un SVG (`favicon.svg`), que Windows no acepta para `BrowserWindow`/`Tray`. Ahora usa `build/icon.png` vía `scripts/generate-icon.mjs`.
 - `ocrService.ts` mandaba la imagen cruda a Tesseract sin preprocesar. Capturas de chat (texto chico, burbujas de color) salían ilegibles ("borroso") aunque la imagen fuera nítida. Ahora hay un paso de escalado + escala de grises + contraste antes del OCR (`preprocess()` en `ocrService.ts`); si el preprocesado falla por lo que sea, cae de vuelta a la imagen original en vez de perder el OCR entero.
 - `scamPatterns.ts` solo cubría fraude financiero — un mensaje de puro acoso/bullying (insultos, sin ninguna señal de dinero/urgencia) daba 0/100. Ahora hay categorías de lenguaje agresivo y hostigamiento severo con peso `repeatable` (escala con cuántos insultos distintos aparecen, no un peso fijo) — un insulto suelto sigue sin disparar alerta, varios en la misma conversación sí.
+- **El escudo de voz alertaba una sola vez y después quedaba mudo.** La cancelación por lane (arriba) más un timeout de IA de 8 s contra un cooldown de 3 s significaba que cada análisis de voz moría abortado por el siguiente mientras el usuario seguía hablando; solo salía veredicto en los silencios. Ahora `maybeAnalyzeVoiceFragment` corre dos pasadas: `runInstantLocalVoiceScan` (síncrona, offline, **no cancelable**) y `maybeRunAiVoiceAnalysis` (guardada por `voiceAiInFlight`, nunca se cancela a sí misma). El anti-repetición de alertas se llavea sobre la firma de tácticas ordenada, no sobre el texto — la transcripción cambia en cada fragmento aunque la amenaza sea la misma, así que dedupear por texto no dedupea nada, y dedupear por "ya alerté" traba el escudo para siempre. `VOICE_REALERT_MS = 25_000` deja re-alertar si la amenaza persiste.
 
 ## Estado real de las integraciones
 

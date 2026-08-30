@@ -3,6 +3,7 @@ import { useState } from 'react';
 import type { ScamAnalysis } from '@/store/useNadaStore';
 import { useNadaStore } from '@/store/useNadaStore';
 import { translations } from '@/utils/translations';
+import { FeedbackPrompt } from './FeedbackPrompt';
 
 interface ResultPanelProps {
   result: ScamAnalysis;
@@ -154,6 +155,8 @@ export function ResultPanel({ result }: ResultPanelProps) {
           )}
         </div>
       )}
+      {/* Feedback Prompt */}
+      <FeedbackPrompt result={result} />
     </div>
   );
 }

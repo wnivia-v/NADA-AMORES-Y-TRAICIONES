@@ -4,7 +4,9 @@
 // Picks the best AI response based on configured strategy
 // =============================================================================
 
-import type { AIProvider, AIAnalysisResult, ProviderOrchestrationConfig, ProviderId } from './types';
+import type { AIProvider, ProviderOrchestrationConfig, ProviderId } from './types';
+import type { AnalysisRequest, ProviderSignal } from '@/shared/llm/types';
+import { riskBand } from '@/shared/llm/signalSchema';
 import { DEFAULT_PROVIDER_CONFIG } from './types';
 import { getRateLimiter } from './rateLimiter';
 import { localProvider } from './localProvider';
@@ -103,7 +105,7 @@ function getActiveProviders(): AIProvider[] {
 // Provider invocation
 // =============================================================================
 
-type ProviderSuccess = { result: AIAnalysisResult; providerId: ProviderId };
+type ProviderSuccess = { result: ProviderSignal; providerId: ProviderId };
 type ProviderOutcome = ProviderSuccess | null;
 
 /**
@@ -115,8 +117,7 @@ type ProviderOutcome = ProviderSuccess | null;
  */
 async function callProvider(
   provider: AIProvider,
-  text: string,
-  prompt: string,
+  request: AnalysisRequest,
   signal?: AbortSignal,
 ): Promise<ProviderOutcome> {
   if (signal?.aborted) return null;
@@ -133,7 +134,7 @@ async function callProvider(
     : timeoutController.signal;
 
   try {
-    const result = await provider.analyze(text, prompt, combinedSignal);
+    const result = await provider.analyze(request, combinedSignal);
     return result ? { result, providerId: provider.id } : null;
   } catch {
     return null;
@@ -145,12 +146,11 @@ async function callProvider(
 /** Calls every provider in parallel and keeps only the successful answers. */
 async function callAll(
   providers: AIProvider[],
-  text: string,
-  prompt: string,
+  request: AnalysisRequest,
   signal?: AbortSignal,
 ): Promise<ProviderSuccess[]> {
   const settled = await Promise.allSettled(
-    providers.map((p) => callProvider(p, text, prompt, signal)),
+    providers.map((p) => callProvider(p, request, signal)),
   );
 
   return settled
@@ -164,13 +164,12 @@ async function callAll(
 
 // Fallback: try providers in priority order, return first success
 async function strategyFallback(
-  text: string,
-  prompt: string,
+  request: AnalysisRequest,
   signal?: AbortSignal,
-): Promise<{ result: AIAnalysisResult | null; providerId: ProviderId | null }> {
+): Promise<{ result: ProviderSignal | null; providerId: ProviderId | null }> {
   for (const provider of getActiveProviders()) {
     if (signal?.aborted) break;
-    const outcome = await callProvider(provider, text, prompt, signal);
+    const outcome = await callProvider(provider, request, signal);
     if (outcome) return outcome;
   }
 
@@ -179,15 +178,14 @@ async function strategyFallback(
 
 // Race: fire all providers simultaneously, return fastest valid response
 async function strategyRace(
-  text: string,
-  prompt: string,
+  request: AnalysisRequest,
   signal?: AbortSignal,
-): Promise<{ result: AIAnalysisResult | null; providerId: ProviderId | null }> {
+): Promise<{ result: ProviderSignal | null; providerId: ProviderId | null }> {
   const providers = getActiveProviders();
   if (providers.length === 0) return { result: null, providerId: null };
 
   const results = await Promise.allSettled(
-    providers.map((p) => callProvider(p, text, prompt, signal)),
+    providers.map((p) => callProvider(p, request, signal)),
   );
 
   // Return the first non-null result
@@ -202,26 +200,25 @@ async function strategyRace(
 
 // Best-result: fire all, wait for all, return the one with highest confidence
 async function strategyBestResult(
-  text: string,
-  prompt: string,
+  request: AnalysisRequest,
   signal?: AbortSignal,
-): Promise<{ result: AIAnalysisResult | null; providerId: ProviderId | null }> {
+): Promise<{ result: ProviderSignal | null; providerId: ProviderId | null }> {
   const providers = getActiveProviders();
   if (providers.length === 0) return { result: null, providerId: null };
 
-  const validResults = await callAll(providers, text, prompt, signal);
+  const validResults = await callAll(providers, request, signal);
   if (validResults.length === 0) return { result: null, providerId: null };
 
   // Pick the result with highest riskScore (most cautious) — protects the user
   // If all are SEGURO, pick lowest riskScore (most confident it's safe)
-  const allSafe = validResults.every((r) => r.result.verdict === 'SEGURO');
+  const allSafe = validResults.every((r) => riskBand(r.result.value) === 'SEGURO');
 
   if (allSafe) {
     // Most confident "safe" = lowest score
-    validResults.sort((a, b) => a.result.riskScore - b.result.riskScore);
+    validResults.sort((a, b) => a.result.value - b.result.value);
   } else {
     // Most cautious = highest score (protect the user)
-    validResults.sort((a, b) => b.result.riskScore - a.result.riskScore);
+    validResults.sort((a, b) => b.result.value - a.result.value);
   }
 
   return validResults[0] ?? { result: null, providerId: null };
@@ -229,15 +226,14 @@ async function strategyBestResult(
 
 // Consensus: fire all, if majority agree on verdict, use that; otherwise use most cautious
 async function strategyConsensus(
-  text: string,
-  prompt: string,
+  request: AnalysisRequest,
   signal?: AbortSignal,
-): Promise<{ result: AIAnalysisResult | null; providerId: ProviderId | null }> {
+): Promise<{ result: ProviderSignal | null; providerId: ProviderId | null }> {
   const providers = getActiveProviders();
   if (providers.length === 0) return { result: null, providerId: null };
-  if (providers.length === 1) return strategyFallback(text, prompt, signal);
+  if (providers.length === 1) return strategyFallback(request, signal);
 
-  const validResults = await callAll(providers, text, prompt, signal);
+  const validResults = await callAll(providers, request, signal);
 
   if (validResults.length === 0) return { result: null, providerId: null };
   if (validResults.length === 1) return validResults[0] ?? { result: null, providerId: null };
@@ -245,7 +241,8 @@ async function strategyConsensus(
   // Count verdicts
   const verdictCounts: Record<string, number> = {};
   for (const { result } of validResults) {
-    verdictCounts[result.verdict] = (verdictCounts[result.verdict] ?? 0) + 1;
+    const band = riskBand(result.value);
+    verdictCounts[band] = (verdictCounts[band] ?? 0) + 1;
   }
 
   // Check if any verdict reaches consensus threshold
@@ -260,14 +257,14 @@ async function strategyConsensus(
 
   if (consensusVerdict) {
     // Return the result from consensus group with median risk score
-    const consensusResults = validResults.filter((r) => r.result.verdict === consensusVerdict);
-    consensusResults.sort((a, b) => a.result.riskScore - b.result.riskScore);
+    const consensusResults = validResults.filter((r) => riskBand(r.result.value) === consensusVerdict);
+    consensusResults.sort((a, b) => a.result.value - b.result.value);
     const medianIdx = Math.floor(consensusResults.length / 2);
     return consensusResults[medianIdx] ?? { result: null, providerId: null };
   }
 
   // No consensus: return most cautious (highest risk) to protect user
-  validResults.sort((a, b) => b.result.riskScore - a.result.riskScore);
+  validResults.sort((a, b) => b.result.value - a.result.value);
   return validResults[0] ?? { result: null, providerId: null };
 }
 
@@ -419,22 +416,21 @@ export async function orchestrateAnalysisWithProgress(
 }
 
 export async function orchestrateAnalysis(
-  text: string,
-  prompt: string,
+  request: AnalysisRequest,
   signal?: AbortSignal,
-): Promise<{ result: AIAnalysisResult | null; providerId: ProviderId | null }> {
+): Promise<{ result: ProviderSignal | null; providerId: ProviderId | null }> {
   const config = getConfig();
 
   switch (config.strategy) {
     case 'race':
-      return strategyRace(text, prompt, signal);
+      return strategyRace(request, signal);
     case 'best-result':
-      return strategyBestResult(text, prompt, signal);
+      return strategyBestResult(request, signal);
     case 'consensus':
-      return strategyConsensus(text, prompt, signal);
+      return strategyConsensus(request, signal);
     case 'fallback':
     default:
-      return strategyFallback(text, prompt, signal);
+      return strategyFallback(request, signal);
   }
 }
 

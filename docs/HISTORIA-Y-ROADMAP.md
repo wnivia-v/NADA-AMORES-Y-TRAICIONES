@@ -41,22 +41,52 @@ La sesión más intensa hasta ahora, con foco en cerrar la distancia entre "se v
 - **Calidad de OCR**: preprocesamiento de imagen (escalado + contraste) antes de leer texto — capturas de chat nítidas que antes salían "ilegibles" ahora se leen.
 - **Menos falsos positivos en detección de deepfake**: se identificó y corrigió un sesgo sistemático que marcaba a personas reales como sospechosas en los primeros ~20 segundos de cualquier videollamada, simplemente porque no había pasado tiempo suficiente para medir una tasa de parpadeo normal.
 
-## 5. Estado actual (esta build)
+## 5. La sesión de campo — 8 de agosto de 2026
+
+Las fases anteriores se probaron con tests y con casos de ejemplo. Esta se probó con **material real**: audios de estafas telefónicas grabadas, capturas de conversaciones de acoso reales, videollamadas en vivo. Y el material real rompió cosas que los tests no veían.
+
+- **El escudo de voz se reescribió desde cero.** La versión anterior era un solo motor (Web Speech API) con parches encima, y fallaba de tres formas distintas según el dispositivo y la red. Se rehízo como una cadena de motores con sustitución automática (`src/services/voice/`): en Android arranca el plugin nativo, en escritorio el del navegador, y si ese queda bloqueado por VPN o firewall, cae solo a **Whisper corriendo en el dispositivo** — sin red, sin cuenta, sin poder ser bloqueado. Multilenguaje (ES/EN/PT/FR/IT/DE).
+- **Se descubrió por qué Whisper transcribía disparates**: el audio se cortaba en bloques fijos de 4 segundos, partiendo palabras a la mitad. Whisper nunca dice "no entendí" — inventa. Se reemplazó por corte en los silencios reales de la conversación, con 300 ms de margen previo.
+- **Se corrigió el fallo más grave del proyecto**: mensajes con amenazas explícitas se reportaban como **0/100, SEGURO**. La causa era que el veredicto de la IA y el análisis local se promediaban, así que una IA distraída podía hundir una detección local sólida. Ahora el análisis local es un **piso**, no un voto: si la capa local ve una amenaza explícita, ningún promedio puede taparla.
+- **Diccionario de amenazas multilenguaje** (`src/utils/threatLexicon.ts`): 51 patrones en 19 categorías, en español, inglés y portugués — y sobre todo **11 reglas de combinación**. Esa es la idea central: una estafa tiene *forma*, no palabras clave. "Andá al Banco Azteca" es inocente; "no cuelgues" es inocente; "tengo a tu hijo" separado es una frase de película. Las tres juntas son un secuestro virtual, y esa combinación es la que dispara la alerta. Los pesos individuales quedan a propósito por debajo del umbral para que la herramienta no grite por cualquier cosa y enseñe al usuario a ignorarla.
+- **Memoria de amenazas** (`src/services/threatMemory.ts`): cuando un mensaje se confirma peligroso, el sistema recuerda su fraseo distintivo para reconocer el mismo guion la próxima vez, offline. Deliberadamente conservador — solo aprende de veredictos confirmados, y lo aprendido nunca alcanza por sí solo para declarar peligro. Aprender de la propia salida es como un detector se envenena a sí mismo.
+- **Alertas que se trababan**: tras la primera alerta el escudo de voz se quedaba mudo. Los análisis se cancelaban entre sí (la IA tarda 8 segundos, se lanzaba uno nuevo cada 3). Se separó en dos pasadas: una local instantánea que no se puede cancelar, y la de IA como refuerzo. Las alertas ahora se diferencian por *tipo de amenaza*, no por la frase exacta — mientras alguien habla el texto cambia todo el tiempo aunque el peligro sea el mismo.
+- **180 pruebas automatizadas** en verde, incluyendo tests escritos con las transcripciones textuales de los casos reales que fallaron.
+
+## 6. El diccionario se apoya en fuentes oficiales — 21 de agosto de 2026
+
+Hasta acá el diccionario de amenazas se había escrito a partir del material que llegaba a mano: los audios y capturas que fallaron en pruebas reales. Eso deja un sesgo evidente — solo reconoce las estafas que a alguien se le ocurrió probar.
+
+Esta etapa lo amplió con los **avisos publicados por INCIBE** (Instituto Nacional de Ciberseguridad de España) y los casos de su línea de ayuda 017: campañas fechadas y documentadas, con los ganchos textuales que realmente se usaron contra personas reales.
+
+Cuatro familias completas eran invisibles para la herramienta antes de esto:
+
+- **El familiar en apuros**: *"Hola mamá, se me ha roto el móvil, este es mi nuevo número."* No tiene ninguna palabra peligrosa — es una frase que un hijo real podría escribir. Lo que la delata es la combinación de identidad familiar declarada más cambio de canal.
+- **Tasas de aduana**: un paquete retenido, una tasa pequeña y un enlace. El importe bajo es el truco: pagar sale más barato que verificar.
+- **Bizum inverso**: en plataformas de compraventa el "comprador" envía una *solicitud* de dinero en vez de un pago, y el vendedor la confirma creyendo que cobra.
+- **Soporte con acceso remoto**: la víctima instala AnyDesk o TeamViewer y el atacante vacía la cuenta desde el dispositivo de confianza de la víctima, esquivando el doble factor del banco.
+
+También se agregaron sextorsión masiva con falso software espía, la comisión para poder retirar en plataformas de inversión falsas, empleos falsos de tareas y likes, suplantación de organismos públicos, amenaza de difusión de material privado y **grooming** — esta última con los sondeos que INCIBE identifica como fase temprana (edad, si el menor está solo, si los padres saben), a peso bajo justamente porque son preguntas que un familiar real podría hacer: lo que identifica el grooming es la combinación con el pedido de secreto o de imágenes.
+
+El diccionario pasó de 51 a **72 patrones**, de 19 a **25 categorías** y de 11 a **26 reglas de combinación**. 198 tests en verde, con los guiones documentados escritos textualmente.
+
+## 7. Estado actual (esta build)
 
 | Área | Estado |
 |---|---|
 | Detección de texto (portapapeles, pegado manual) | Funcional, multi-capa, 5 proveedores de IA disponibles |
-| Detección de voz en tiempo real | Funcional en web/Electron y Android (nativo) |
+| Detección de voz en tiempo real | Funcional en web/Electron y Android (nativo), con Whisper local como respaldo si la red bloquea el reconocimiento del navegador |
+| Diccionario de amenazas | 72 patrones, 25 categorías, 26 reglas de combinación, ES/EN/PT, alimentado con los avisos documentados de INCIBE |
 | OCR de capturas de pantalla | Funcional, con preprocesamiento de imagen |
 | Detección de deepfake en videollamada | Funcional, heurística biométrica (no un modelo entrenado contra deepfakes reales) |
 | Escritorio (Electron) | Funcional, con overlay siempre-encima |
 | Android (Capacitor) | APK directo, voz nativa funcional; captura de pantalla y overlay siempre-encima **aún no** (requieren plugins nativos adicionales) |
 | iOS | No existe — Apple no permite overlays sobre otras apps bajo ninguna circunstancia; una app iOS nativa es un proyecto aparte |
-| Pruebas automatizadas | 121 tests, todos en verde |
+| Pruebas automatizadas | 198 tests en 16 archivos, todos en verde |
 
 ---
 
-## 6. Roadmap
+## 8. Roadmap
 
 ### Corto plazo (gratis, sin nueva infraestructura)
 - Activar una clave de Groq (gratis, sin tarjeta) para que el análisis de texto/voz generalice a frases dichas con fraseo distinto a los ejemplos conocidos — hoy, sin ninguna clave de nube, la única IA activa es el clasificador local, deliberadamente conservador.

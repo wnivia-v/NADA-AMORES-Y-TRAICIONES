@@ -1,35 +1,7 @@
-// =============================================================================
-// Groq Provider — free tier, no credit card
-//
-// Published free limits at time of writing: 30 requests/minute on the
-// Llama 4 Scout model. Verify at https://console.groq.com since these change.
-// Note: llama-3.3-70b-versatile was deprecated in August 2026.
-//
-// Same caveat as Claude: the key is read from import.meta.env, which Vite inlines
-// into the client bundle. Fine for local and desktop use, not for a public
-// deployment — see the `deploy` agent notes.
-// =============================================================================
-
-import type { AIProvider, AIAnalysisResult } from './types';
-
-// In dev mode (browser on localhost) calls to api.groq.com are blocked by CORS.
-// The Vite server proxies /api/groq/* -> https://api.groq.com/* to work around it.
-// In production (Electron desktop, where CORS doesn't apply) we call the real URL.
-const IS_DEV_BROWSER =
-  typeof window !== 'undefined' &&
-  (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-
-const GROQ_API_URL = IS_DEV_BROWSER
-  ? '/api/groq/openai/v1/chat/completions'
-  : 'https://api.groq.com/openai/v1/chat/completions';
-
-function getApiKey(): string {
-  return import.meta.env.VITE_GROQ_API_KEY || '';
-}
-
-function getModel(): string {
-  return import.meta.env.VITE_GROQ_MODEL || 'llama-3.3-70b-versatile';
-}
+// Groq — tier gratuito, sin tarjeta de credito
+import type { AIProvider } from './types';
+import type { AnalysisRequest, ProviderSignal } from '@/shared/llm/types';
+import { analyzeViaProxy, hasProxy } from './proxyClient';
 
 export const groqProvider: AIProvider = {
   id: 'groq',
@@ -38,71 +10,10 @@ export const groqProvider: AIProvider = {
   limits: { rpm: 30, rpd: 1000 },
 
   isAvailable(): boolean {
-    return Boolean(getApiKey());
+    return hasProxy();
   },
 
-  async analyze(text: string, prompt: string, signal?: AbortSignal): Promise<AIAnalysisResult | null> {
-    if (signal?.aborted) return null;
-
-    const apiKey = getApiKey();
-    if (!apiKey) return null;
-
-    const modelsToTry = [getModel(), 'llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'gemma2-9b-it'];
-    // Deduplicate models
-    const uniqueModels = [...new Set(modelsToTry)];
-
-    for (const model of uniqueModels) {
-      if (signal?.aborted) return null;
-      try {
-        const finalPrompt = prompt.replace('{{TEXT}}', text);
-
-        const response = await fetch(GROQ_API_URL, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${apiKey}`,
-          },
-          body: JSON.stringify({
-            model,
-            messages: [{ role: 'user', content: finalPrompt }],
-            max_tokens: 1024,
-            temperature: 0,
-            response_format: { type: 'json_object' },
-          }),
-          signal,
-        });
-
-        if (signal?.aborted) return null;
-
-        if (!response.ok) {
-          const errText = await response.text().catch(() => '');
-          console.warn(`[NADA][Groq] Model ${model} returned ${response.status}: ${errText}`);
-          if (response.status === 404) {
-            // Model not found, try next candidate
-            continue;
-          }
-          return null;
-        }
-
-        const data = await response.json();
-        const content: string = data.choices?.[0]?.message?.content ?? '';
-
-        const jsonMatch = content.match(/\{[\s\S]*\}/);
-        if (!jsonMatch) return null;
-
-        const parsed = JSON.parse(jsonMatch[0]);
-        return {
-          verdict: parsed.verdict ?? 'SEGURO',
-          riskScore: Math.min(100, Math.max(0, parsed.riskScore ?? 0)),
-          tactics: parsed.tactics ?? [],
-          explanation: parsed.explanation ?? '',
-          recommendations: parsed.recommendations ?? [],
-        };
-      } catch (e) {
-        if (signal?.aborted) return null;
-        console.warn(`[NADA][Groq] Error with model ${model}:`, e);
-      }
-    }
-    return null;
+  analyze(request: AnalysisRequest, signal?: AbortSignal): Promise<ProviderSignal | null> {
+    return analyzeViaProxy('groq', request, signal);
   },
 };

@@ -21,7 +21,8 @@ export { getRateLimiter, clearRateLimiters, RateLimiter } from './rateLimiter';
 export type { RateLimits } from './rateLimiter';
 export type {
   AIProvider,
-  AIAnalysisResult,
+  AnalysisRequest,
+  ProviderSignal,
   ProviderOrchestrationConfig,
   ProviderId,
   ProviderStrategy,

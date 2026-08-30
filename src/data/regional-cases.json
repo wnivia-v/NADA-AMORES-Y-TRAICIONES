@@ -1,0 +1,86 @@
+{
+  "note": "Casos etiquetados por region para medir falsos positivos dialectales. PROCEDENCIA: a diferencia de los casos incibe-* de scam-corpus.json, esto NO sale de ninguna fuente documentada — INCIBE publica fraudes, no modismos. Estan escritos para calibracion y necesitan revision de alguien que hable asi a diario antes de darlos por buenos. Un caso mal etiquetado aqui se convierte en una amenaza real silenciada, que es el peor error que puede cometer este producto.",
+  "reviewStatus": "sin revisar por hablantes nativos de cada region",
+  "cases": [
+    {
+      "id": "reg-es-001",
+      "region": "es",
+      "label": "SEGURO",
+      "kind": "modismo",
+      "text": "Tio que cabron, no me habias dicho que venias. Que alegria verte",
+      "note": "Vocativo de aprecio en peninsular. Fuera de España el mismo insulto no funciona asi, de ahi que el amortiguador este marcado por region."
+    },
+    {
+      "id": "reg-es-002",
+      "region": "es",
+      "label": "SEGURO",
+      "kind": "broma",
+      "text": "Te mato si no traes el pan, jajaja",
+      "note": "Hiperbole domestica marcada ademas como broma."
+    },
+    {
+      "id": "reg-es-003",
+      "region": "es",
+      "label": "SEGURO",
+      "kind": "modismo",
+      "text": "Me estas matando de risa con lo que cuentas",
+      "note": "Hiperbole afectiva. Sin amortiguador, 'me estas matando' puntua como amenaza."
+    },
+    {
+      "id": "reg-univ-001",
+      "region": "*",
+      "label": "SEGURO",
+      "kind": "modismo",
+      "text": "Me ha llegado esto del banco diciendo que tengo un cargo de 300 euros, tu que crees, es estafa?",
+      "note": "EL FALSO POSITIVO MAS IMPORTANTE DEL PRODUCTO. El texto contiene una estafa, pero quien lo manda es la victima potencial pidiendo ayuda. Sin este amortiguador, NADA alarma a quien esta haciendo justo lo correcto."
+    },
+    {
+      "id": "reg-univ-002",
+      "region": "*",
+      "label": "SEGURO",
+      "kind": "modismo",
+      "text": "Mira lo que me acaba de llegar, esto es phishing no?",
+      "note": "Misma forma, mas corta."
+    },
+    {
+      "id": "reg-mx-001",
+      "region": "mx",
+      "label": "SEGURO",
+      "kind": "modismo",
+      "text": "Ya conseguiste chamba? Te paso el contacto de mi primo",
+      "note": "Vocabulario laboral mexicano en conversacion normal. No debe confundirse con oferta de empleo fraudulenta."
+    },
+    {
+      "id": "reg-ar-001",
+      "region": "ar",
+      "label": "SEGURO",
+      "kind": "modismo",
+      "text": "Che, pasame la guita de la juntada cuando puedas asi cierro con el del asado",
+      "note": "Peticion de dinero legitima entre amigos con vocabulario rioplatense. La forma se parece a la estafa; el contexto no."
+    },
+    {
+      "id": "reg-univ-003",
+      "region": "*",
+      "label": "PELIGROSO",
+      "kind": "amenaza",
+      "text": "Soy tu hijo, se me rompio el movil y este es mi numero nuevo. Necesito que me hagas un bizum de 400 euros urgente, no le digas nada a papa",
+      "note": "Familiar en apuros, familia documentada por INCIBE. Debe seguir alertando aunque haya amortiguadores activos en el lexico."
+    },
+    {
+      "id": "reg-univ-004",
+      "region": "*",
+      "label": "PELIGROSO",
+      "kind": "amenaza",
+      "text": "Correos: su paquete no ha podido ser entregado por falta de numero. Confirme sus datos aqui: https://correos-entrega.top/reenvio",
+      "note": "Suplantacion de paqueteria, familia documentada por INCIBE."
+    },
+    {
+      "id": "reg-es-004",
+      "region": "es",
+      "label": "PELIGROSO",
+      "kind": "amenaza",
+      "text": "Cabron, como no me pagues hoy voy a tu casa y te reviento",
+      "note": "CONTROL DEL AMORTIGUADOR. Lleva el mismo insulto que reg-es-001, pero aqui es una amenaza real. Si el amortiguador de insulto complice lo silencia, esta mal calibrado."
+    }
+  ]
+}

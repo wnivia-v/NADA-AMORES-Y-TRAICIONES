@@ -1,9 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNadaStore } from '@/store/useNadaStore';
 import { translations } from '@/utils/translations';
 import { getProvidersStatus, getProviderConfig, saveProviderConfig } from '@/services/aiProviders';
 import type { ProviderStrategy, ProviderId, ProviderCost } from '@/services/aiProviders';
 import { Palette, Globe, Code, Brain, Zap, Shield, Layers, Laptop, Cloud, CreditCard } from 'lucide-react';
+import { PrivacyPanel } from './PrivacyPanel';
+import { AccountPanel } from './AccountPanel';
 
 const STRATEGY_INFO: Record<ProviderStrategy, { icon: typeof Zap; label: string; desc: string }> = {
   fallback: { icon: Shield, label: 'Fallback', desc: 'Intenta el siguiente si falla' },
@@ -29,14 +31,11 @@ export function SettingsView() {
   const { theme, setTheme, language, setLanguage, activeTab, setActiveTab } = useNadaStore();
   const t = translations[language];
 
-  const [providers, setProviders] = useState(getProvidersStatus());
-  const [config, setConfig] = useState(getProviderConfig());
-
-  // Refresh provider status
-  useEffect(() => {
-    setProviders(getProvidersStatus());
-    setConfig(getProviderConfig());
-  }, []);
+  // El inicializador va como funcion para que se evalue una sola vez y no en
+  // cada render. Aqui habia ademas un useEffect que, al montar, volvia a poner
+  // exactamente estos mismos valores: un render de mas para no cambiar nada.
+  const [providers, setProviders] = useState(() => getProvidersStatus());
+  const [config, setConfig] = useState(() => getProviderConfig());
 
   const toggleProvider = (id: ProviderId) => {
     const updated = {
@@ -234,6 +233,12 @@ export function SettingsView() {
           </button>
         </div>
       </div>
+
+      {/* Cuenta: solo hace falta para contribuir reportes. */}
+      <AccountPanel />
+
+      {/* Privacidad: retirar el consentimiento y borrar lo guardado. */}
+      <PrivacyPanel />
 
       {/* About */}
       <div className="card p-4 text-center">

@@ -1,0 +1,37 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "types": ["node"],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "moduleDetection": "force",
+    "resolveJsonModule": true,
+    "noEmit": true
+  },
+  "include": ["server/src", "src/shared"],
+  // El modulo de vision es de dispositivo por diseño: §4.1 exige que ningun
+  // frame facial salga del equipo, asi que codigo de vision compilado para el
+  // servidor seria una contradiccion. Se excluye a proposito, y no se le añade
+  // la lib DOM al backend — eso permitiria que codigo de servidor usara APIs de
+  // navegador por descuido, que es justo lo que este limite evita.
+  //
+  // El backoffice se excluye por el mismo motivo y por uno mas. §4.2 dice que
+  // los agentes viven FUERA DE LINEA: el backoffice corre en la herramienta de
+  // linea de comandos sobre un export, nunca dentro del API. Ademas importa el
+  // lexico de la app, que el servidor no tiene por que poder alcanzar.
+  //
+  // `src/shared` significa aqui "compartido entre contextos": llm y risk los
+  // comparten cliente y servidor; vision la comparten el hilo principal y el
+  // worker, que siguen siendo el dispositivo; feedback y policy los comparten
+  // cliente y servidor.
+  "exclude": ["src/shared/vision", "src/shared/backoffice"]
+}

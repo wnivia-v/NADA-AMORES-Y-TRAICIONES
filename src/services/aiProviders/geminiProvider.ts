@@ -1,21 +1,31 @@
-// =============================================================================
-// Gemini Provider — Firebase AI (Gemini 3.7 Flash)
-// =============================================================================
-
+// Gemini — Firebase AI Logic
 import { app, hasValidConfig } from '../firebaseConfig';
-import type { AIProvider, AIAnalysisResult } from './types';
+import type { AIProvider } from './types';
+import type { AnalysisRequest, AnalysisTask, ProviderSignal } from '@/shared/llm/types';
+import { systemPromptFor, renderUserContent } from '@/shared/llm/envelope';
+import { parseProviderSignal } from '@/shared/llm/signalSchema';
 
-let geminiModel: any = null;
+// Un modelo por tarea: la instruccion de sistema se fija al construirlo.
+const models = new Map<AnalysisTask, unknown>();
 
-async function getModel() {
-  if (geminiModel) return geminiModel;
+async function getModel(task: AnalysisTask): Promise<any> {
+  const cached = models.get(task);
+  if (cached) return cached;
   if (!hasValidConfig || !app) return null;
 
   try {
     const { getGenerativeModel, getAI } = await import('firebase/ai');
     const ai = getAI(app);
-    geminiModel = getGenerativeModel(ai, { model: 'gemini-3.7-flash' });
-    return geminiModel;
+    const model = getGenerativeModel(ai, {
+      model: 'gemini-2.0-flash',
+      systemInstruction: systemPromptFor(task),
+      generationConfig: {
+        temperature: 0,
+        responseMimeType: 'application/json',
+      },
+    });
+    models.set(task, model);
+    return model;
   } catch (e) {
     console.warn('[NADA][Gemini] Model init failed:', e);
     return null;
@@ -26,41 +36,30 @@ export const geminiProvider: AIProvider = {
   id: 'gemini',
   name: 'Google Gemini 3.7 Flash',
   cost: 'free-tier',
-  // Gemini Developer API free tier. It requires the Firebase project to stay on
-  // the no-cost Spark plan (i.e. NOT linked to Cloud Billing). Kept slightly
-  // under the published 15 RPM so a burst does not trip a 429.
+  // Tier gratuito de la Gemini Developer API. Exige que el proyecto de Firebase
+  // siga en el plan Spark (sin Cloud Billing vinculado). Un poco por debajo de
+  // los 15 RPM publicados para que una rafaga no dispare un 429.
   limits: { rpm: 14, rpd: 1400 },
 
   isAvailable(): boolean {
     return hasValidConfig && app !== null;
   },
 
-  async analyze(text: string, prompt: string, signal?: AbortSignal): Promise<AIAnalysisResult | null> {
+  async analyze(request: AnalysisRequest, signal?: AbortSignal): Promise<ProviderSignal | null> {
     if (signal?.aborted) return null;
 
-    const model = await getModel();
+    const model = await getModel(request.task);
     if (!model) return null;
 
     try {
-      const finalPrompt = prompt.replace('{{TEXT}}', text);
-      const result = await model.generateContent(finalPrompt);
-
+      const result = await model.generateContent(renderUserContent(request));
       if (signal?.aborted) return null;
 
-      const response = result.response.text();
-
-      // Extract JSON from response
-      const jsonMatch = response.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) return null;
-
-      const parsed = JSON.parse(jsonMatch[0]);
-      return {
-        verdict: parsed.verdict ?? 'SEGURO',
-        riskScore: Math.min(100, Math.max(0, parsed.riskScore ?? 0)),
-        tactics: parsed.tactics ?? [],
-        explanation: parsed.explanation ?? '',
-        recommendations: parsed.recommendations ?? [],
-      };
+      // Validacion cerrada: si la respuesta no encaja en el esquema, no hay
+      // señal. Antes se rellenaba con verdict 'SEGURO' y riskScore 0.
+      const { signal: parsed, rejection } = parseProviderSignal(result.response.text());
+      if (rejection) console.warn(`[NADA][Gemini] respuesta descartada (${rejection})`);
+      return parsed;
     } catch (e) {
       if (signal?.aborted) return null;
       console.warn('[NADA][Gemini] Analysis error:', e);
@@ -68,3 +67,8 @@ export const geminiProvider: AIProvider = {
     }
   },
 };
+
+/** Test helper: olvida los modelos cacheados. */
+export function resetGeminiProvider() {
+  models.clear();
+}
