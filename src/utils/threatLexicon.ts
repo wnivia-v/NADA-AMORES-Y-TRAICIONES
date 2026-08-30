@@ -1005,7 +1005,6 @@ export const COMBOS: readonly ComboRule[] = [
     bonus: 30,
     label: 'Amenaza acompanada de exigencia de pago',
   },
-<<<<<<< HEAD
   // ── Voice-typical combination shapes ─────────────────────────────────────
   {
     id: 'extortion-violence',
@@ -1042,7 +1041,7 @@ export const COMBOS: readonly ComboRule[] = [
     requires: ['acoso-insulto', 'acoso-severo'],
     bonus: 20,
     label: 'Acoso que escala a hostigamiento severo',
-=======
+  },
 
   // ── Formas documentadas por INCIBE ─────────────────────────────────────────
   //
