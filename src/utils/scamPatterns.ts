@@ -214,7 +214,7 @@ export function scanLocalPatterns(text: string, options: ScanOptions = {}): Loca
     for (const cat of dictResult.categories) {
       const catScore = dictResult.categoryScores[cat] ?? 0;
       if (catScore > 0) {
-        matches.push({ category: DICT_LABELS[cat] ?? cat, pattern: 'dictionary', weight: catScore });
+        matches.push({ id: `dict-${cat}`, category: DICT_LABELS[cat] ?? cat, pattern: 'dictionary', weight: catScore });
       }
     }
     // Dictionary contributes its score to corroborate regex or act as standalone floor.
