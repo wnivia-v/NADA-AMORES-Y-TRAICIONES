@@ -184,6 +184,20 @@ export const LEXICON: readonly LexiconEntry[] = [
     regex: /env[ií]\w*\s*(dinero|plata|pago|transferencia|lana)|(dinero|plata|lana|guita)\s+(necesit|urgente|env[ií]|mand[aá]|pas[aá])|(pas[aá]\w*|mand[aá]\w*|d[aá]\w*)\s+(la\s+)?(plata|lana|guita|dinero)|(mandame|mandes|manda|enviame|envies|envia|pasame|pases|pasa|ingresame|ingreses|ingresa|transfiereme|transfieras|transfiere)\s+(unos?\s+)?\d{1,6}\s*(€|euros?|eur|dolares|usd|pavos|pesos|soles|lucas)(?![a-z])/,
   }),
   E({
+    // Pedir dinero no siempre lleva verbo de envio. El guion mas repetido de la
+    // estafa sentimental no dice "mandame": dice "necesito 800 dolares", "me
+    // hacen falta 500 euros". fin-send-money exige un imperativo de envio justo
+    // antes de la cifra, asi que ese fraseo se colaba entero.
+    //
+    // Pesa menos que fin-send-money (18 frente a 25) a proposito: necesitar una
+    // cantidad es algo que tambien dice un amigo de verdad. Sola no llega al
+    // umbral de aviso —18 puntan 22 de 100—; hace falta que la acompañe otra
+    // cosa. Que es exactamente la regla del producto.
+    id: 'fin-need-amount', category: 'fraude-financiero', weight: 18, langs: ['es'],
+    label: 'Necesita una cantidad concreta',
+    regex: /(necesito|necesitamos|me\s+hacen?\s+falta|me\s+faltan?|me\s+urgen?)\s+(unos?\s+)?\d{1,6}\s*(€|euros?|eur|dolares|usd|pavos|pesos|soles|lucas)(?![a-z])/,
+  }),
+  E({
     id: 'fin-send-money-en', category: 'fraude-financiero', weight: 25, langs: ['en'],
     label: 'Money request',
     regex: /\b(send|wire|transfer)\s+(me\s+)?(the\s+)?(money|cash|funds|payment)\b/,
@@ -280,7 +294,7 @@ export const LEXICON: readonly LexiconEntry[] = [
   E({
     id: 'parcel-customs', category: 'paqueteria-aduana', weight: 24, langs: ['es'],
     label: 'Paquete retenido con tasas por pagar',
-    regex: /(paquete|env[ií]o|envio|pedido|maleta|encomienda|equipaje)\s.{0,60}?(retenid|aduana|tasas?\s+de\s+(aduana|env[ií]o|envio)|gastos\s+de\s+(aduana|env[ií]o|envio)|derechos\s+de\s+aduana)|(aduana|aduanas)\s.{0,40}?(pagar|abonar|tasa|coste)/,
+    regex: /(paquete|env[ií]o|envio|pedido|maleta|encomienda|equipaje)\s.{0,60}?(retenid|aduana|tasas?\s+de\s+(aduana|env[ií]o|envio)|gastos\s+de\s+(aduana|env[ií]o|envio)|derechos\s+de\s+aduana)|(aduana|aduanas)\s.{0,40}?(pagar|abonar|tasa|coste)|(problema|l[ií]o|incidencia|retenid\w+)\s+(con\s+)?(la\s+)?aduana/,
   }),
   E({
     id: 'parcel-carrier-issue', category: 'paqueteria-aduana', weight: 20, langs: ['es'],
@@ -450,10 +464,42 @@ export const LEXICON: readonly LexiconEntry[] = [
     label: 'Amenaza a la seguridad personal',
     regex: /(sabemos\s*d[oó]nde\s*vives|conocemos\s*tu\s*direcci[oó]n|algo\s*(le|te)\s*va\s*a\s*pasar|tu\s*familia\s*corre\s*peligro)/,
   }),
+  // Ir a donde alguien vive es una amenaza o un plan de tarde segun DOS cosas:
+  // como se llama al sitio, y con que va acompañado.
+  //
+  // "Paso por tu domicilio" no lo dice nadie que te aprecie: domicilio, portal,
+  // direccion y trabajo son el vocabulario del guion de autoridad falsa. Esos
+  // pesan solos, 32.
+  //
+  // "Paso por tu casa" es lo contrario: es de las frases mas cotidianas que hay
+  // en español. Pesaba 32 tambien, y con eso "voy hoy mismo al banco y luego
+  // paso por tu casa" puntuaba 53 — SOSPECHOSO por quedar para cenar. Ese es el
+  // falso positivo que hunde a estas herramientas: la primera vez que alertas
+  // sobre un plan de tarde, la persona aprende a ignorarte.
+  //
+  // No se borra la señal, se le pone el peso que tiene. Tres entradas:
+  //
+  //   - el sitio formal (domicilio, portal, trabajo): 32, sola.
+  //   - "a tu casa" a secas: 12. Sigue existiendo para el detector —que es
+  //     distinto de alertar— y puede corroborar a otra, pero ni con la urgencia
+  //     al lado llega al umbral.
+  //   - "a tu casa" dentro de un marco de amenaza, condicional delante
+  //     ("como no me pagues... voy a tu casa") o violencia detras ("...y te
+  //     reviento"): 32. Ahi ya no hay ambiguedad que respetar.
   E({
     id: 'vio-physical-presence', category: 'amenaza-violencia', weight: 32, langs: ['es'],
     label: 'Amenaza de presencia fisica',
-    regex: /(estoy|estare|estar[eé]|voy|ire|ir[eé]|llego|llegare|llegar[eé]|paso|pasare|pasar[eé]|me\s+presento|aparezco|estamos|estaremos|vamos|iremos|llegamos|pasamos|nos\s+presentamos)\s+(a|en|por)\s*(su|tu)\s*(domicilio|casa|direcci[oó]n|direccion|trabajo|portal|curro)/,
+    regex: /(estoy|estare|estar[eé]|voy|ire|ir[eé]|llego|llegare|llegar[eé]|paso|pasare|pasar[eé]|me\s+presento|aparezco|estamos|estaremos|vamos|iremos|llegamos|pasamos|nos\s+presentamos)\s+(a|en|por)\s*(su|tu)\s*(domicilio|direcci[oó]n|direccion|trabajo|portal|curro)/,
+  }),
+  E({
+    id: 'vio-home-visit', category: 'amenaza-violencia', weight: 12, langs: ['es'],
+    label: 'Anuncia presentarse donde vives',
+    regex: /(estoy|estare|estar[eé]|voy|ire|ir[eé]|llego|llegare|llegar[eé]|paso|pasare|pasar[eé]|me\s+presento|aparezco|estamos|estaremos|vamos|iremos|llegamos|pasamos|nos\s+presentamos)\s+(a|en|por)\s*(su|tu)\s*casa/,
+  }),
+  E({
+    id: 'vio-home-visit-threat', category: 'amenaza-violencia', weight: 32, langs: ['es'],
+    label: 'Amenaza de presentarse en el domicilio',
+    regex: /((si|como|a\s*ver\s*si)\s+no\s+(me\s+)?(pagas|paga|pagais|depositas|transfieres|mandas|envias|env[ií]as|respondes|contestas|colaboras|cumples|entregas|apareces|vienes|haces\s+lo\s+que)[^.]{0,70}(voy|ire|ir[eé]|paso|pasare|pasar[eé]|aparezco|vamos|iremos|estamos|nos\s+presentamos|me\s+presento)\s+(a|en|por)\s*(su|tu)\s*casa|(voy|ire|ir[eé]|paso|pasare|pasar[eé]|aparezco|vamos|iremos|estamos|nos\s+presentamos|me\s+presento)\s+(a|en|por)\s*(su|tu)\s*casa[^.]{0,70}(y\s+ya\s+ver[aá]s|te\s+arrepent|te\s+vas\s+a\s+arrepentir|a\s+por\s+ti|con\s+la\s+polic[ií]a|te\s+saco|te\s+busco|te\s+reviento|te\s+parto|te\s+rompo|no\s+me\s+obligues|si\s+no\s+pagas|si\s+no\s+me\s+(pagas|mandas|respondes)))/,
   }),
   E({
     id: 'vio-death', category: 'amenaza-violencia', weight: 35, langs: ['es'],
@@ -575,7 +621,9 @@ export const LEXICON: readonly LexiconEntry[] = [
   E({
     id: 'iso-secrecy', category: 'aislamiento-manipulacion', weight: 20, langs: ['es'],
     label: 'Aislamiento',
-    regex: /(no\s*le\s*digas|no\s*cuentes|no\s*avises|es\s*un\s*secreto|entre\s*nosotros|no\s*hables\s*con\s*nadie)/,
+    // "no se lo cuentes a tu familia" no casaba: el patron pedia "no cuentes"
+    // pegado, y el pronombre en medio es como se dice de verdad.
+    regex: /(no\s*(se\s*)?(lo\s*|le\s*)?(digas|cuentes)|no\s*avises|es\s*un\s*secreto|entre\s*nosotros|no\s*hables\s*con\s*nadie)/,
   }),
   E({
     id: 'iso-secrecy-en', category: 'aislamiento-manipulacion', weight: 20, langs: ['en'],
@@ -587,7 +635,7 @@ export const LEXICON: readonly LexiconEntry[] = [
   E({
     id: 'urg-general', category: 'urgencia-presion', weight: 12, langs: ['es', 'en', 'pt'],
     label: 'Presion de urgencia',
-    regex: /(urgente|inmediatamente|ahora\s*mismo|[uú]ltima\s*oportunidad|ultima\s*oportunidad|urgent|immediately|right\s+now)/,
+    regex: /(urgente|inmediatamente|(ahora|hoy|ya)\s*mismo|[uú]ltima\s*oportunidad|ultima\s*oportunidad|urgent|immediately|right\s+now)/,
   }),
   E({
     id: 'urg-deadline', category: 'urgencia-presion', weight: 15, langs: ['es'],

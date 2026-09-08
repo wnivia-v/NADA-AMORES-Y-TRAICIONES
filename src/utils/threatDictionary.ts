@@ -868,6 +868,13 @@ const AMBIGUOS_SIN_CONTEXTO = new Set([
   // proteger a gente que tiene pareja.
   'te amo', 'mi amor', 'amor', 'mi vida', 'carino', 'cariño', 'mi cielo',
   'te quiero', 'mi reina', 'mi rey', 'bebe', 'corazon',
+  // Destinos de difusion: dicen a QUIEN, no QUE. En la sextorsion aparecen
+  // detras de la amenaza ("lo mando a tu familia"), pero solos son cualquier
+  // frase. "No se lo cuentes a tu familia" es aislamiento, y el diccionario lo
+  // etiquetaba de sextorsion por esas tres palabras.
+  'a tu familia', 'a tus contactos', 'a tu trabajo', 'a tu jefe',
+  'en redes', 'en internet', 'en facebook', 'en instagram', 'en tiktok',
+  'por whatsapp', 'a todos', 'a todo el mundo',
 ]);
 
 /** True si la categoria se sostiene en algo mas que terminos ambiguos. */

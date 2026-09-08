@@ -38,7 +38,7 @@ molestar**: un detector con falsos positivos entrena a su usuario a ignorarlo.
 | Voz | Web Speech API / Whisper en el dispositivo / reconocedor nativo Android |
 | OCR | Tesseract |
 | Backend | Node + PostgreSQL (Prisma) — proxy de IA y corpus de reportes |
-| Calidad | Vitest (487 tests), ESLint, GitHub Actions |
+| Calidad | Vitest (490 tests), ESLint, GitHub Actions |
 
 ## Resultado obtenido
 
@@ -49,7 +49,7 @@ Todo lo de abajo está **medido**, y cualquiera puede reproducirlo con las
 
 | | Al empezar | Hoy |
 |---|---|---|
-| Acierto exacto | 34,1 % | **81,5 %** |
+| Acierto exacto | 34,1 % | **83,1 %** |
 | Amenazas detectadas | 35,3 % | **87,5 %** |
 | **Falsas alarmas** | 0 % | **0 %** |
 | Fallos graves | 14 | **0** |
@@ -69,7 +69,7 @@ El 0 % de falsas alarmas es la cifra que más costó y la que más importa.
 
 ### Qué se comprueba solo
 
-487 tests. La misma batería de seguridad corre contra el almacén en memoria
+490 tests. La misma batería de seguridad corre contra el almacén en memoria
 **y** contra PostgreSQL real.
 
     npm ci && npm test

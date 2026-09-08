@@ -175,3 +175,45 @@ describe('la capa regex ya no se evade con caracteres invisibles', () => {
     expect(score('te voy а matar')).toBe(score(limpio));
   });
 });
+
+describe('el guion completo de la estafa sentimental', () => {
+  // Este es el caso de manual —afecto acelerado, excusa de aduana, cantidad
+  // concreta, canal irrastreable y aislamiento— y puntuaba 31: SEGURO. La causa
+  // no era una sino cuatro grietas de fraseo, cada una pequeña:
+  //
+  //   - "necesito 800 dolares": pedir dinero no siempre lleva verbo de envio, y
+  //     el patron de cantidad exigia un imperativo justo delante.
+  //   - "no se lo cuentes a tu familia": el patron pedia "no cuentes" pegado.
+  //   - "hoy mismo": la urgencia solo cubria "ahora mismo".
+  //   - "problema con la aduana": la aduana solo contaba si se hablaba de pagar
+  //     tasas con esas palabras.
+  //
+  // Ninguna de las cuatro es rara. Todas juntas eran la diferencia entre ver la
+  // estafa y no verla.
+  const guion =
+    'Mi amor, se que apenas nos conocemos pero siento que eres la persona que ' +
+    'esperaba. Tengo un problema con la aduana y necesito 800 dolares hoy mismo, ' +
+    'mandalos por Western Union. No se lo cuentes a tu familia, no lo entenderian.';
+
+  it('se ve entero', () => {
+    expect(score(guion)).toBeGreaterThanOrEqual(70);
+  });
+
+  it('y sus piezas sueltas siguen sin alertar', () => {
+    // La otra mitad del trato. Si estas frases alertaran, el arreglo de arriba
+    // habria salido carisimo.
+    expect(score('Mi amor, me mandas 800 dolares?')).toBeLessThan(40);
+    expect(score('Necesito 20 euros para el taxi, te los devuelvo el viernes')).toBeLessThan(40);
+    expect(score('No se lo cuentes a nadie todavia, quiero darle la sorpresa')).toBeLessThan(40);
+    expect(score('Voy hoy mismo al banco y luego paso por tu casa')).toBeLessThan(40);
+  });
+
+  it('el diccionario ya no llama sextorsion a decir "a tu familia"', () => {
+    // "a tu familia", "en redes", "por whatsapp" dicen a QUIEN, no QUE. Solos
+    // son cualquier frase; en la sextorsion van detras de la amenaza. El
+    // diccionario etiquetaba "no se lo cuentes a tu familia" de sextorsion por
+    // esas tres palabras, y esa etiqueta la lee la persona.
+    const r = scanLocalPatterns('No se lo cuentes a tu familia, es entre nosotros');
+    expect(r.tactics.join(' ')).not.toMatch(/[Ss]extorsion/);
+  });
+});
