@@ -4,7 +4,8 @@
 PWA que analiza texto, voz, imágenes y vídeo en tiempo real.
 
 - Repositorio: https://github.com/wnivia-v/NADA-AMORES-Y-TRAICIONES
-- Presentación: _(pendiente: enlace al PDF/PPTX)_
+- Presentación: [`entrega/presentacion.pdf`](presentacion.pdf) (11 diapositivas, 16:9)
+- Guion del vídeo: [`entrega/guion-video.md`](guion-video.md) — minutado a los 4 min que pide la guía
 - Vídeo: _(pendiente: enlace)_
 
 ---

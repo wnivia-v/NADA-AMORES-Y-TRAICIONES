@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>NADA — Amores y Traiciones</title>
+<style>
+  @page { size: 1280px 720px; margin: 0; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+    background: #0d0f14; color: #e8eaf0;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .s {
+    width: 1280px; height: 720px; padding: 52px 76px;
+    page-break-after: always; break-after: page;
+    position: relative; overflow: hidden;
+    display: flex; flex-direction: column; justify-content: center;
+    background: linear-gradient(160deg, #0d0f14 0%, #141824 100%);
+  }
+  .s::after {
+    content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 6px;
+    background: linear-gradient(90deg, #e0426a 0%, #7b3fe4 55%, #2bb3a3 100%);
+  }
+  .num { position: absolute; right: 40px; bottom: 28px; font-size: 15px; color: #4a5164; letter-spacing: .1em; }
+  .kicker { font-size: 15px; letter-spacing: .22em; text-transform: uppercase; color: #e0426a; margin-bottom: 20px; font-weight: 700; }
+  h1 { font-size: 78px; line-height: 1.02; margin: 0 0 18px; letter-spacing: -.025em; font-weight: 800; }
+  h2 { font-size: 44px; line-height: 1.1; margin: 0 0 24px; letter-spacing: -.02em; font-weight: 750; }
+  p  { font-size: 24px; line-height: 1.45; margin: 0 0 16px; color: #c2c8d6; max-width: 1020px; }
+  p.lead { font-size: 29px; color: #e8eaf0; }
+  strong { color: #fff; }
+  .accent { color: #ffc46b; }
+  ul { margin: 6px 0 0; padding: 0; list-style: none; }
+  li { font-size: 23px; line-height: 1.42; margin-bottom: 14px; padding-left: 34px; position: relative; color: #c2c8d6; max-width: 1030px; }
+  li::before { content: ""; position: absolute; left: 4px; top: 13px; width: 11px; height: 11px; border-radius: 3px; background: #7b3fe4; }
+  li.no::before { background: #4a5164; }
+  .cols { display: flex; gap: 34px; }
+  .card { flex: 1; background: rgba(255,255,255,.045); border: 1px solid rgba(255,255,255,.09); border-radius: 16px; padding: 24px 26px; }
+  .card h3 { font-size: 22px; margin: 0 0 12px; color: #fff; font-weight: 700; }
+  .card p { font-size: 19px; line-height: 1.42; margin: 0; color: #b0b7c7; }
+  .tag { display: inline-block; font-size: 15px; letter-spacing: .1em; text-transform: uppercase; padding: 5px 12px; border-radius: 999px; margin-bottom: 14px; font-weight: 700; }
+  .tag.dev { background: rgba(43,179,163,.16); color: #59d6c6; }
+  .tag.cloud { background: rgba(123,63,228,.2); color: #b394f5; }
+  .tag.own { background: rgba(255,196,107,.15); color: #ffc46b; }
+  table { border-collapse: collapse; width: 100%; margin-top: 6px; }
+  th, td { text-align: left; padding: 11px 16px; font-size: 23px; border-bottom: 1px solid rgba(255,255,255,.09); }
+  th { font-size: 16px; letter-spacing: .12em; text-transform: uppercase; color: #6d7488; font-weight: 700; }
+  td.n { text-align: right; font-variant-numeric: tabular-nums; }
+  td.now { color: #59d6c6; font-weight: 750; }
+  td.before { color: #6d7488; }
+  .big { display: flex; gap: 24px; margin-top: 22px; }
+  .big div { flex: 1; background: rgba(255,255,255,.045); border: 1px solid rgba(255,255,255,.09); border-radius: 16px; padding: 20px 22px; }
+  .big b { display: block; font-size: 44px; color: #59d6c6; line-height: 1; margin-bottom: 10px; font-variant-numeric: tabular-nums; }
+  .big span { font-size: 18px; color: #a6adbd; line-height: 1.35; display: block; }
+  .quote { font-size: 34px; line-height: 1.35; color: #fff; border-left: 5px solid #e0426a; padding-left: 26px; max-width: 980px; }
+  .foot { position: absolute; left: 80px; bottom: 28px; font-size: 16px; color: #4a5164; }
+  code { font-family: "Cascadia Mono", Consolas, monospace; font-size: 21px; color: #ffc46b; background: rgba(255,196,107,.09); padding: 2px 8px; border-radius: 6px; }
+</style>
+</head>
+<body>
+
+<section class="s" style="justify-content:center">
+  <div class="kicker">PWA · Escudo en tiempo real</div>
+  <h1>NADA<br><span style="font-size:52px;font-weight:600;color:#b0b7c7">Amores y Traiciones</span></h1>
+  <p class="lead" style="max-width:900px">Detección de fraude conversacional y manipulación en apps de citas y mensajería. Texto, voz, imagen y videollamada.</p>
+  <div class="foot">Equipo Antigravity · Cohorte WomenCISO 4 / MenCISO Gen 1 · github.com/wnivia-v/NADA-AMORES-Y-TRAICIONES</div>
+</section>
+
+<section class="s">
+  <div class="kicker">El problema</div>
+  <h2>Nadie cae por ingenuo.<br>Cae porque el fraude llega dentro de una<br>conversación que quiere tener.</h2>
+  <ul>
+    <li>Cuando alguien empieza a dudar, <strong>ya está emocionalmente comprometido</strong>.</li>
+    <li>Preguntar a un familiar da vergüenza, así que no se pregunta.</li>
+    <li>El aviso llega cuando el dinero ya salió: entonces sirve para el atestado, no para la persona.</li>
+  </ul>
+  <p style="margin-top:26px;color:#8a92a6;font-size:21px">La FTC de EE. UU. reporta más de mil millones de dólares anuales en pérdidas por estafa sentimental. Cifra pública ampliamente difundida; no verificada por este equipo.</p>
+  <div class="num">2</div>
+</section>
+
+<section class="s">
+  <div class="kicker">El problema real</div>
+  <h2>No era detectar más.<br>Era detectar <span class="accent">sin molestar</span>.</h2>
+  <p class="lead">Un detector con falsos positivos entrena a su usuario a ignorarlo. Y una alerta que nadie cree no protege a nadie el día que es verdad.</p>
+  <div class="cols" style="margin-top:16px">
+    <div class="card"><h3>Problema A — falsos positivos</h3><p>El diccionario evaluaba palabras aisladas, no contexto. «Mi amor, ¿me mandas 800 dólares?» es una madre escribiéndole a su hijo.</p></div>
+    <div class="card"><h3>Problema B — inyección de prompt</h3><p>El texto que analizamos lo escribe el atacante. Puede intentar hablarle a nuestra propia IA y desactivarla.</p></div>
+  </div>
+  <div class="num">3</div>
+</section>
+
+<section class="s">
+  <div class="kicker">Las dos reglas del producto</div>
+  <h2>Lo que NADA no hará nunca</h2>
+  <div class="cols">
+    <div class="card">
+      <span class="tag own">Regla 1</span>
+      <h3>Nunca dice «esta persona es un estafador»</h3>
+      <p>Emite indicadores de riesgo, cada uno con su confianza y su motivo. Quien decide es la persona. Un veredicto binario sobre alguien real es una acusación, y equivocarse tiene víctima.</p>
+    </div>
+    <div class="card">
+      <span class="tag own">Regla 2</span>
+      <h3>Ninguna alerta salta por una señal aislada</h3>
+      <p>Hace falta corroboración de dos fuentes independientes, en una ventana deslizante de 30 segundos. Es la regla que compra el 0 % de falsas alarmas.</p>
+    </div>
+  </div>
+  <p style="margin-top:30px;font-size:23px">Única excepción ética: la inducción al suicidio o la autolesión alerta sola.</p>
+  <div class="num">4</div>
+</section>
+
+<section class="s">
+  <div class="kicker">Arquitectura</div>
+  <h2>Qué se queda en el móvil y qué sale</h2>
+  <div class="cols">
+    <div class="card">
+      <span class="tag dev">On-device</span>
+      <h3>No sale del dispositivo</h3>
+      <p>Malla facial, parpadeo, pose, rPPG, detección de bucle, voz sintética y transcripción. <strong>Ningún frame ni audio crudo se transmite ni se persiste.</strong></p>
+    </div>
+    <div class="card">
+      <span class="tag cloud">Nube</span>
+      <h3>Sólo texto</h3>
+      <p>El análisis de lenguaje va a Gemini, Groq, Venice, Claude o Bedrock. Texto no es dato biométrico. Es opcional: sin claves, el análisis local funciona igual.</p>
+    </div>
+    <div class="card">
+      <span class="tag own">Código propio</span>
+      <h3>La decisión</h3>
+      <p>Los modelos emiten una <strong>señal</strong>: puntuación y confianza. La fusión y el veredicto los calcula código determinista. <strong>Nunca decide un LLM.</strong></p>
+    </div>
+  </div>
+  <p style="margin-top:28px;font-size:22px;color:#8a92a6">No es un ajuste que se pueda cambiar luego: el reporte de vídeo no tiene ningún campo donde meter un frame, y el servidor lo descarta aunque la petición lo traiga. Hay un test que lo comprueba.</p>
+  <div class="num">5</div>
+</section>
+
+<section class="s">
+  <div class="kicker">La idea técnica</div>
+  <h2>Una estafa tiene <span class="accent">forma</span>, no palabras clave</h2>
+  <table>
+    <tr><th>Frase suelta</th><th>¿Sospechosa sola?</th></tr>
+    <tr><td>«Ve al Banco Azteca»</td><td class="before">No. Es un banco real.</td></tr>
+    <tr><td>«No cuelgues, quédate en la línea»</td><td class="before">No. Se lo dices a tu madre.</td></tr>
+    <tr><td>«Tengo a tu muchacho»</td><td class="before">No necesariamente.</td></tr>
+    <tr><td><strong>Las tres juntas</strong></td><td class="now">Secuestro virtual.</td></tr>
+  </table>
+  <p style="margin-top:26px">72 patrones en 25 categorías y 26 reglas de combinación, en español, inglés y portugués, construidos sobre campañas reales publicadas por <strong>INCIBE</strong>. Cada señal suelta pesa por debajo del umbral <em>a propósito</em>.</p>
+  <div class="num">6</div>
+</section>
+
+<section class="s">
+  <div class="kicker">Blindaje — Problema B</div>
+  <h2>El texto analizado lo escribe el atacante</h2>
+  <ul>
+    <li><strong>No existe la costura donde concatenar.</strong> Las reglas van en el turno <code>system</code> y el mensaje en el <code>user</code>, entre marcadores con identificador aleatorio por petición.</li>
+    <li><strong>Se escanea en seis vistas</strong> —plana, leet, espaciada, invertida, base64, rot13— y el disfraz suma en vez de esconder.</li>
+    <li><strong>Aunque un modelo caiga del todo, no decide.</strong> Sólo puede empujar una fuente entre varias.</li>
+    <li><strong>Los reportes de usuarios nunca tocan el corpus</strong> contra el que se mide una regla nueva. Si se juntaran, el atacante escribiría el examen con el que se le juzga. Hay un test que impide ese cableado.</li>
+  </ul>
+  <p style="margin-top:22px;font-size:22px;color:#8a92a6">Protocolo completo mapeado a MITRE ATLAS y NIST AI RMF en <code>docs/PROTOCOLO-SEGURIDAD.md</code>.</p>
+  <div class="num">7</div>
+</section>
+
+<section class="s">
+  <div class="kicker">Resultados medidos · reproducibles con una orden</div>
+  <h2>Detección sobre 65 casos etiquetados</h2>
+  <table>
+    <tr><th>Métrica</th><th style="text-align:right">Al empezar</th><th style="text-align:right">Hoy</th></tr>
+    <tr><td>Acierto exacto</td><td class="n before">34,1 %</td><td class="n now">83,1 %</td></tr>
+    <tr><td>Amenazas detectadas</td><td class="n before">35,3 %</td><td class="n now">87,5 %</td></tr>
+    <tr><td>Falsas alarmas</td><td class="n before">0 %</td><td class="n now">0 %</td></tr>
+    <tr><td>Fallos graves</td><td class="n before">14</td><td class="n now">0</td></tr>
+  </table>
+  <div class="big">
+    <div><b>40/40</b><span>ataques de inyección detectados, con 0 falsas alarmas sobre conversación normal</span></div>
+    <div><b>490</b><span>tests automáticos; la batería de seguridad corre también contra PostgreSQL real</span></div>
+    <div><b>0 %</b><span>de falsas alarmas: la cifra que más costó y la que más importa</span></div>
+  </div>
+  <div class="num">8</div>
+</section>
+
+<section class="s">
+  <div class="kicker">Honestidad</div>
+  <h2>Lo que NADA <span class="accent">no</span> hace</h2>
+  <ul>
+    <li class="no">No dicta veredictos ni bloquea a nadie.</li>
+    <li class="no">No sube fotos ni audio a ningún servidor.</li>
+    <li class="no">No detecta lo que no ha visto: el corpus tiene 65 casos, no todas las estafas del mundo.</li>
+    <li class="no">La detección de deepfake es una heurística biométrica, no un modelo entrenado contra deepfakes reales. Por eso la recomendación es «verifica por otro canal», no «es falso».</li>
+    <li class="no">La batería de ataques la escribió quien escribió las defensas: mide cobertura de lo previsto, no resistencia a lo imprevisto.</li>
+  </ul>
+  <p style="margin-top:20px;font-size:22px;color:#8a92a6">Decir esto en voz alta genera más confianza que sobrevender. Y es coherente con la Regla 1.</p>
+  <div class="num">9</div>
+</section>
+
+<section class="s">
+  <div class="kicker">Negocio</div>
+  <h2>Gratis lo que protege. De pago lo que amplía.</h2>
+  <div class="cols">
+    <div class="card"><h3>Gratis, sin cuenta y sin red</h3><p>Detección local completa. Quien más lo necesita no va a pagar antes de confiar, y una barrera de pago delante de la protección deja fuera justo a quien la necesita.</p></div>
+    <div class="card"><h3>De pago</h3><p>IA en la nube para fraseo nunca visto, histórico de conversaciones y panel para familias.</p></div>
+    <div class="card"><h3>B2B</h3><p>Apps de citas y bancos, que hoy pagan el fraude que no supieron ver a tiempo. API del motor de fusión.</p></div>
+  </div>
+  <p style="margin-top:28px;font-size:22px;color:#8a92a6">Cifras de precio pendientes de validar con mercado: se presentan como propuesta razonada, no como dato.</p>
+  <div class="num">10</div>
+</section>
+
+<section class="s" style="justify-content:center">
+  <div class="quote">NADA no bloquea a nadie ni dicta veredictos.<br>Le da a la persona el dato que le falta,<br>en el momento en que le sirve.</div>
+  <p style="margin-top:44px;font-size:23px;color:#8a92a6">github.com/wnivia-v/NADA-AMORES-Y-TRAICIONES · <code>npm ci &amp;&amp; npm run dev</code></p>
+  <div class="foot">Equipo Antigravity · Cohorte WomenCISO 4 / MenCISO Gen 1</div>
+</section>
+
+</body>
+</html>
