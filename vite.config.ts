@@ -50,9 +50,8 @@ export default defineConfig(({ mode }) => {
       ),
       // Firebase App Check — needed for Gemini to work
       'import.meta.env.VITE_RECAPTCHA_ENTERPRISE_KEY': JSON.stringify(env.VITE_RECAPTCHA_ENTERPRISE_KEY || ''),
-      // Venice.ai
-      'import.meta.env.VITE_VENICE_API_KEY': JSON.stringify(env.VITE_VENICE_API_KEY || ''),
-      'import.meta.env.VITE_VENICE_MODEL': JSON.stringify(env.VITE_VENICE_MODEL || 'llama-3.3-70b'),
+      // Venice.ai — movido al servidor igual que Groq/Claude/Bedrock.
+      // Si aparece una variable VITE_VENICE_* aqui es un error.
     },
     plugins: [
       // La CSP de index.html se arma aqui para que connect-src refleje a donde
@@ -179,11 +178,6 @@ export default defineConfig(({ mode }) => {
           target: 'https://api.groq.com',
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/api\/groq/, ''),
-        },
-        '/api/venice': {
-          target: 'https://api.venice.ai',
-          changeOrigin: true,
-          rewrite: (path) => path.replace(/^\/api\/venice/, ''),
         },
       },
     },

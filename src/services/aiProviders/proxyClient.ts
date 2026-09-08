@@ -37,7 +37,7 @@ export interface ProxyResponse {
  * contesto y sigue con los demas, o cae al camino local.
  */
 export async function analyzeViaProxy(
-  provider: 'groq' | 'claude' | 'bedrock',
+  provider: 'groq' | 'claude' | 'bedrock' | 'venice',
   request: AnalysisRequest,
   signal?: AbortSignal,
 ): Promise<ProviderSignal | null> {

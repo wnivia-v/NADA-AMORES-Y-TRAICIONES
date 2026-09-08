@@ -18,7 +18,7 @@ export interface HandlerResponse {
   body: unknown;
 }
 
-const VALID_UPSTREAMS: UpstreamId[] = ['groq', 'claude', 'bedrock'];
+const VALID_UPSTREAMS: UpstreamId[] = ['groq', 'claude', 'bedrock', 'venice'];
 const VALID_TASKS: AnalysisTask[] = ['text', 'voice'];
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {

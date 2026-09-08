@@ -10,7 +10,7 @@
 // proceso del servidor y no cruzan nunca hacia el navegador.
 // =============================================================================
 
-export type UpstreamId = 'groq' | 'claude' | 'bedrock';
+export type UpstreamId = 'groq' | 'claude' | 'bedrock' | 'venice';
 
 export interface UpstreamConfig {
   apiKey: string;
@@ -40,13 +40,18 @@ export function upstreamConfig(id: UpstreamId): UpstreamConfig | null {
       if (!apiKey || !endpoint) return null;
       return { apiKey, endpoint, model: env('BEDROCK_MODEL', 'anthropic.claude-3-haiku-20240307-v1:0') };
     }
+    case 'venice': {
+      const apiKey = env('VENICE_API_KEY');
+      if (!apiKey) return null;
+      return { apiKey, model: env('VENICE_MODEL', 'llama-3.3-70b') };
+    }
     default:
       return null;
   }
 }
 
 export function configuredUpstreams(): UpstreamId[] {
-  return (['groq', 'claude', 'bedrock'] as UpstreamId[]).filter((id) => upstreamConfig(id) !== null);
+  return (['groq', 'claude', 'bedrock', 'venice'] as UpstreamId[]).filter((id) => upstreamConfig(id) !== null);
 }
 
 export const PORT = Number(env('PORT', '8787'));
