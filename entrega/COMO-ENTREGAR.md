@@ -1,73 +1,72 @@
 # Cómo entregar — pasos exactos
 
-La carpeta [`proyectos-finales/wnivia-v/`](proyectos-finales/wnivia-v/) ya está
-montada con la estructura que pide la guía oficial. Sólo hay que copiarla al
-repositorio de la cohorte y abrir el Pull Request.
+> Reescrito con `instruccionescompetencia_V1.docx`. **La entrega ya no es un
+> Pull Request.** La guía anterior mandaba hacer fork de
+> `lorenabravo-design/Final-AI-Cibersecurity-Projects-MenCISO-Gen-1` y abrir un
+> PR con una carpeta dentro de `/proyectos-finales`. Eso queda anulado: ahora
+> cada proyecto tiene **su propio repositorio privado dentro de una
+> organización**. Por eso la carpeta que había preparada ya no se llama
+> `proyectos-finales/wnivia-v` sino [`NADA/`](NADA/): el nombre ya no es el del
+> usuario, es el del proyecto, porque es el nombre que llevará el repositorio.
 
-**Esto no lo pude hacer yo:** esta sesión sólo puede tocar
-`wnivia-v/NADA-AMORES-Y-TRAICIONES`. Intentar leer o escribir en
-`lorenabravo-design/Final-AI-Cibersecurity-Projects-MenCISO-Gen-1` se rechaza,
-y sin autenticar el repositorio devuelve 404 —lo que no prueba que no exista,
-un repositorio privado devuelve lo mismo—. Hay que hacerlo desde una cuenta con
-acceso, o desde una sesión nueva abierta directamente sobre ese repositorio.
+## Los cuatro pasos
 
----
+**1 · Avisar de la cuenta de GitHub.** Escribir a **mentorias@womenciso.com.mx**
+diciendo qué cuenta de GitHub va asociada al proyecto — `wnivia-v`. De ahí sale
+la invitación a la organización. Una sola cuenta por proyecto.
 
-## 1. Antes de nada: el registro
+**2 · Aceptar la invitación** a la organización **github.com/WomenCISO-MenCISO**.
+La guía avisa de que la aprobación puede tardar.
 
-**El registro de proyectos cerró el domingo 6 de septiembre.** Si el proyecto no
-quedó registrado ese día, eso es lo primero, por delante del PR. La guía deja un
-formulario de pre-registro para quien no llegó:
+**3 · Crear el repositorio**, dentro de la organización y **privado**, con el
+nombre simplificado del proyecto: **`NADA`**.
 
-https://docs.google.com/forms/d/e/1FAIpQLSfRsQUgmNagGxB0kyc6Akht7y9Ng6jAvuvDsC12LdmIzVkCeQ/viewform
+**4 · Subir el proyecto**, con un mensaje de commit del estilo
+`Entrega proyecto final - [tu nombre]`.
 
-Fechas que quedan: **semifinalistas el viernes 11** y **presentación en vivo el
-17 de septiembre** (4 min de pitch + 4 min de preguntas).
+## Sobre el paso 4: subir el código, no sólo los archivos
 
-## 2. El fork y la copia
+La guía describe arrastrar archivos en la web. Funciona, pero para un proyecto
+de este tamaño es mejor empujar el repositorio entero: va el código con su
+historia —sesenta y tantos commits que enseñan cómo se llegó aquí— en vez de una
+foto suelta de los archivos.
 
-    # 1. Fork desde la web:
-    #    https://github.com/lorenabravo-design/Final-AI-Cibersecurity-Projects-MenCISO-Gen-1
+Con el repositorio ya creado y vacío en la organización:
 
-    git clone https://github.com/<tu-usuario>/Final-AI-Cibersecurity-Projects-MenCISO-Gen-1
-    cd Final-AI-Cibersecurity-Projects-MenCISO-Gen-1
-    git checkout -b entrega-nada
+    cd /ruta/a/NADA-AMORES-Y-TRAICIONES
 
-    # 2. Copiar la carpeta ya preparada
-    cp -r /ruta/a/NADA-AMORES-Y-TRAICIONES/entrega/proyectos-finales/wnivia-v \
-          proyectos-finales/
+    # 1. La documentación de entrega, en la raíz
+    cp entrega/NADA/README.md      ENTREGA.md
+    cp entrega/NADA/presentacion.pdf .
+    cp entrega/NADA/video.md       .
 
-    git add proyectos-finales/wnivia-v
-    git commit -m "Entrega: NADA — Amores y Traiciones"
-    git push -u origin entrega-nada
+    git add ENTREGA.md presentacion.pdf video.md
+    git commit -m "Entrega proyecto final - [tu nombre]"
 
-    # 3. Pull Request desde la web hacia la rama principal del repo oficial.
+    # 2. Empujar todo al repositorio de la organización
+    git remote add entrega https://github.com/WomenCISO-MenCISO/NADA
+    git push entrega HEAD:main
 
-**Antes de copiar, comprueba dos cosas en el repositorio oficial:**
+Si se prefiere la vía de la guía —arrastrar archivos en la web— entonces se
+suben los tres de [`NADA/`](NADA/) y basta: el README que llevan enlaza al
+repositorio público con todo el código.
 
-- Que la carpeta raíz se llama de verdad `proyectos-finales`. La guía la da como
-  «estructura sugerida»; si el repositorio ya tiene otras entregas, imita cómo
-  están puestas.
-- Cómo han nombrado su carpeta los demás. Ahora mismo la mía se llama
-  `wnivia-v`, que es el usuario de GitHub. Si el resto usa nombre y apellido,
-  renómbrala: es un `mv` y no toca nada de dentro.
+## Lo que queda pendiente
 
-## 3. Lo que queda pendiente dentro de la carpeta
+- **El vídeo.** [`NADA/video.md`](NADA/video.md) tiene el enlace en blanco. El
+  guion está minutado en [`guion-video.md`](guion-video.md).
 
-- `video.md` tiene el enlace del vídeo en blanco. El guion minutado está en
-  [`guion-video.md`](guion-video.md); grabado y subido, se pega el enlace ahí y
-  en el README.
+## Fechas
 
-## Qué lleva la carpeta
+**Este documento nuevo no trae ninguna.** Las que había en la guía anterior eran
+registro hasta el 6 de septiembre, semifinalistas el 11 y presentación en vivo
+el 17 (4 min de pitch + 4 de preguntas). Si el plazo se amplió, conviene que
+quede por escrito de quien lo amplió — no está en el documento.
 
-    proyectos-finales/wnivia-v/
+## Qué se sube
+
+    NADA/
       README.md          objetivo, herramientas, resultados medidos, framework
-                         de seguridad y lo que NO hace
+                         de seguridad, mapa del código y lo que NO hace
       presentacion.pdf   11 diapositivas, 16:9
       video.md           estructura del pitch y enlace (pendiente)
-      codigo/README.md   enlace al repositorio y mapa de por dónde leerlo
-
-El código no se copia dentro: duplicar veinte mil líneas en el repositorio de la
-cohorte deja dos copias que se separan a la primera corrección, y la que se
-evalúa sería la vieja. La guía pide «enlace a su repositorio personal de
-GitHub», que es lo que va.

@@ -7,7 +7,7 @@ PWA que analiza texto, voz, imágenes y vídeo en tiempo real.
 - Presentación: [`entrega/presentacion.pdf`](presentacion.pdf) (11 diapositivas, 16:9)
 - Guion del vídeo: [`entrega/guion-video.md`](guion-video.md) — minutado a los 4 min que pide la guía
 - Vídeo: _(pendiente: enlace)_
-- Carpeta lista para el repo de la cohorte: [`entrega/proyectos-finales/wnivia-v/`](proyectos-finales/wnivia-v/) — pasos en [`COMO-ENTREGAR.md`](COMO-ENTREGAR.md)
+- Carpeta lista para subir: [`entrega/NADA/`](NADA/) — pasos en [`COMO-ENTREGAR.md`](COMO-ENTREGAR.md)
 
 ---
 

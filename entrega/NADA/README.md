@@ -8,7 +8,6 @@ PWA que analiza texto, voz, imágenes y vídeo en tiempo real.
 | **Repositorio del proyecto** | https://github.com/wnivia-v/NADA-AMORES-Y-TRAICIONES |
 | **Presentación** | [`presentacion.pdf`](presentacion.pdf) — 11 diapositivas, 16:9 |
 | **Vídeo** | [`video.md`](video.md) |
-| **Código** | [`codigo/`](codigo/) |
 | **Cohorte** | MenCISO Gen 1 |
 
 ---
@@ -111,10 +110,23 @@ escribiría el examen con el que se le juzga. Hay un test que impide ese cablead
 - La batería de ataques la escribió quien escribió las defensas. Mide cobertura
   de lo previsto, no resistencia a lo imprevisto.
 
+## Por dónde leer el código
+
+| Qué | Dónde |
+|---|---|
+| Léxico de amenazas: patrones, combinaciones y amortiguadores | `src/utils/threatLexicon.ts` |
+| Puntuación local, sin red | `src/utils/scamPatterns.ts` |
+| Diccionario con conjugaciones y términos ambiguos | `src/utils/threatDictionary.ts` |
+| Fusión de señales y ventana deslizante — **aquí se decide** | `src/shared/risk/fusionEngine.ts` |
+| Blindaje del turno del LLM y escaneo de inyección | `src/shared/llm/` |
+| Visión on-device en Web Worker | `src/shared/vision/`, `src/workers/vision.worker.ts` |
+| Motor del escudo (voz, vídeo, orquestación) | `src/services/protectionEngine.ts` |
+| Backend: proxy de IA, consentimiento y reportes | `server/src/` |
+| Protocolo de seguridad, mapeado a MITRE ATLAS y NIST AI RMF | `docs/PROTOCOLO-SEGURIDAD.md` |
+| Bancos de medida | `bench/` |
+
 ## Cómo probarlo
 
-    git clone https://github.com/wnivia-v/NADA-AMORES-Y-TRAICIONES
-    cd NADA-AMORES-Y-TRAICIONES
     npm ci
     npm run dev
 
