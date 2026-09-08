@@ -17,7 +17,7 @@ depende del wifi de nadie ni de que un proveedor externo responda.
 
 > «NADA — Amores y Traiciones. Un escudo contra el fraude conversacional en
 > apps de citas y mensajería. Soy [nombre], del equipo [equipo], cohorte
-> [WomenCISO 4 / MenCISO Gen 1].»
+> MenCISO Gen 1.»
 
 *(No gastes segundos en agradecer ni en presentar la agenda. Los 15 s son para
 que quien mire sepa qué es y quién lo firma.)*

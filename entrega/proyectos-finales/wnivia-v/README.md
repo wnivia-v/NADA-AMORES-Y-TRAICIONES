@@ -3,11 +3,13 @@
 **Escudo contra fraude conversacional y manipulación en apps de citas y mensajería.**
 PWA que analiza texto, voz, imágenes y vídeo en tiempo real.
 
-- Repositorio: https://github.com/wnivia-v/NADA-AMORES-Y-TRAICIONES
-- Presentación: [`entrega/presentacion.pdf`](presentacion.pdf) (11 diapositivas, 16:9)
-- Guion del vídeo: [`entrega/guion-video.md`](guion-video.md) — minutado a los 4 min que pide la guía
-- Vídeo: _(pendiente: enlace)_
-- Carpeta lista para el repo de la cohorte: [`entrega/proyectos-finales/wnivia-v/`](proyectos-finales/wnivia-v/) — pasos en [`COMO-ENTREGAR.md`](COMO-ENTREGAR.md)
+| | |
+|---|---|
+| **Repositorio del proyecto** | https://github.com/wnivia-v/NADA-AMORES-Y-TRAICIONES |
+| **Presentación** | [`presentacion.pdf`](presentacion.pdf) — 11 diapositivas, 16:9 |
+| **Vídeo** | [`video.md`](video.md) |
+| **Código** | [`codigo/`](codigo/) |
+| **Cohorte** | MenCISO Gen 1 |
 
 ---
 
@@ -78,7 +80,8 @@ El 0 % de falsas alarmas es la cifra que más costó y la que más importa.
 
 ## Framework de ciberseguridad
 
-`docs/PROTOCOLO-SEGURIDAD.md` — el protocolo completo, mapeado a **MITRE ATLAS**
+[`docs/PROTOCOLO-SEGURIDAD.md`](https://github.com/wnivia-v/NADA-AMORES-Y-TRAICIONES/blob/main/docs/PROTOCOLO-SEGURIDAD.md)
+— el protocolo completo, mapeado a **MITRE ATLAS**
 y **NIST AI RMF**, con el código y el test que sostienen cada defensa.
 
 Las tres decisiones que lo definen:
@@ -110,6 +113,8 @@ escribiría el examen con el que se le juzga. Hay un test que impide ese cablead
 
 ## Cómo probarlo
 
+    git clone https://github.com/wnivia-v/NADA-AMORES-Y-TRAICIONES
+    cd NADA-AMORES-Y-TRAICIONES
     npm ci
     npm run dev
 
