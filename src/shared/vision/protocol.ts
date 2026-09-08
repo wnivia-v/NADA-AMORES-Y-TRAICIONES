@@ -21,6 +21,11 @@ import type { TierBudget } from './deviceTier';
  * (scripts/copy-mediapipe-wasm.mjs), asi que esta constante no elige nada: es
  * documentacion, y un test la contrasta con la version instalada para que no se
  * quede mintiendo cuando alguien actualice el paquete.
+ *
+ * NO es una version de protocolo, aunque el fichero se llame protocol.ts. Se
+ * cambio a '1.0.1' en una rama paralela leyendola asi, y el test la cazo: lo
+ * que hay aqui es la version del PAQUETE de MediaPipe que se sirve desde
+ * public/, y tiene que coincidir con la instalada o esta linea miente.
  */
 export const MEDIAPIPE_VERSION = '0.10.35';
 

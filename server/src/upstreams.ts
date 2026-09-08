@@ -144,6 +144,43 @@ async function callBedrock(turns: ChatTurns): Promise<RawResponse> {
   return typeof text === 'string' ? { text } : null;
 }
 
+async function callVenice(turns: ChatTurns): Promise<RawResponse> {
+  const config = upstreamConfig('venice');
+  if (!config) return null;
+
+  // API compatible con OpenAI. Se intentan varios modelos porque Venice puede
+  // retirar uno sin aviso; si el configurado falla con 404, el siguiente tiene
+  // mas probabilidades de existir.
+  const modelsToTry = [config.model, 'llama-3.3-70b', 'llama-3.2-3b', 'default'];
+  const uniqueModels = [...new Set(modelsToTry)];
+
+  for (const model of uniqueModels) {
+    try {
+      const data = (await postJson(
+        'https://api.venice.ai/api/v1/chat/completions',
+        { Authorization: `Bearer ${config.apiKey}` },
+        {
+          model,
+          messages: [
+            { role: 'system', content: turns.system },
+            { role: 'user', content: turns.user },
+          ],
+          max_tokens: turns.maxTokens ?? 1024,
+          temperature: 0,
+        },
+      )) as { choices?: Array<{ message?: { content?: string } }> };
+
+      const text = data.choices?.[0]?.message?.content;
+      return typeof text === 'string' ? { text } : null;
+    } catch (error) {
+      // Solo reintentar con el siguiente modelo si el actual no existe (404→502).
+      if (error instanceof UpstreamError && error.status === 502) continue;
+      throw error;
+    }
+  }
+  return null;
+}
+
 /** Manda dos turnos ya construidos. Es lo que usa el backoffice. */
 export function callUpstreamChat(id: UpstreamId, turns: ChatTurns): Promise<RawResponse> {
   switch (id) {
@@ -153,6 +190,8 @@ export function callUpstreamChat(id: UpstreamId, turns: ChatTurns): Promise<RawR
       return callClaude(turns);
     case 'bedrock':
       return callBedrock(turns);
+    case 'venice':
+      return callVenice(turns);
     default:
       return Promise.resolve(null);
   }

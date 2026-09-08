@@ -1,17 +1,4 @@
-// =============================================================================
-// Gemini — Firebase AI Logic (Gemini 2.0 Flash)
-//
-// Unico proveedor de nube que sigue llamandose desde el cliente, y a proposito:
-// Firebase AI Logic esta diseñado para uso desde el navegador y se protege con
-// App Check (reCAPTCHA Enterprise), no con una clave secreta que haya que
-// esconder. `VITE_FIREBASE_API_KEY` es un identificador de proyecto publico, no
-// una credencial — a diferencia de las de Groq o Claude, que ya se movieron al
-// servidor.
-//
-// La separacion de roles se consigue con `systemInstruction`: las instrucciones
-// van por su canal y el mensaje por el turno del usuario. Nunca se concatenan.
-// =============================================================================
-
+// Gemini — Firebase AI Logic
 import { app, hasValidConfig } from '../firebaseConfig';
 import type { AIProvider } from './types';
 import type { AnalysisRequest, AnalysisTask, ProviderAnswer } from '@/shared/llm/types';
@@ -48,7 +35,7 @@ async function getModel(task: AnalysisTask): Promise<any> {
 
 export const geminiProvider: AIProvider = {
   id: 'gemini',
-  name: 'Google Gemini 2.0 Flash',
+  name: 'Google Gemini 3.7 Flash',
   cost: 'free-tier',
   // Tier gratuito de la Gemini Developer API. Exige que el proyecto de Firebase
   // siga en el plan Spark (sin Cloud Billing vinculado). Un poco por debajo de

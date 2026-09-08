@@ -45,7 +45,7 @@ export interface ProxyResponse {
  * sobrevive hasta la vista tecnica en vez de morir en un console.warn.
  */
 export async function analyzeViaProxy(
-  provider: 'groq' | 'claude' | 'bedrock',
+  provider: 'groq' | 'claude' | 'bedrock' | 'venice',
   request: AnalysisRequest,
   signal?: AbortSignal,
 ): Promise<ProviderAnswer> {

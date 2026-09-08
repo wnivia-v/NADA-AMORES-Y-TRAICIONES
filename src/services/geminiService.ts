@@ -1,4 +1,4 @@
-import { scanLocalPatterns, normalizeForMatching } from '@/utils/scamPatterns';
+import { scanLocalPatterns, normalizeForMatching, feedDictionaryLearning } from '@/utils/scamPatterns';
 import { learnFromThreat } from './threatMemory';
 import { checkUrlSafety } from './safeBrowsingService';
 import { scamDatabase } from './scamDatabase';
@@ -9,6 +9,7 @@ import { orchestrateAnalysis } from './aiProviders';
 import { buildAnalysisRequest } from '@/shared/llm/envelope';
 import { injectionSignalWeight } from '@/shared/llm/injectionScan';
 import type { AnalysisRequest } from '@/shared/llm/types';
+import { scanDictionary } from '@/utils/threatDictionary';
 import type { ScamAnalysis } from '@/store/useNadaStore';
 import { feedbackService } from './feedbackService';
 import { LEXICON_VERSION } from '@/utils/threatLexicon';
@@ -392,6 +393,15 @@ async function runTextAnalysis(
     // Remember the phrasing so the next message built from this script is
     // caught offline and instantly, even if the AI is unreachable then.
     learnFromThreat(normalizeForMatching(text), result.verdict);
+
+    // Aprendizaje del diccionario (viene de Antigravity): una amenaza
+    // confirmada enseña sus categorias para reconocerla despues sin red.
+    if (result.verdict === 'PELIGROSO') {
+      const dictScan = scanDictionary(text);
+      if (dictScan.categories.length > 0) {
+        feedDictionaryLearning(normalizeForMatching(text), dictScan.categories);
+      }
+    }
 
     return withDraft({ ...result, deliberation }, {
       surface,

@@ -22,6 +22,7 @@ import { geminiProvider } from './geminiProvider';
 import { groqProvider } from './groqProvider';
 import { claudeProvider } from './claudeProvider';
 import { bedrockProvider } from './bedrockProvider';
+import { veniceProvider } from './veniceProvider';
 
 // Registry of all providers
 const PROVIDERS: Record<ProviderId, AIProvider> = {
@@ -30,6 +31,7 @@ const PROVIDERS: Record<ProviderId, AIProvider> = {
   groq: groqProvider,
   claude: claudeProvider,
   bedrock: bedrockProvider,
+  venice: veniceProvider,
 };
 
 /**
@@ -453,6 +455,200 @@ export interface OrchestrationResult {
   providerId: ProviderId | null;
   /** El acta. Se levanta siempre; mirarla o no es cosa de quien llama. */
   deliberation: Deliberation;
+}
+
+// =============================================================================
+// Progreso en vivo, para la consola de IA
+//
+// Viene de Antigravity y la idea es buena: enseñar cada proveedor moviendose
+// mientras piensa, en vez de una espera muda. Lo que llegaba no compilaba —
+// pedia un tipo `AIAnalysisResult` que no existe, y leia `.verdict` y
+// `.riskScore` de la señal, dos campos que la Fase 1 quito A PROPOSITO para
+// que el modelo no dictase el veredicto.
+//
+// Ademas su firma era (text, prompt, ...). Ese segundo parametro es
+// exactamente la costura que se elimino: si vuelve un `prompt` al lado del
+// texto, vuelve el sitio donde concatenarlos. Aqui recibe un AnalysisRequest
+// ya empaquetado, que no tiene donde.
+//
+// La funcion se queda; lo que cambia es sobre que se apoya.
+// =============================================================================
+
+export type ProviderProgressStatus =
+  | 'pending'
+  | 'thinking'
+  | 'done'
+  | 'error'
+  | 'disabled'
+  | 'no-key'
+  | 'no-quota';
+
+export interface ProviderProgressEvent {
+  providerId: ProviderId;
+  providerName: string;
+  status: ProviderProgressStatus;
+  /**
+   * Lo que dijo, cuando contesto.
+   *
+   * Es un ProviderRun —la misma pieza del acta de deliberacion— y no un tipo
+   * aparte: dos formas para lo mismo acaban divergiendo, y entonces la consola
+   * y el acta cuentan cosas distintas del mismo analisis.
+   */
+  run: ProviderRun | null;
+  durationMs: number | null;
+  detail?: string;
+}
+
+export type ProviderProgressCallback = (event: ProviderProgressEvent) => void;
+
+/**
+ * Lanza a todos los proveedores y va avisando segun contesta cada uno.
+ *
+ * Devuelve el mismo OrchestrationResult que la via normal, acta incluida: la
+ * consola enseña el durante, el acta explica el despues, y las dos salen de la
+ * misma ejecucion.
+ */
+export async function orchestrateAnalysisWithProgress(
+  request: AnalysisRequest,
+  onProgress: ProviderProgressCallback,
+  signal?: AbortSignal,
+): Promise<OrchestrationResult> {
+  const config = getConfig();
+  const activos = getActiveProviders();
+  const activosIds = new Set(activos.map((p) => p.id));
+  const started = now();
+
+  // Primero los que no van a participar, con su motivo. Que la consola los
+  // enseñe apagados desde el principio explica por que hay pocos paneles.
+  for (const [id, provider] of Object.entries(PROVIDERS) as Array<[ProviderId, AIProvider]>) {
+    if (activosIds.has(id)) {
+      onProgress({
+        providerId: id,
+        providerName: provider.name,
+        status: 'pending',
+        run: null,
+        durationMs: null,
+      });
+      continue;
+    }
+
+    const enabled = config.providers[id]?.enabled ?? false;
+    const status: ProviderProgressStatus = !enabled
+      ? 'disabled'
+      : !provider.isAvailable()
+        ? 'no-key'
+        : 'no-quota';
+
+    onProgress({ providerId: id, providerName: provider.name, status, run: null, durationMs: null });
+  }
+
+  const runs: ProviderRun[] = await Promise.all(
+    activos.map(async (provider) => {
+      onProgress({
+        providerId: provider.id,
+        providerName: provider.name,
+        status: 'thinking',
+        run: null,
+        durationMs: null,
+      });
+
+      const run = await callProvider(provider, request, signal);
+
+      onProgress({
+        providerId: provider.id,
+        providerName: provider.name,
+        status: run.outcome === 'answered' ? 'done' : 'error',
+        run,
+        durationMs: run.ms,
+        detail: run.detail,
+      });
+
+      return run;
+    }),
+  );
+
+  // La decision la toma el mismo codigo que la via normal. Duplicar aqui la
+  // eleccion de ganador es como se llega a que la consola y el resultado
+  // discrepen — y quien lo viera no sabria a cual creer.
+  const valid = answeredRuns(runs);
+  const outcome: StrategyOutcome =
+    valid.length === 0
+      ? { runs, winner: null, reason: { kind: 'silence' } }
+      : valid.length === 1
+        ? { runs, winner: valid[0]!, reason: { kind: 'sole-answer' } }
+        : await decideAmong(runs, valid);
+
+  const todos = [...runs, ...idleRuns(activos)];
+  const injectionIds = request.hardening.injectionAttempts.map((a) => a.id);
+
+  return {
+    result: outcome.winner?.signal ?? null,
+    providerId: (outcome.winner?.id as ProviderId | undefined) ?? null,
+    deliberation: {
+      strategy: config.strategy,
+      runs: todos,
+      winner: (outcome.winner?.id as ProviderId | undefined) ?? null,
+      reason: outcome.reason,
+      injectionIds,
+      suspicions: findSuspicions(todos, injectionIds.length > 0),
+      totalMs: Math.round(now() - started),
+    },
+  };
+}
+
+/**
+ * Elige entre respuestas ya obtenidas, segun la estrategia configurada.
+ *
+ * Se extrae para que la via con progreso no reimplemente el criterio. La
+ * carrera no aplica aqui —ya se espero a todos— asi que cae a la mas prudente,
+ * que es lo que protege a quien usa la app.
+ */
+async function decideAmong(runs: ProviderRun[], valid: ProviderRun[]): Promise<StrategyOutcome> {
+  const { strategy, consensusThreshold } = getConfig();
+
+  if (strategy === 'consensus') {
+    const cuenta: Record<string, number> = {};
+    for (const r of valid) {
+      const band = riskBand(r.signal!.value);
+      cuenta[band] = (cuenta[band] ?? 0) + 1;
+    }
+    const threshold = Math.ceil(valid.length * consensusThreshold);
+    const banda = Object.entries(cuenta).find(([, n]) => n >= threshold)?.[0];
+
+    if (banda) {
+      const acuerdo = valid.filter((r) => riskBand(r.signal!.value) === banda);
+      const discrepan = valid.filter((r) => riskBand(r.signal!.value) !== banda);
+      const orden = [...acuerdo].sort((a, b) => a.signal!.value - b.signal!.value);
+      return {
+        runs,
+        winner: orden[Math.floor(orden.length / 2)]!,
+        reason: {
+          kind: 'consensus',
+          band: banda,
+          agreeing: acuerdo.map((r) => r.id),
+          dissenting: discrepan.map((r) => r.id),
+          threshold,
+        },
+      };
+    }
+    return {
+      runs,
+      winner: [...valid].sort((a, b) => b.signal!.value - a.signal!.value)[0]!,
+      reason: { kind: 'no-consensus', bands: [...new Set(valid.map((r) => riskBand(r.signal!.value)))] },
+    };
+  }
+
+  const allSafe = valid.every((r) => riskBand(r.signal!.value) === 'SEGURO');
+  const orden = [...valid].sort((a, b) =>
+    allSafe ? a.signal!.value - b.signal!.value : b.signal!.value - a.signal!.value,
+  );
+  return {
+    runs,
+    winner: orden[0]!,
+    reason: allSafe
+      ? { kind: 'most-confident-safe', among: valid.length }
+      : { kind: 'most-cautious', among: valid.length },
+  };
 }
 
 export async function orchestrateAnalysis(

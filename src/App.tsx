@@ -13,6 +13,19 @@ import { TextAnalyzer } from '@/components/analysis/TextAnalyzer';
 import { VoiceAnalyzer } from '@/components/analysis/VoiceAnalyzer';
 import { CameraAnalyzer } from '@/components/analysis/CameraAnalyzer';
 import { ImageAnalyzer } from '@/components/analysis/ImageAnalyzer';
+// AIConsolePanel: construido en Antigravity y AUN SIN CONECTAR.
+//
+// El componente existe (374 lineas), el store tiene su estado y sus setters, y
+// orchestrateAnalysisWithProgress ya emite los eventos. Lo que falta es el
+// cable: nadie llama a esos setters, asi que el panel se pintaria vacio.
+//
+// No se conecta aqui a proposito. Hacerlo exige decidir COMO llega el progreso
+// desde el servicio hasta el store, y en este proyecto los servicios no tocan
+// el store —se comunican por callbacks, ver EngineCallbacks en
+// protectionEngine.ts—. Elegir el otro camino es una decision de arquitectura
+// de quien lleva el proyecto, no algo que deba colar una fusion.
+//
+// import { AIConsolePanel } from '@/components/analysis/AIConsolePanel';
 import { notificationService } from '@/services/notificationService';
 import { ConsumerHome } from '@/components/consumer/ConsumerHome';
 import { AlertsView } from '@/components/consumer/AlertsView';
@@ -171,7 +184,7 @@ export default function App() {
   // Tab index for sliding indicator
   const tabIndex = activeTab === 'home' ? 0 : activeTab === 'alerts' ? 1 : 2;
 
-  // Debug mode tabs including IMAGEN
+  // Debug mode tabs
   const debugModes: DebugMode[] = ['TEXTO', 'VOZ', 'CAMARA', 'IMAGEN'];
 
   return (
@@ -184,7 +197,7 @@ export default function App() {
 
       {/* Debug mode: technical dashboard */}
       {activeTab === 'debug' ? (
-        <main className="flex-1 p-4 lg:p-6 max-w-4xl w-full mx-auto fade-slide-in">
+        <main className="flex-1 p-4 lg:p-6 max-w-5xl w-full mx-auto fade-slide-in">
           <div className="flex gap-2 mb-4 overflow-x-auto pb-1">
             {debugModes.map((mode) => (
               <button

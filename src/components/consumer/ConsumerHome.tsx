@@ -245,27 +245,89 @@ export function ConsumerHome() {
           })}
         </div>
 
-        {/* Voice transcript preview — same global transcript VoiceAnalyzer shows,
-            including the live not-yet-final tail so this proves it's listening
-            in real time instead of waiting for a full sentence to commit.
-            Always visible while the shield is on, not just once text exists —
-            an empty box during the silence before the first word looked like
-            the mic wasn't listening at all. */}
+        {/* Voice transcript & real-time threat detection preview */}
         {voiceActive && (
-          <div
-            className="mt-3 p-3 rounded-xl text-xs leading-relaxed fade-slide-in"
-            style={{ background: 'var(--bg-elevated)', color: 'var(--text-secondary)', borderLeft: '2px solid var(--accent)' }}
-          >
-            {voiceTranscript || voiceInterim ? (
-              <>
-                {voiceTranscript.slice(-150)}
-                {voiceInterim && (
-                  <span style={{ fontStyle: 'italic', opacity: 0.75 }}> {voiceInterim}</span>
-                )}
-              </>
-            ) : (
-              <span style={{ fontStyle: 'italic', opacity: 0.75 }}>{t.transcriptPlaceholder}</span>
+          <div className="mt-3 space-y-2 fade-slide-in">
+            {/* Live Threat Alert Banner (Extortion / Scam Detection) */}
+            {useNadaStore.getState().voiceRealtimeVerdict && useNadaStore.getState().voiceRealtimeVerdict?.verdict !== 'SEGURO' && (
+              <div
+                className="p-3.5 rounded-xl border flex items-start gap-3 transition-all animate-pulse"
+                style={{
+                  background: useNadaStore.getState().voiceRealtimeVerdict?.verdict === 'PELIGROSO'
+                    ? 'rgba(239, 68, 68, 0.12)'
+                    : 'rgba(245, 158, 11, 0.12)',
+                  borderColor: useNadaStore.getState().voiceRealtimeVerdict?.verdict === 'PELIGROSO'
+                    ? 'var(--danger)'
+                    : 'var(--warning)',
+                }}
+              >
+                <AlertTriangle
+                  className="w-5 h-5 shrink-0 mt-0.5"
+                  style={{
+                    color: useNadaStore.getState().voiceRealtimeVerdict?.verdict === 'PELIGROSO'
+                      ? 'var(--danger)'
+                      : 'var(--warning)',
+                  }}
+                />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between">
+                    <span
+                      className="text-xs font-black uppercase tracking-wider"
+                      style={{
+                        color: useNadaStore.getState().voiceRealtimeVerdict?.verdict === 'PELIGROSO'
+                          ? 'var(--danger)'
+                          : 'var(--warning)',
+                      }}
+                    >
+                      🚨 ALERTA: {useNadaStore.getState().voiceRealtimeVerdict?.verdict}
+                    </span>
+                    <span
+                      className="text-xs font-black font-mono"
+                      style={{
+                        color: useNadaStore.getState().voiceRealtimeVerdict?.verdict === 'PELIGROSO'
+                          ? 'var(--danger)'
+                          : 'var(--warning)',
+                      }}
+                    >
+                      {useNadaStore.getState().voiceRealtimeVerdict?.riskScore}/100
+                    </span>
+                  </div>
+                  <p className="text-xs mt-1 font-medium leading-tight text-white">
+                    {useNadaStore.getState().voiceRealtimeVerdict?.explanation}
+                  </p>
+                  {useNadaStore.getState().voiceRealtimeVerdict?.tactics && (
+                    <div className="flex flex-wrap gap-1 mt-2">
+                      {useNadaStore.getState().voiceRealtimeVerdict?.tactics.map((tactic) => (
+                        <span
+                          key={tactic}
+                          className="px-2 py-0.5 rounded-md text-[10px] font-bold"
+                          style={{ background: 'rgba(239, 68, 68, 0.25)', color: '#FF8888' }}
+                        >
+                          ⚠️ {tactic}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
             )}
+
+            {/* Transcript preview */}
+            <div
+              className="p-3 rounded-xl text-xs leading-relaxed"
+              style={{ background: 'var(--bg-elevated)', color: 'var(--text-secondary)', borderLeft: '2px solid var(--accent)' }}
+            >
+              {voiceTranscript || voiceInterim ? (
+                <>
+                  {voiceTranscript.slice(-150)}
+                  {voiceInterim && (
+                    <span style={{ fontStyle: 'italic', opacity: 0.75 }}> {voiceInterim}</span>
+                  )}
+                </>
+              ) : (
+                <span style={{ fontStyle: 'italic', opacity: 0.75 }}>{t.transcriptPlaceholder}</span>
+              )}
+            </div>
           </div>
         )}
       </div>

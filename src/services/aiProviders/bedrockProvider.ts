@@ -15,7 +15,7 @@ import { analyzeViaProxy, hasProxy } from './proxyClient';
 
 export const bedrockProvider: AIProvider = {
   id: 'bedrock',
-  name: 'AWS Bedrock (requiere proxy propio)',
+  name: 'AWS Bedrock Claude Haiku 4.5 (requiere proxy propio)',
   cost: 'paid',
 
   requires: 'backend',
