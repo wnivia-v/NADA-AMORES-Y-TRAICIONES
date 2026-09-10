@@ -113,10 +113,10 @@ consola de análisis en vivo enseñando las señales que van entrando.)*
 **En pantalla:** slide de resultados medidos → slide de cierre.
 
 > «Los números están medidos y son reproducibles con una orden. Sobre 65 casos
-> etiquetados: el acierto exacto pasó del 34 al 81,5 por ciento, las amenazas
+> etiquetados: el acierto exacto pasó del 34 al 83 por ciento, las amenazas
 > detectadas del 35 al 87,5. Y la cifra que más costó y más importa: cero por
 > ciento de falsas alarmas. Contra 40 ataques de manipulación del analizador,
-> 40 detectados y ninguna falsa alarma sobre conversación normal. 487 tests
+> 40 detectados y ninguna falsa alarma sobre conversación normal. 490 tests
 > automáticos, y la batería de seguridad corre también contra PostgreSQL real.
 >
 > El modelo de negocio es freemium: la detección local es gratis, funciona sin
