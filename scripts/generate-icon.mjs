@@ -31,6 +31,16 @@ const STROKE = 5; // slightly heavier than the SVG's 4 so it survives 16x16
 const OUTPUTS = [
   { path: 'build/icon.png', size: 512 }, // electron-builder derives .ico here
   { path: 'public/icon.png', size: 512 }, // shipped to dist/ for runtime use
+
+  // Para la entrega: presentacion, video y cualquier sitio donde haga falta el
+  // logo suelto. El de fondo transparente es el que sirve para sobreponerlo a
+  // una grabacion o a una diapositiva que no sea oscura; la placa redondeada
+  // ahi estorba.
+  { path: 'entrega/logo/nada-logo-1024.png', size: 1024 },
+  { path: 'entrega/logo/nada-logo-512.png', size: 512 },
+  { path: 'entrega/logo/nada-logo-256.png', size: 256 },
+  { path: 'entrega/logo/nada-logo-transparente-1024.png', size: 1024, transparent: true },
+  { path: 'entrega/logo/nada-logo-transparente-512.png', size: 512, transparent: true },
 ];
 
 // ── Path sampling ────────────────────────────────────────────────────────────
@@ -151,7 +161,7 @@ function encodePng(width, height, rgba) {
 // ── Render ───────────────────────────────────────────────────────────────────
 const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
 
-function render(size) {
+function render(size, transparent = false) {
   const rgba = Buffer.alloc(size * size * 4);
   const scale = size / 100; // 100-space units -> device px
   const aa = 1 / scale; // one device pixel, expressed in 100-space
@@ -172,8 +182,12 @@ function render(size) {
 
       // Composite mark over plate, both premultiplied by the plate's alpha so
       // the mark never bleeds outside the rounded corners.
-      const alpha = bgCoverage;
-      const mix = fgCoverage * bgCoverage;
+      //
+      // Sin placa la cuenta es otra: el alfa lo pone el propio trazo, y el
+      // color es el de marca sin mezclar con nada. Mezclarlo con el fondo
+      // oscuro dejaria un borde sucio sobre cualquier fondo claro.
+      const alpha = transparent ? fgCoverage : bgCoverage;
+      const mix = transparent ? 1 : fgCoverage * bgCoverage;
       const i = (y * size + x) * 4;
       rgba[i] = Math.round(BG[0] * (1 - mix) + FG[0] * mix);
       rgba[i + 1] = Math.round(BG[1] * (1 - mix) + FG[1] * mix);
@@ -185,10 +199,11 @@ function render(size) {
   return encodePng(size, size, rgba);
 }
 
-for (const { path, size } of OUTPUTS) {
+for (const { path, size, transparent } of OUTPUTS) {
   const abs = resolve(ROOT, path);
   mkdirSync(dirname(abs), { recursive: true });
-  const png = render(size);
+  const png = render(size, transparent === true);
   writeFileSync(abs, png);
-  console.log(`${path}  ${size}x${size}  ${(png.length / 1024).toFixed(1)} KB`);
+  const nota = transparent ? '  (fondo transparente)' : '';
+  console.log(`${path}  ${size}x${size}  ${(png.length / 1024).toFixed(1)} KB${nota}`);
 }
