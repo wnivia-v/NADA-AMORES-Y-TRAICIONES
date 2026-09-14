@@ -14,13 +14,13 @@ Contexto de mercado (cifra ampliamente reportada, no verificada por este equipo)
 
 - Análisis de texto (pegado manual o portapapeles automático) contra 5 capas de detección, con 5 proveedores de IA posibles.
 - Reconocimiento de voz en tiempo real con transcripción visible en vivo, en web, escritorio (Electron) **y Android nativo**, con Whisper corriendo en el propio dispositivo como respaldo si la red bloquea el reconocimiento del navegador.
-- Diccionario de amenazas propio: 72 patrones en 25 categorías (fraude, phishing, extorsión, sextorsión, secuestro virtual, suplantación de familiares, acoso, grooming, inducción a la autolesión…), en español, inglés y portugués, con 26 reglas de combinación. Está construido sobre los avisos publicados por **INCIBE**, el instituto nacional de ciberseguridad de España — campañas reales, fechadas y documentadas, no ejemplos inventados.
+- Diccionario de amenazas propio: 112 patrones en 33 categorías (fraude, phishing, extorsión, sextorsión, secuestro virtual, suplantación de familiares, acoso, grooming, inducción a la autolesión…), en español, inglés y portugués, con 48 reglas de combinación. Está construido sobre los avisos publicados por **INCIBE**, el instituto nacional de ciberseguridad de España — campañas reales, fechadas y documentadas, no ejemplos inventados.
 - OCR de capturas de pantalla (WhatsApp, Telegram, SMS, Messenger) con preprocesamiento de imagen.
 - Detección de deepfake en videollamada (heurística biométrica: parpadeo, estabilidad facial, sincronía labial real entre audio y movimiento de boca).
 - Funciona sin pagar y sin crear cuenta — la detección local no necesita red, cuenta ni clave de API.
 - App de escritorio (Windows, vía Electron) con ícono flotante siempre visible.
 - App Android (APK directo, no requiere Play Store).
-- 198 pruebas automatizadas en 16 archivos, todas en verde, cubriendo desde los patrones de detección hasta la lógica de reintentos de red.
+- 490 pruebas automatizadas en 33 archivos, todas en verde, cubriendo desde los patrones de detección hasta la lógica de reintentos de red. La batería de seguridad del servidor corre dos veces: contra el almacén en memoria y contra PostgreSQL real.
 
 ## 3. ¿Qué es heurística/beta y qué es producción real? (para no prometer de más)
 
@@ -31,7 +31,7 @@ Ser honesto acá genera más confianza que sobrevender:
 - Sin ninguna clave de IA en la nube configurada (que es como corre hoy la demo), el diccionario de amenazas es la capa que forma la opinión. Funciona y es instantáneo, pero reconoce guiones conocidos; el fraseo completamente nuevo es donde la IA en la nube aporta, y activarla es agregar una clave gratuita de Groq.
 - Captura de pantalla y overlay siempre-encima en Android todavía no existen — son plugins nativos por construir (ver roadmap).
 - No hay verificación por consenso de múltiples IAs de visión en la nube todavía (tiene costo real de API).
-- No hay una tasa de acierto medida sobre un conjunto grande y representativo. Hay 198 tests con casos reales, que es otra cosa: demuestran que casos concretos se detectan, no cuánto acierta en promedio sobre el mundo.
+- Sí hay una tasa de acierto medida, pero sobre un corpus **pequeño**: 65 casos etiquetados, no un conjunto grande y representativo del mundo. Sobre él: 83,1 % de acierto exacto, 87,5 % de amenazas detectadas y 0 % de falsas alarmas. Lo honesto es decir las dos cosas — la cifra y su denominador.
 
 ## 4. ¿Cómo funciona técnicamente? (resumen de 30 segundos)
 
@@ -169,4 +169,4 @@ El diccionario cubre español, inglés y portugués hoy. El reconocimiento de vo
 Hoy, realistamente, lo instala un familiar: el hijo o el nieto que ya está preocupado. Por eso el modo familiar está en el roadmap — que la alerta le llegue también a esa persona de confianza. Y por eso funciona sin crear cuenta: cada paso de registro es gente que se pierde en el camino.
 
 **"¿Cómo sé que de verdad funciona y no es una demo armada?"**
-Las pruebas están escritas con las transcripciones y capturas reales que fallaron, palabra por palabra, y están en el repositorio. Se corren con un comando y son 198. Lo que no voy a decir es que tenga una tasa de acierto medida sobre un conjunto grande y representativo — para eso hace falta un corpus etiquetado que hoy no tenemos, y sería inventar una cifra.
+Las pruebas están escritas con las transcripciones y capturas reales que fallaron, palabra por palabra, y están en el repositorio. Se corren con un comando y son 490. Y sí hay tasa de acierto medida, sobre un corpus etiquetado de 65 casos: 83,1 % de acierto exacto y 0 % de falsas alarmas, reproducible con `npx tsx bench/measure-regex.ts`. Lo que no voy a decir es que ese corpus sea grande ni representativo del mundo: son 65 casos, y la cifra vale lo que vale su denominador.

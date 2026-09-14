@@ -1,7 +1,26 @@
 # NADA — Amores y Traiciones v2
 
 > Deteccion de fraude en tiempo real con IA multi-proveedor.  
-> Equipo Antigravity
+> Equipo Antigravity — Cohorte MenCISO Gen 1
+
+### Para la evaluacion
+
+| | |
+|---|---|
+| **Resumen del proyecto** | [`entrega/README.md`](entrega/README.md) — objetivo, herramientas y resultados medidos |
+| **Presentacion** | [`entrega/presentacion.pdf`](entrega/presentacion.pdf) — 11 diapositivas |
+| **Guion del video** | [`entrega/guion-video.pdf`](entrega/guion-video.pdf) — minutado a 4 min |
+| **Framework de ciberseguridad** | [`docs/PROTOCOLO-SEGURIDAD.md`](docs/PROTOCOLO-SEGURIDAD.md) — mapeado a MITRE ATLAS y NIST AI RMF |
+
+Cifras medidas hoy, reproducibles con una orden cada una:
+
+| | |
+|---|---|
+| Acierto exacto sobre 65 casos etiquetados | **83,1 %** (`npx tsx bench/measure-regex.ts`) |
+| Amenazas detectadas | **87,5 %** |
+| **Falsas alarmas** | **0 %** |
+| Ataques de inyeccion detectados | **40/40**, 0 falsas alarmas (`npm run bench:redteam`) |
+| Tests automaticos | **490** en 33 ficheros (`npm test`) |
 
 ## Que es NADA?
 
@@ -29,9 +48,9 @@ NADA es una aplicacion de proteccion contra estafas, fraudes romanticos y manipu
 ├─────────────────────────────────────────────────────────────┤
 │  Pipeline de Analisis (5 capas)                             │
 │  1. ScamDB (IndexedDB) — cache local, lookup instantaneo   │
-│  2. Regex patterns (25+ patrones de estafa)                 │
+│  2. Lexico de amenazas (112 patrones, 48 combinaciones)     │
 │  3. Safe Browsing API (URLs maliciosas)                     │
-│  4. AI Orchestrator (Gemini / Claude / Bedrock)             │
+│  4. AI Orchestrator (local/Gemini/Groq/Venice/Claude/Bedrock)│
 │  5. RiskScorer (señales con decadencia temporal)            │
 ├─────────────────────────────────────────────────────────────┤
 │  Backend minimo (server/) — node:http, sin dependencias     │
@@ -48,7 +67,7 @@ NADA es una aplicacion de proteccion contra estafas, fraudes romanticos y manipu
 
 ## Features
 
-- **Funciona sin pagar y sin claves**: analisis en el dispositivo con un modelo de embeddings local + 25 patrones regex. Los proveedores en la nube son opcionales.
+- **Funciona sin pagar y sin claves**: analisis en el dispositivo con un modelo de embeddings local + un lexico de 112 patrones en 33 categorias, con 48 reglas de combinacion. Los proveedores en la nube son opcionales.
 - **Multi-AI**: local, Gemini (gratis), Groq (gratis), Claude y Bedrock, con 4 estrategias de orquestacion: fallback, carrera, mejor resultado y consenso.
 - **Privacidad**: en el camino local, los mensajes de la victima nunca salen de su equipo.
 - **Deteccion de Deepfakes en videollamada**: captura la ventana/pestana de la llamada (no tu propia camara) y analiza con MediaPipe Face Landmarker: EAR, blink rate, jitter, y sincronia labial real (correlacion entre apertura de boca y energia de audio, no un valor fijo).
@@ -67,14 +86,14 @@ NADA es una aplicacion de proteccion contra estafas, fraudes romanticos y manipu
 | Capa | Tecnologia |
 |------|-----------|
 | Frontend | React 18, TypeScript, Tailwind CSS, Zustand 5 |
-| IA | Firebase AI (Gemini 2.0 Flash), Anthropic Claude, AWS Bedrock (via proxy) |
+| IA | Local (sin red), Gemini (Firebase AI), Groq, Venice.ai, Anthropic Claude, AWS Bedrock — los de nube via proxy |
 | Vision | MediaPipe Tasks Vision, TensorFlow.js |
 | OCR | Tesseract.js 5 |
 | Speech | Web Speech API |
 | Backend | Node (node:http), sin dependencias |
 | Desktop | Electron 33, electron-builder |
 | Build | Vite 6, vite-plugin-pwa |
-| Tests | Vitest 4 (jsdom, fake-indexeddb) — 248 tests |
+| Tests | Vitest 4 (jsdom, fake-indexeddb) — 490 tests en 33 ficheros |
 | URLs | Google Safe Browsing API v4 |
 
 ## Inicio Rapido
@@ -100,7 +119,7 @@ cp .env.example server/.env    # rellena solo el bloque de SERVIDOR
 npm run server:dev             # escucha en 127.0.0.1:8787
 
 # 6. Tests
-npm test                   # 248 tests, una pasada
+npm test                   # 490 tests, una pasada
 npm run test:watch         # modo watch
 
 # 7. Build produccion
@@ -921,12 +940,12 @@ proyecto se vuelve imposible de arrancar para quien llega nuevo.
 #### La misma bateria, contra las dos implementaciones
 
 El servidor no importa un almacen concreto: pide el activo (`server/src/store/`).
-Eso permite correr **los mismos 22 tests de seguridad** contra el almacen en
+Eso permite correr **los mismos 8 tests de seguridad** contra el almacen en
 memoria y contra PostgreSQL:
 
 ```bash
-npm test                                    # 402 pasan, 1 se salta (ruidosamente)
-TEST_DATABASE_URL=... npm test              # 424 pasan
+npm test                                    # 482 pasan, 1 se salta (ruidosamente)
+TEST_DATABASE_URL=... npm test              # 490 pasan
 ```
 
 No hay dos juegos de tests que puedan divergir sin que nadie se entere: hay uno

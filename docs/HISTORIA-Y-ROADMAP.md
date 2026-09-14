@@ -76,13 +76,13 @@ El diccionario pasó de 51 a **72 patrones**, de 19 a **25 categorías** y de 11
 |---|---|
 | Detección de texto (portapapeles, pegado manual) | Funcional, multi-capa, 5 proveedores de IA disponibles |
 | Detección de voz en tiempo real | Funcional en web/Electron y Android (nativo), con Whisper local como respaldo si la red bloquea el reconocimiento del navegador |
-| Diccionario de amenazas | 72 patrones, 25 categorías, 26 reglas de combinación, ES/EN/PT, alimentado con los avisos documentados de INCIBE |
+| Diccionario de amenazas | 112 patrones, 33 categorías, 48 reglas de combinación, ES/EN/PT, alimentado con los avisos documentados de INCIBE |
 | OCR de capturas de pantalla | Funcional, con preprocesamiento de imagen |
 | Detección de deepfake en videollamada | Funcional, heurística biométrica (no un modelo entrenado contra deepfakes reales) |
 | Escritorio (Electron) | Funcional, con overlay siempre-encima |
 | Android (Capacitor) | APK directo, voz nativa funcional; captura de pantalla y overlay siempre-encima **aún no** (requieren plugins nativos adicionales) |
 | iOS | No existe — Apple no permite overlays sobre otras apps bajo ninguna circunstancia; una app iOS nativa es un proyecto aparte |
-| Pruebas automatizadas | 198 tests en 16 archivos, todos en verde |
+| Pruebas automatizadas | 490 tests en 33 archivos, todos en verde |
 
 ---
 
