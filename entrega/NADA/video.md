@@ -1,6 +1,6 @@
 # Vídeo del pitch
 
-**Enlace:** _(pendiente de subir)_
+**Enlace:** https://drive.google.com/file/d/1t2tLuV_DLyw7qF5uUaZL3qnTlUOTx0WK/view
 
 Duración 4 minutos, con la estructura que pide la guía oficial:
 

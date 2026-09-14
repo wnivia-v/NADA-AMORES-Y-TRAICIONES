@@ -51,10 +51,24 @@ Si se prefiere la vía de la guía —arrastrar archivos en la web— entonces s
 suben los tres de [`NADA/`](NADA/) y basta: el README que llevan enlaza al
 repositorio público con todo el código.
 
-## Lo que queda pendiente
+## Antes de subir: comprobar que el vídeo se ve
 
-- **El vídeo.** [`NADA/video.md`](NADA/video.md) tiene el enlace en blanco. El
-  guion está minutado en [`guion-video.md`](guion-video.md).
+El vídeo está en Google Drive, y ahí lo que decide si alguien puede verlo no es
+el enlace sino el **permiso de la carpeta o del archivo**. Un enlace correcto
+sobre un archivo restringido enseña «Solicitar acceso», y quien lo abre no ve
+nada.
+
+Se comprueba en treinta segundos, y hay que hacerlo desde **fuera de la propia
+cuenta**, porque desde la cuenta del dueño siempre se ve:
+
+1. Abrir una **ventana de incógnito** en el navegador.
+2. Pegar ahí el enlace del vídeo.
+3. Si pide iniciar sesión o solicitar acceso, hay que cambiarlo: en Drive,
+   botón derecho sobre el archivo → **Compartir** → **Cualquier usuario con el
+   enlace** → permiso **Lector**.
+
+Es el fallo más caro posible en una entrega: todo el trabajo está hecho y quien
+evalúa se encuentra una puerta cerrada.
 
 ## Fechas
 
@@ -69,4 +83,4 @@ quede por escrito de quien lo amplió — no está en el documento.
       README.md          objetivo, herramientas, resultados medidos, framework
                          de seguridad, mapa del código y lo que NO hace
       presentacion.pdf   11 diapositivas, 16:9
-      video.md           estructura del pitch y enlace (pendiente)
+      video.md           estructura del pitch y enlace al vídeo

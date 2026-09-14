@@ -7,7 +7,7 @@ PWA que analiza texto, voz, imágenes y vídeo en tiempo real.
 |---|---|
 | **Repositorio del proyecto** | https://github.com/wnivia-v/NADA-AMORES-Y-TRAICIONES |
 | **Presentación** | [`presentacion.pdf`](presentacion.pdf) — 11 diapositivas, 16:9 |
-| **Vídeo** | [`video.md`](video.md) |
+| **Vídeo** | https://drive.google.com/file/d/1t2tLuV_DLyw7qF5uUaZL3qnTlUOTx0WK/view |
 | **Cohorte** | MenCISO Gen 1 |
 
 ---
