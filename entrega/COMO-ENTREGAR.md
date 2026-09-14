@@ -22,34 +22,58 @@ La guía avisa de que la aprobación puede tardar.
 nombre simplificado del proyecto: **`NADA`**.
 
 **4 · Subir el proyecto**, con un mensaje de commit del estilo
-`Entrega proyecto final - [tu nombre]`.
+`Entrega proyecto final - Wladimir Nivia`.
 
-## Sobre el paso 4: subir el código, no sólo los archivos
+## Sobre los pasos 3 y 4: subir el proyecto entero, con su historia
 
-La guía describe arrastrar archivos en la web. Funciona, pero para un proyecto
-de este tamaño es mejor empujar el repositorio entero: va el código con su
-historia —sesenta y tantos commits que enseñan cómo se llegó aquí— en vez de una
-foto suelta de los archivos.
+La guía describe arrastrar archivos en la web. Eso sube una foto suelta de los
+archivos y pierde el historial. Aquí se sube el repositorio completo: **87
+commits** que enseñan cómo se llegó al resultado, no sólo el resultado. Ocupa
+7,9 MB, así que no es un problema de tamaño.
 
-Con el repositorio ya creado y vacío en la organización:
+No hace falta copiar nada a la raíz: el README del repositorio ya abre con una
+tabla que apunta a `entrega/` —resumen, presentación, guion y protocolo de
+seguridad— y a las cifras con la orden que reproduce cada una.
 
-    cd /ruta/a/NADA-AMORES-Y-TRAICIONES
+### Vía A — desde la web, sin terminal (la más simple)
 
-    # 1. La documentación de entrega, en la raíz
-    cp entrega/NADA/README.md      ENTREGA.md
-    cp entrega/NADA/presentacion.pdf .
-    cp entrega/NADA/video.md       .
+GitHub tiene un importador que copia un repositorio entero, con su historia, sin
+que haya que clonar nada. Y crea el repositorio de destino, así que el paso 3 va
+incluido.
 
-    git add ENTREGA.md presentacion.pdf video.md
-    git commit -m "Entrega proyecto final - [tu nombre]"
+1. Entrar a **github.com/new/import**
+2. *The URL for your source repository*:
+   `https://github.com/wnivia-v/NADA-AMORES-Y-TRAICIONES`
+3. *Owner*: elegir **WomenCISO-MenCISO** (no la cuenta personal)
+4. *Repository name*: **`NADA`**
+5. Marcar **Private**
+6. **Begin import**
 
-    # 2. Empujar todo al repositorio de la organización
+Tarda un par de minutos. Al terminar, el repositorio de la organización tiene
+todo: código, tests, documentación y la carpeta `entrega/`.
+
+### Vía B — desde la terminal
+
+Si se prefiere hacerlo a mano, primero crear el repositorio **vacío** y privado
+llamado `NADA` dentro de la organización, y después:
+
+    git clone https://github.com/wnivia-v/NADA-AMORES-Y-TRAICIONES
+    cd NADA-AMORES-Y-TRAICIONES
     git remote add entrega https://github.com/WomenCISO-MenCISO/NADA
-    git push entrega HEAD:main
+    git push entrega main
 
-Si se prefiere la vía de la guía —arrastrar archivos en la web— entonces se
-suben los tres de [`NADA/`](NADA/) y basta: el README que llevan enlaza al
-repositorio público con todo el código.
+### Si GitHub responde que no se puede crear el repositorio
+
+Al intentarlo desde aquí, GitHub contestó:
+
+    403 You need admin access to the organization before adding a repository
+
+Puede ser una limitación de este entorno, pero también puede ser que la
+organización no deje crear repositorios a sus miembros —es una casilla que el
+dueño de la organización activa o desactiva—. Si al intentarlo sale ese mismo
+mensaje, no es culpa de nada que se pueda arreglar por esta parte: hay que
+escribir a **mentorias@womenciso.com.mx** y pedir que creen el repositorio
+`NADA` y den permiso de escritura, o que suban el permiso de miembro.
 
 ## Antes de subir: comprobar que el vídeo se ve
 
