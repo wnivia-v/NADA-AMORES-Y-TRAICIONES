@@ -187,7 +187,11 @@ void initStore().then((kind) => {
 
 server.listen(PORT, () => {
   const upstreams = configuredUpstreams();
-  console.log(`[NADA][server] escuchando en http://127.0.0.1:${PORT}`);
+  // Sin host, Node escucha en TODAS las interfaces, que es lo que necesita un
+  // hosting para enrutar hacia aqui. Decir 127.0.0.1 era mentira util en local
+  // y confusa en un despliegue: se lee en el registro y parece que el servicio
+  // se quedo encerrado en si mismo.
+  console.log(`[NADA][server] escuchando en el puerto ${PORT} (todas las interfaces)`);
   console.log(
     upstreams.length > 0
       ? `[NADA][server] proveedores configurados: ${upstreams.join(', ')}`

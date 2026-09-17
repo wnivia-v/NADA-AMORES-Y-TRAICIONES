@@ -1,0 +1,79 @@
+# =============================================================================
+# Despliegue del servidor de NADA en Render — "Blueprint"
+#
+# Que hace este servidor: es el proxy de las IAs de nube. Groq, Venice, Claude y
+# Bedrock pasan por aqui para que sus claves NUNCA lleguen al navegador. Sin el,
+# la app sigue funcionando entera con la deteccion local; lo unico que queda
+# apagado son esos cuatro proveedores.
+#
+# COMO SE USA
+#   1. render.com -> New -> Blueprint -> apuntar a este repositorio
+#   2. Render lee este archivo y propone el servicio ya configurado
+#   3. Pide las claves que estan marcadas abajo como sync: false
+#   4. Al terminar da una URL https://...onrender.com
+#   5. Esa URL se pone en Amplify como VITE_NADA_API_URL, y SE RECOMPILA
+#      (Vite mete ese valor dentro del JavaScript al compilar, no al abrirse:
+#      guardar la variable sin recompilar no cambia nada)
+#
+# NO necesita base de datos. Sin DATABASE_URL el servidor usa un almacen en
+# memoria y lo dice por consola. Los reportes se pierden al reiniciar, pero el
+# proxy de IA —que es para lo que se despliega— funciona igual.
+# =============================================================================
+
+services:
+  - type: web
+    name: nada-servidor
+    runtime: node
+    plan: free
+    region: oregon
+
+    # --include=dev no es un descuido: esbuild, que es quien empaqueta el
+    # servidor, entra como dependencia de desarrollo (viene con vite). Render
+    # instala en modo produccion, que se las salta, y sin esbuild la compilacion
+    # falla con un "command not found" que no explica nada.
+    #
+    # El precio es que tambien se baja Electron, que no pinta nada aqui y pesa.
+    # Si la compilacion tarda demasiado, la version rapida es:
+    #   npm ci --omit=dev && npm i --no-save esbuild && npm run server:build
+    buildCommand: npm ci --include=dev && npm run server:build
+    startCommand: npm run server:start
+
+    # El servidor responde aqui con la lista de proveedores configurados, sin
+    # revelar ninguna clave. Sirve de sonda de salud y para comprobar de un
+    # vistazo que las claves llegaron: si un proveedor no sale en esta lista, su
+    # clave no esta puesta.
+    healthCheckPath: /health
+
+    envVars:
+      # --- Origenes autorizados -------------------------------------------
+      # El servidor solo contesta a los origenes que conoce. Se compara LITERAL:
+      # sin barra final, con https, y exactamente el dominio desde el que se
+      # sirve la app. Si esto no coincide, las llamadas mueren por CORS y desde
+      # fuera parece que el servidor no contesta.
+      - key: ALLOWED_ORIGINS
+        value: https://main.d1j45o8prt2e3g.amplifyapp.com
+
+      # --- Claves ----------------------------------------------------------
+      # sync: false = Render las pide en su panel y no quedan escritas en el
+      # repositorio. Que es justo el motivo por el que este servidor existe.
+      #
+      # Ninguna es obligatoria: el servidor arranca con las que haya y anuncia
+      # en /health solo esas. Empieza por las dos gratuitas.
+
+      # Groq — gratis, sin tarjeta (https://console.groq.com)
+      - key: GROQ_API_KEY
+        sync: false
+
+      # Venice.ai — gratis, privacidad primero (https://venice.ai/settings/api)
+      - key: VENICE_API_KEY
+        sync: false
+
+      # Anthropic Claude — DE PAGO. Dejala sin poner si no quieres gasto.
+      - key: CLAUDE_API_KEY
+        sync: false
+
+      # AWS Bedrock — necesita ademas su endpoint.
+      - key: BEDROCK_API_KEY
+        sync: false
+      - key: BEDROCK_ENDPOINT
+        sync: false
