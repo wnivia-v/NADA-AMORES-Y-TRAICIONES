@@ -113,6 +113,24 @@ class ProtectionEngine {
   private readonly VOICE_REALERT_MS = 25_000;
 
   /**
+   * Cada cuanto se puede REPETIR el tono de una amenaza que sigue igual.
+   *
+   * La de-duplicacion de arriba trabaja sobre la firma de tacticas, y esa firma
+   * cambia en cuanto la conversacion suma una frase nueva: basta que aparezca
+   * un patron mas para que el conjunto sea distinto, deje de considerarse la
+   * misma amenaza, y vuelva a sonar. En una conversacion sospechosa que sigue
+   * adelante eso es un pitido cada pocos segundos.
+   *
+   * El escudo de video ya resolvia esto y aqui faltaba: el aviso sonoro es para
+   * lo que la persona TODAVIA NO SABE —la primera deteccion, o una que ha
+   * empeorado—. Mientras la misma amenaza continua, la evidencia se sigue
+   * acumulando en pantalla, pero en silencio.
+   */
+  private readonly SOUND_REPEAT_MS = 150_000;
+  private lastSoundAt = new Map<string, number>();
+  private lastSoundVerdict = new Map<string, Verdict>();
+
+  /**
    * Espera antes de volver a intentar el reconocimiento cuando se cae.
    *
    * Antes no habia reintento: bastaban tres fallos de red seguidos —tres a
@@ -199,6 +217,11 @@ class ProtectionEngine {
     cancelAnalysis('clipboard');
     cancelAnalysis('screen');
     this.stopVoiceMonitoring();
+
+    // Apagar y volver a encender es la forma que tiene la persona de decir
+    // "empieza otra vez": la primera amenaza de la sesion nueva debe sonar.
+    this.lastSoundAt.clear();
+    this.lastSoundVerdict.clear();
 
     this.callbacks?.onShieldStatusChange('clipboard', { active: false, scanning: false });
     this.callbacks?.onShieldStatusChange('screen', { active: false, scanning: false });
@@ -723,13 +746,26 @@ class ProtectionEngine {
       return;
     }
 
-    // El tono acompaña a la alerta visual, no la reemplaza. Una sospecha (que
-    // puede repetirse mientras la conversación sigue) suena suave a propósito;
-    // el volumen se reserva para lo confirmado.
-    if (result.verdict === 'PELIGROSO') {
-      playAlertTone('high');
-    } else if (result.verdict === 'SOSPECHOSO') {
-      playAlertTone('low');
+    // El tono acompaña a la alerta visual, no la reemplaza, y sobre todo NO se
+    // repite mientras la amenaza sigue siendo la misma. Suena en la primera
+    // deteccion de este carril, cuando la cosa empeora a PELIGROSO, o cuando ha
+    // pasado tanto tiempo en silencio que conviene recordarlo.
+    //
+    // El carril importa: voz, pantalla y portapapeles son avisos distintos para
+    // la persona, y silenciar uno porque sono otro le esconderia informacion.
+    const ahora = Date.now();
+    const sonoAntes = this.lastSoundVerdict.get(app);
+    const empeoro = result.verdict === 'PELIGROSO' && sonoAntes !== 'PELIGROSO';
+    const calladoYa = ahora - (this.lastSoundAt.get(app) ?? 0) >= this.SOUND_REPEAT_MS;
+
+    if (sonoAntes === undefined || empeoro || calladoYa) {
+      this.lastSoundAt.set(app, ahora);
+      this.lastSoundVerdict.set(app, result.verdict);
+      if (result.verdict === 'PELIGROSO') {
+        playAlertTone('high');
+      } else if (result.verdict === 'SOSPECHOSO') {
+        playAlertTone('low');
+      }
     }
 
     // Send push notification
