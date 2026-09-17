@@ -32,13 +32,13 @@ export function upstreamConfig(id: UpstreamId): UpstreamConfig | null {
     case 'claude': {
       const apiKey = env('CLAUDE_API_KEY');
       if (!apiKey) return null;
-      return { apiKey, model: env('CLAUDE_MODEL', 'claude-sonnet-4-20250514') };
+      return { apiKey, model: env('CLAUDE_MODEL', 'claude-sonnet-5') };
     }
     case 'bedrock': {
       const apiKey = env('BEDROCK_API_KEY');
       const endpoint = env('BEDROCK_ENDPOINT');
       if (!apiKey || !endpoint) return null;
-      return { apiKey, endpoint, model: env('BEDROCK_MODEL', 'anthropic.claude-3-haiku-20240307-v1:0') };
+      return { apiKey, endpoint, model: env('BEDROCK_MODEL', 'anthropic.claude-haiku-4-5') };
     }
     case 'venice': {
       const apiKey = env('VENICE_API_KEY');
