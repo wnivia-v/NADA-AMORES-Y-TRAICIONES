@@ -65,6 +65,11 @@ function makeOptions(overrides: Partial<Record<string, unknown>> = {}) {
 describe('voice orchestrator engine chain', () => {
   beforeEach(() => {
     vi.resetModules();
+    // Lo que se prueba aqui es LA CADENA —que se pasa al siguiente motor cuando
+    // uno falla—, no cual va primero. Eso lo decide la preferencia, que desde
+    // que el de fabrica dejo de ser 'auto' reordenaria la lista y haria fallar
+    // estas pruebas por un motivo que no tiene que ver con lo que miden.
+    localStorage.setItem('nada-voice-engine', 'auto');
     primary = new FakeEngine('web-speech', 'Reconocimiento del navegador');
     fallback = new FakeEngine('whisper-local', 'Reconocimiento local (sin internet)');
   });

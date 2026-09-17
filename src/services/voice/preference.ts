@@ -48,12 +48,34 @@ export type VoicePreference =
 const KEY = 'nada-voice-engine';
 const VALIDAS: VoicePreference[] = ['auto', 'system', 'on-device'];
 
+/**
+ * Lo que vale cuando nadie ha elegido.
+ *
+ * Era 'auto', que empieza por el reconocedor del sistema. Y el reconocedor del
+ * sistema abre y cierra una sesion cada pocos segundos: cada arranque toca la
+ * campanita de "escuchando". Reportado tres veces usando la app, la ultima con
+ * la razon exacta: "nadie quiere un escudo que pite cada dos segundos diciendo
+ * te estoy escuchando; con aceptar el microfono ya se sabe que escucha".
+ *
+ * Tiene razon y el permiso del navegador es lo que informa. Un escudo que
+ * anuncia su presencia cada pocos segundos acaba apagado, y un escudo apagado
+ * no protege a nadie — el mismo argumento que gobierna las alertas.
+ *
+ * Se paga con precision: el motor local es mas lento y menos fino, y la primera
+ * vez descarga un modelo. Se acepta porque un escudo silencioso que acierta algo
+ * menos sigue puesto, y uno que pita se quita.
+ *
+ * Quien prefiera lo contrario lo tiene a un toque en Ajustes. Lo que cambia es
+ * por donde se empieza, no lo que se puede elegir.
+ */
+const POR_DEFECTO: VoicePreference = 'on-device';
+
 export function voicePreference(): VoicePreference {
   try {
     const guardado = localStorage.getItem(KEY);
-    return VALIDAS.find((v) => v === guardado) ?? 'auto';
+    return VALIDAS.find((v) => v === guardado) ?? POR_DEFECTO;
   } catch {
-    return 'auto';
+    return POR_DEFECTO;
   }
 }
 

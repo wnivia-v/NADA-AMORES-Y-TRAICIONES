@@ -33,18 +33,6 @@ interface Opcion {
 
 const OPCIONES: Opcion[] = [
   {
-    id: 'auto',
-    titulo: { es: 'Automatico', en: 'Automatic' },
-    bien: {
-      es: 'El mas rapido y preciso de este aparato, con el otro de respaldo.',
-      en: 'The fastest and most accurate on this device, with the other as backup.',
-    },
-    coste: {
-      es: 'Empieza por el reconocedor del sistema, asi que interrumpe la reproduccion.',
-      en: 'Starts with the system recognizer, so it interrupts playback.',
-    },
-  },
-  {
     id: 'on-device',
     titulo: { es: 'En el dispositivo', en: 'On-device' },
     bien: {
@@ -54,6 +42,18 @@ const OPCIONES: Opcion[] = [
     coste: {
       es: 'Mas lento y menos preciso. La primera vez descarga un modelo.',
       en: 'Slower and less accurate. Downloads a model the first time.',
+    },
+  },
+  {
+    id: 'auto',
+    titulo: { es: 'Automatico', en: 'Automatic' },
+    bien: {
+      es: 'El mas rapido y preciso de este aparato, con el otro de respaldo.',
+      en: 'The fastest and most accurate on this device, with the other as backup.',
+    },
+    coste: {
+      es: 'Empieza por el reconocedor del sistema, asi que interrumpe la reproduccion.',
+      en: 'Starts with the system recognizer, so it interrupts playback.',
     },
   },
   {
@@ -98,8 +98,8 @@ export function VoiceEnginePanel() {
       <p className="text-[11px] leading-snug mb-3" style={{ color: 'var(--text-muted)' }}>
         <Music className="w-3 h-3 inline mr-1" />
         {idioma === 'es'
-          ? 'Si escuchas musica o un podcast mientras vigilas, elige "En el dispositivo": es el unico que no le quita el audio a la otra app.'
-          : 'If you listen to music or a podcast while monitoring, pick "On-device": it is the only one that does not steal audio from the other app.'}
+          ? 'Viene puesto "En el dispositivo": es el unico que no toca la campanita de "escuchando" ni le quita el audio a la musica o al podcast que tengas sonando. Los otros dos son mas precisos, a cambio de eso.'
+          : 'Ships with "On-device": the only one that never triggers the "listening" chime and does not steal audio from music or a podcast you have playing. The other two are more accurate, at that cost.'}
       </p>
 
       <div className="space-y-2">

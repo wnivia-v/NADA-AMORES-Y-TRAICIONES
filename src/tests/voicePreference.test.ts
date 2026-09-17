@@ -28,13 +28,22 @@ const EN_NAVEGADOR: VoiceEngineId[] = ['web-speech', 'whisper-local'];
 describe('preferencia de motor de voz', () => {
   beforeEach(() => localStorage.clear());
 
-  it('sin elegir nada vale "auto"', () => {
-    expect(voicePreference()).toBe('auto');
+  // Reportado tres veces usando la app: "nadie quiere un escudo que pite cada
+  // dos segundos diciendo te estoy escuchando". La campanita la toca el
+  // reconocedor del sistema al reabrir la escucha, y 'auto' empezaba por ahi.
+  // Se paga con precision; se acepta porque un escudo que pita se apaga.
+  it('sin elegir nada NO se arranca por el motor que toca la campanita', () => {
+    expect(voicePreference()).toBe('on-device');
   });
 
-  it('un valor corrupto en el almacen no rompe: vuelve a auto', () => {
+  it('un valor corrupto en el almacen no rompe: vuelve al de fabrica', () => {
     localStorage.setItem('nada-voice-engine', 'motor-inventado');
-    expect(voicePreference()).toBe('auto');
+    expect(voicePreference()).toBe('on-device');
+  });
+
+  it('quien prefiera el del sistema lo sigue teniendo a un toque', () => {
+    setVoicePreference('system');
+    expect(voicePreference()).toBe('system');
   });
 
   it('se guarda y se recupera', () => {
